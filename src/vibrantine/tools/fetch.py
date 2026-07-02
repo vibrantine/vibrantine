@@ -1,0 +1,162 @@
+"""Fetch tool: issue an HTTP GET and return the response.
+
+The HTTP primitive for the std-lib tools layer. Migrated in Phase 8
+from `src/vibrantine/commissions/fetch.py` where it lived as
+`FetchCommission` — a tool dressed in the commission contract during
+v0 for composition convenience. Now properly a tool.
+"""
+
+from typing import ClassVar
+
+import httpx
+from pydantic import BaseModel, Field
+
+from vibrantine.contract import CallContext, Commission, CommissionResult
+from vibrantine.tools._helpers import ZERO_COST, failure, provenance
+
+DEFAULT_TIMEOUT_SECONDS: float = 30.0
+DEFAULT_MAX_CHARS: int = 50_000
+
+
+class FetchInput(BaseModel):
+    """Inputs for one HTTP GET."""
+
+    url: str = Field(description="Absolute URL to fetch.")
+    headers: dict[str, str] | None = Field(
+        default=None,
+        description="Optional request headers.",
+    )
+    timeout_seconds: float = Field(
+        default=DEFAULT_TIMEOUT_SECONDS,
+        description="Per-request timeout in seconds.",
+        gt=0.0,
+    )
+    offset: int = Field(
+        default=0,
+        description="Character offset into the decoded body to start returning from.",
+        ge=0,
+    )
+    max_chars: int = Field(
+        default=DEFAULT_MAX_CHARS,
+        description="Maximum characters of the body to return, starting at offset.",
+        gt=0,
+    )
+
+
+class FetchOutput(BaseModel):
+    """Response payload from a successful fetch."""
+
+    content: str = Field(description="Response body slice (decoded as text), from offset.")
+    status_code: int = Field(description="HTTP status code returned by the server.")
+    content_type: str | None = Field(
+        default=None,
+        description="Value of the response Content-Type header, if present.",
+    )
+    truncated: bool = Field(
+        description="True if more body remains beyond the returned slice.",
+    )
+    total_chars: int = Field(
+        description="Total length of the decoded body, in characters.",
+    )
+
+
+class FetchTool(Commission[FetchInput, FetchOutput]):
+    """Issue an HTTP GET and return the response body, status, and content type."""
+
+    name: ClassVar[str] = "fetch"
+    description: ClassVar[str] = (
+        "Issues an HTTP GET request to a URL and returns the response.\n"
+        "\n"
+        "Usage:\n"
+        "- `url` must be absolute with a scheme (https:// or http://).\n"
+        "- `headers` is an optional mapping (User-Agent, Authorization, etc.).\n"
+        "- `timeout_seconds` defaults to 30; raise it for slow endpoints.\n"
+        "- Redirects are followed automatically. Non-2xx final responses\n"
+        "  and transport failures return ErrorState; only 2xx responses\n"
+        "  populate `output`.\n"
+        "- The body is returned from `offset` (default 0) up to `max_chars`\n"
+        "  (default 50000) characters. If `truncated` is true, more remains;\n"
+        "  re-fetch with a higher `offset` to page through a large response.\n"
+        "\n"
+        "Returns `content` (the decoded body slice), `status_code`,\n"
+        "`content_type` (Content-Type header if present), `truncated`, and\n"
+        "`total_chars` (full body length)."
+    )
+    input_type: ClassVar[type] = FetchInput
+    output_type: ClassVar[type] = FetchOutput
+
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        super().__init__(max_input_tokens=None)
+        self._transport = transport
+
+    async def invoke(
+        self,
+        input: FetchInput,
+        ctx: CallContext,
+    ) -> CommissionResult[FetchOutput]:
+        prov = provenance(input.url)
+
+        if ctx.cancel.is_cancelled:
+            return failure(
+                "cancelled",
+                "Cancelled before request was issued.",
+                retryable=False,
+                provenance=prov,
+            )
+
+        try:
+            async with httpx.AsyncClient(
+                transport=self._transport,
+                timeout=input.timeout_seconds,
+                # httpx does not follow redirects by default; without this a
+                # 301 would sail through as "success" with a useless body.
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(input.url, headers=input.headers)
+        except httpx.TimeoutException:
+            return failure(
+                "timeout",
+                f"Request to {input.url} exceeded {input.timeout_seconds}s.",
+                retryable=True,
+                provenance=prov,
+            )
+        except httpx.HTTPError as exc:
+            return failure(
+                "internal",
+                f"Transport error fetching {input.url}: {exc}",
+                retryable=True,
+                provenance=prov,
+            )
+
+        # Anything non-2xx fails — the description promises "only 2xx
+        # responses populate output". Redirects are followed above, so a
+        # 3xx here means redirection didn't resolve to a final document.
+        if not response.is_success:
+            return failure(
+                "internal",
+                f"HTTP {response.status_code} from {input.url}.",
+                retryable=response.status_code >= 500,
+                provenance=prov,
+            )
+
+        body = response.text
+        total_chars = len(body)
+        sliced = body[input.offset : input.offset + input.max_chars]
+        truncated = (input.offset + len(sliced)) < total_chars
+
+        return CommissionResult[FetchOutput](
+            status="success",
+            output=FetchOutput(
+                content=sliced,
+                status_code=response.status_code,
+                content_type=response.headers.get("content-type"),
+                truncated=truncated,
+                total_chars=total_chars,
+            ),
+            provenance=prov,
+            cost=ZERO_COST,
+        )

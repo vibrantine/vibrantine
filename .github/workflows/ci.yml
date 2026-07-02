@@ -1,0 +1,42 @@
+name: CI
+
+# Quality gate for the library: lint, format, types, and tests on every push
+# to main and every pull request. Integration tests skip automatically without
+# OPENROUTER_API_KEY (none is provided here), so no secret is required.
+# Windows runs too: development happens there and several tools encode
+# deliberately Windows-aware behavior (write_bytes, directory-read checks).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Type check (basedpyright)
+        run: uv run basedpyright
+
+      - name: Test (pytest)
+        run: uv run pytest
