@@ -215,6 +215,16 @@ async def run_llm_loop[OutputT: BaseModel](
                 children_cost=children_cost,
             )
 
+        if not response.choices:
+            return _loop_error(
+                "internal",
+                "LLM provider returned no choices.",
+                retryable=True,
+                in_tokens=in_tokens,
+                out_tokens=out_tokens,
+                children_cost=children_cost,
+            )
+
         msg = response.choices[0].message
         # We only send function-type tools, so all returned calls must be
         # function calls. Cast the union from the SDK at this boundary so

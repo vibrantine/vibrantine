@@ -293,3 +293,26 @@ async def test_synthesize_unpriced_model_without_budget_still_runs() -> None:
 
     assert result.status == "success", result.error
     assert len(fake.completions.calls) == 2
+
+
+async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
+    commission, fake = _commission(
+        [
+            SimpleNamespace(
+                usage=SimpleNamespace(prompt_tokens=1000, completion_tokens=200),
+                choices=[],
+            )
+        ]
+    )
+
+    result = await commission.invoke(
+        SynthesizeInput(sources=[_src(0), _src(1)]),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "no choices" in result.error.detail
+    assert result.cost.estimated_usd > 0
+    assert len(fake.completions.calls) == 1

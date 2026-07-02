@@ -9,6 +9,8 @@ on-disk state.
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from vibrantine.contract import PersistedRecord
 from vibrantine.persistence import FilesystemBackend
 
@@ -75,6 +77,34 @@ async def test_delete_removes_file(tmp_path: Path) -> None:
     await backend.delete("r-1")
 
     assert await backend.load("r-1") is None
+
+
+async def test_store_rejects_run_id_that_escapes_root(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path / "records")
+
+    with pytest.raises(ValueError, match="run_id"):
+        await backend.store(_record(run_id="../outside", mode="always"))
+
+    assert not (tmp_path / "outside.json").exists()
+
+
+async def test_load_rejects_run_id_that_escapes_root(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path / "records")
+    (tmp_path / "outside.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="run_id"):
+        await backend.load("../outside")
+
+
+async def test_delete_rejects_run_id_that_escapes_root(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path / "records")
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep me", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="run_id"):
+        await backend.delete("../outside")
+
+    assert outside.read_text(encoding="utf-8") == "keep me"
 
 
 async def test_delete_older_than_evicts_only_older(tmp_path: Path) -> None:

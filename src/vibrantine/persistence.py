@@ -31,7 +31,7 @@ class FilesystemBackend:
         dev_ring_buffer_size: int = DEV_RING_BUFFER_SIZE,
         on_failure_retention_days: int = ON_FAILURE_RETENTION_DAYS,
     ) -> None:
-        self._root = root
+        self._root = root.resolve()
         self._dev_ring_buffer_size = dev_ring_buffer_size
         self._on_failure_retention_days = on_failure_retention_days
         self._root.mkdir(parents=True, exist_ok=True)
@@ -55,7 +55,10 @@ class FilesystemBackend:
     # --- sync helpers run in threadpool ---
 
     def _path_for(self, run_id: str) -> Path:
-        return self._root / f"{run_id}.json"
+        path = (self._root / f"{run_id}.json").resolve()
+        if path.parent != self._root:
+            raise ValueError(f"run_id must name one record under the persistence root: {run_id!r}")
+        return path
 
     def _write_sync(self, record: PersistedRecord) -> None:
         path = self._path_for(record.run_id)

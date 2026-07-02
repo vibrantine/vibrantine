@@ -75,16 +75,18 @@ class SynthesizeOutput(BaseModel):
 class _ClaimRaw(BaseModel):
     """LLM-emitted claim. `source_indices` reference `SynthesizeInput.sources`."""
 
-    value: str
-    source_indices: list[int]
-    confidence: ConfidenceLevel
+    value: str = Field(description="Short asserted fact emitted by the LLM.")
+    source_indices: list[int] = Field(
+        description="Indices into SynthesizeInput.sources that support this claim.",
+    )
+    confidence: ConfidenceLevel = Field(description="LLM-emitted confidence for this claim.")
 
 
 class _SynthesizeRaw(BaseModel):
     """LLM-emitted JSON shape for the structured pass."""
 
-    summary_text: str
-    claims: list[_ClaimRaw]
+    summary_text: str = Field(description="Neutral prose summary emitted by the LLM.")
+    claims: list[_ClaimRaw] = Field(description="Claims emitted by the LLM with source indices.")
 
 
 class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
@@ -312,6 +314,23 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         usage = response.usage
         in_tokens = usage.prompt_tokens if usage is not None else 0
         out_tokens = usage.completion_tokens if usage is not None else 0
+        if not response.choices:
+            cost = CostMetrics(
+                estimated_usd=cost_so_far.estimated_usd
+                + self._cost(in_tokens, out_tokens).estimated_usd
+            )
+            return (
+                "",
+                in_tokens,
+                out_tokens,
+                self._fail(
+                    "internal",
+                    "LLM provider returned no choices.",
+                    retryable=True,
+                    provenance=provenance,
+                    cost=cost,
+                ),
+            )
         content = response.choices[0].message.content or ""
         return content, in_tokens, out_tokens, None
 

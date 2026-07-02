@@ -9,6 +9,7 @@ so the messages it was sent can be inspected.
 
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
 from conftest import FakeClient, llm_response
@@ -206,3 +207,33 @@ async def test_second_free_text_reply_fails_the_loop() -> None:
     assert outcome.error is not None
     assert outcome.error.kind == "internal"
     assert "twice" in outcome.error.detail
+
+
+async def test_empty_provider_choices_fail_as_loop_error() -> None:
+    fake = FakeClient(
+        [
+            SimpleNamespace(
+                usage=SimpleNamespace(prompt_tokens=12, completion_tokens=3),
+                choices=[],
+            )
+        ]
+    )
+
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(0.0, 0.0),
+    )
+
+    assert outcome.output is None
+    assert outcome.error is not None
+    assert outcome.error.kind == "internal"
+    assert "no choices" in outcome.error.detail
+    assert outcome.in_tokens == 12
+    assert outcome.out_tokens == 3
