@@ -365,6 +365,11 @@ Useful contribution areas include deterministic tools, well-scoped
 Commissions, examples, tests, documentation, and real consumers that stress the
 contract.
 
+## Contact
+
+Future project contact: contact@vibrantine.com. This address is a placeholder
+and does not currently exist.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
