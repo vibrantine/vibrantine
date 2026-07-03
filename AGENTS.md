@@ -33,7 +33,13 @@ When the question is "should this be a commission?", apply the LLM-anywhere rule
 
 > A **commission** has an LLM call somewhere in its subtree. A **tool** has none. If the entire subtree can be done deterministically — including truncation, summarization heuristics, or wrapping a primitive (shell exec, file write, HTTP GET) — it's a tool, not a commission. A deterministic Python coordinator with LLM-bearing children is still a commission; the LLM is in the subtree.
 
-Tools live in `src/vibrantine/tools/` and subclass `Commission[InputT, OutputT]` under Shape A (`max_input_tokens=None`, no model arg): identical contract, no LLM anywhere in the subtree. See [`docs/composition.md § Three types, not four`](docs/composition.md) for the rationale and the commission / tool / application-code relationship.
+Shared tools live in `src/vibrantine/tools/`; private deterministic tools
+owned by a folder-sized commission may live under that commission's
+`tools/` slot. Both subclass `Commission[InputT, OutputT]` under Shape A
+(`max_input_tokens=None`, no model arg): identical contract, no LLM
+anywhere in the subtree. See
+[`docs/composition.md § Three types, not four`](docs/composition.md) for
+the rationale and the commission / tool / application-code relationship.
 
 ## Description prose: write for the LLM by default
 
