@@ -195,11 +195,28 @@ colliding with `src/vibrantine/contract.py`; `types.py` stands.
   for provisional and near-public ones. Current lean: required; the slot
   being always present is worth more than the writing cost.
 - The model menu (`models.py`) is provisional until proven by a real
-  consumer. The first test is wiring a menu onto `DeepResearchCommission`,
-  the smallest honest case: it already threads `model=` down its recursive
-  chain. Open within it: the seat-name vocabulary, whether a menu ever
-  needs per-seat client injection alongside the model, and how the menu
-  relates to the planned catalog/grant model-ownership design.
+  consumer. The first wiring landed inline in `deep_research.py`
+  (`DeepResearchModelMenu`), which proved the plumbing but is a
+  single-class tree. Open within it: the seat-name vocabulary (per child
+  class vs per subtree role, which needs a true multi-seat commission to
+  answer), whether a menu ever needs per-seat client injection alongside
+  the model, and how the menu relates to the planned catalog/grant
+  model-ownership design.
+
+## What Bites Next
+
+The open threads in the order they will actually block work:
+
+1. **Prompt loading mechanics** blocks the first real move of a prompt
+   into `prompts/` (DeepResearch is the natural candidate). Everything
+   else in the standard can proceed without it.
+2. **The packaging exclude for colocated tests** is needed the moment the
+   first commission package materializes, not before.
+3. **Model-menu seat vocabulary** waits on a genuine multi-seat
+   commission; there is no honest test case yet.
+4. **Shared-type promotion friction** (EmailHandler's `IncomingEmail`)
+   only matters when a subcommission carrying a shared type is actually
+   promoted; recorded in the sketch findings.
 
 ## The Sketches
 
