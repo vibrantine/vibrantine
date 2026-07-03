@@ -7,7 +7,9 @@ alternatives analysis (summarized at the end).
 ## The Standard
 
 A commission is a single module until it outgrows one. When it does, it
-becomes a package with this exact shape:
+becomes a package with this available shape; optional slots such as
+`models.py`, `prompts/`, `tools/`, and `subcommissions/` are omitted until
+earned:
 
 ```text
 src/vibrantine/commissions/deep_research/
@@ -17,6 +19,9 @@ src/vibrantine/commissions/deep_research/
   models.py              # optional, provisional: the model menu (LLM seats)
   prompts/
     system.md            # the stable system prompt; more files as steps earn them
+  tools/
+    __init__.py          # empty; private deterministic tools owned here
+    render_state.py      # no LLM anywhere in its subtree
   subcommissions/
     __init__.py          # empty; importability only, never a facade
     plan.py              # small child: a single module
@@ -25,6 +30,8 @@ src/vibrantine/commissions/deep_research/
       commission.py
       types.py
       prompts/
+      tools/
+        __init__.py
       subcommissions/
       tests/
       BRIEF.md
@@ -35,7 +42,9 @@ src/vibrantine/commissions/deep_research/
 
 The recursion is the whole standard. Every entry in `subcommissions/` is
 itself a commission, and follows the same module-or-package rule with the
-same escalation criteria. There is no second vocabulary for children.
+same escalation criteria. `tools/` is the companion slot for deterministic
+private capabilities: no LLM anywhere in their subtree, still wired through
+the parent's `toolbox` when the parent's LLM may call them.
 
 ## Design Regime: Built For Massive Recursion
 
@@ -100,6 +109,14 @@ varies, the less a human or an AI assistant has to guess.
   prompt-bearing step, `system.md` by convention for the main prompt. Long
   prompts diff better as markdown and stay out of Python noise. A
   module-sized commission keeps its prompt as an inline constant instead.
+- **`tools/`** holds private deterministic tools this commission owns:
+  substantial capabilities that are too large to be helpers, but do not
+  contain an LLM anywhere in their subtree. A small tool is a single module;
+  a larger private tool may earn its own module cluster only when the
+  commission has truly outgrown a file. The `__init__.py` is empty and
+  exists for importability; it must never become a registry. Reusable tools
+  promote out to the shared tools layer; LLM-bearing children belong in
+  `subcommissions/` instead.
 - **`subcommissions/`** holds the children this commission owns: full
   commissions, and only commissions. A small child is a single module; a
   folder-sized child is this same package shape, recursively. The
@@ -150,6 +167,12 @@ plausible consumer. The moment it has a second consumer, promote it to a
 public sibling package under `src/vibrantine/commissions/`. Because it is
 already in standard shape, promotion is a directory move, not a rewrite.
 
+The same reuse trigger applies to private tools. A deterministic tool that
+has a second consumer promotes to the shared tools layer (or, in an
+external repo, that repo's shared tools package). If the tool grows an LLM
+anywhere in its subtree, it is promoted conceptually first: it becomes a
+commission, then follows the subcommission promotion rule.
+
 Depth alone is not a smell. A deep chain of genuinely single-consumer
 subcommissions is legitimate and stays put. Reuse is the only flattening
 force, and it is sufficient: real trees stay shallower than their call
@@ -160,9 +183,10 @@ graphs because the useful pieces keep getting promoted.
 - **No generated index, registry, or tree-overview file.** The uniform
   slots make the tree enumerable by glob; an authored overview is exactly
   the artifact that rots under agentic edits. The structure is the map.
-- **No internal layers** (`services/`, `engine/`, `adapters/`, `domain/`)
-  unless a commission has truly earned them. The contract still wants the
-  smallest viable thing.
+- **No internal layers** (`services/`, `engine/`, `adapters/`, `domain/`).
+  The named slots already cover the contract-shaped pieces: deterministic
+  private capabilities go in `tools/`, LLM-bearing children go in
+  `subcommissions/`, and ordinary helpers stay next to their consumer.
 - **No mirroring of the call graph.** Directories come from authoring size
   and ownership only.
 - **No alias tables or orientation modules** that hide real class names.
@@ -174,12 +198,15 @@ The earlier draft weighed five layouts: minimal package, prompt-centered,
 step-centered, component-centered, and README-first. The recursive standard
 absorbs them: the minimal package is the base shape, `prompts/` is a fixed
 slot rather than an escalation, the component-centered layout became the
-`subcommissions/` rule once it was recognized that components are
-commissions in themselves, and the README-first audit requirement became
-BRIEF.md. A `steps/` directory was dropped: a step with real independent
-logic is either a helper (stays in `commission.py`) or a commission
-(belongs in `subcommissions/`). A local `contract.py` was rejected for
-colliding with `src/vibrantine/contract.py`; `types.py` stands.
+`subcommissions/` rule once it was recognized that LLM-bearing components
+are commissions in themselves, and the README-first audit requirement
+became BRIEF.md. A private `tools/` slot was later added for deterministic
+capabilities that are larger than helpers but still not commissions. A
+`steps/` directory was dropped: a step with real independent logic is
+either a helper (stays in `commission.py`), a deterministic tool (belongs
+in `tools/`), or a commission (belongs in `subcommissions/`). A local
+`contract.py` was rejected for colliding with `src/vibrantine/contract.py`;
+`types.py` stands.
 
 ## Open Decisions
 
@@ -226,7 +253,7 @@ The audit questions asked of every sketch:
 - What file would a human open first?
 - What file would an AI assistant edit for a prompt change?
 - Where would a new input field go?
-- Where would a new subcommission be declared?
+- Where would a new subcommission or private tool be declared?
 - Where would a known prompt failure be recorded?
 - Does the folder make the commission easier to understand, or just wider?
 
@@ -247,16 +274,18 @@ src/vibrantine/commissions/morning_briefing/
 ```
 
 - No `prompts/`: a Python coordinator with no LLM of its own.
-- No `subcommissions/`: both children are public siblings; nothing here
-  is privately owned.
+- No `tools/`: `FetchTool` and `WriteTool` are public shared tools, not
+  private tools owned by this package.
+- No `subcommissions/`: the LLM-bearing child is a public sibling; nothing
+  here is privately owned.
 - `_render_markdown` stays in `commission.py`: a helper, not a commission.
 
 Audit: a human opens BRIEF.md. A prompt change points *outside* the
 package: the only prompt in this tree belongs to `synthesize`, which owns
 it (prompts are internal). A new input field goes in `types.py`. A new
-subcommission is declared in `commission.py`'s `__init__` (import, kwarg,
-toolbox entry) and lives under `subcommissions/` only if private. A known
-failure is recorded in BRIEF.md.
+subcommission or private tool is declared in `commission.py`'s `__init__`
+(import, kwarg, toolbox entry) and lives under `subcommissions/` or
+`tools/` only if private. A known failure is recorded in BRIEF.md.
 
 Verdict: the package is barely earned. Owning children does not by itself
 justify the folder; the module form remains fine until the file stops
@@ -284,15 +313,18 @@ src/vibrantine/commissions/deep_research/
 - No `subcommissions/`: the recursive child is this same class (no second
   file), and `FetchTool` is a public sibling. Runtime depth N, one
   package: the regime rule in the flesh.
+- No `tools/`: `FetchTool` is a shared public tool, not privately owned by
+  this package.
 - `prompts/system.md` would be the library's first externalized prompt,
   so an actual move must first settle the prompt-loading open decision.
 
 Audit: a human opens BRIEF.md; an assistant edits `prompts/system.md` for
 a prompt change; a new input field goes in `types.py`; a new
-subcommission is declared in `commission.py`'s constructor; a known
-prompt failure goes in BRIEF.md.
+subcommission or private tool is declared in `commission.py`'s
+constructor; a known prompt failure goes in BRIEF.md.
 
-Verdict: the strongest fit; earns every slot except `subcommissions/`.
+Verdict: the strongest fit; earns every slot except the private-owned
+`tools/` and `subcommissions/` slots.
 
 ### EmailHandler (parent plus stub children)
 
@@ -307,17 +339,21 @@ src/vibrantine/commissions/email_handler/
   types.py             # IncomingEmail, EmailHandlerInput, Route, EmailHandlerOutput
   prompts/
     system.md          # today's _SYSTEM_PROMPT
+  tools/
+    __init__.py        # empty
+    notify_user.py     # NotifyUserTool + NotifyInput/Output
   subcommissions/
     __init__.py        # empty
     draft_reply.py     # DraftReplyCommission + DraftReplyInput/Output
-    notify_user.py     # NotifyUserTool + NotifyInput/Output
   tests/
     test_commission.py # today's tests/test_email_handler.py
   BRIEF.md             # provisional status, and what each stub probes
 ```
 
-- The only sketch that exercises `subcommissions/`. Both children are
-  module-sized, and each keeps its boundary types beside its class.
+- The only sketch that exercises both private-owned slots:
+  `subcommissions/` for the LLM-bearing `DraftReplyCommission`, and
+  `tools/` for the deterministic `NotifyUserTool`. Both are module-sized,
+  and each keeps its boundary types beside its class.
 - `IncomingEmail` is shared: it appears in the parent's input and inside
   `DraftReplyInput`. It stays in the parent's `types.py` and the child
   imports it. Fine while the child is private, but promoting
@@ -326,8 +362,9 @@ src/vibrantine/commissions/email_handler/
 
 Audit: same answers as above, with two sharpenings: the provisional
 framing moves from module docstring to BRIEF.md, and "where is a new
-subcommission declared" now has a two-part answer (a module under
-`subcommissions/`, plus the constructor wiring in `commission.py`).
+subcommission or private tool declared" now has a two-part answer (a
+module under `subcommissions/` or `tools/`, plus the constructor wiring in
+`commission.py`).
 
 Verdict: the sketch where the layout adds the most: the stubs stop
 masquerading as one flat file of six equal classes.
@@ -339,8 +376,8 @@ masquerading as one flat file of six equal classes.
   unscannable module do.
 - **Module-sized subcommissions keep their boundary types beside their
   class**, not hoisted into the parent's `types.py`. The same logic
-  partially settles the raw-LLM-models open decision: types live with
-  their owner.
+  applies to private tools and partially settles the raw-LLM-models open
+  decision: types live with their owner.
 - **Shared types are the first promotion friction.** A type used by both
   parent and child lives with the parent; promoting the child means
   moving or splitting it. Acceptable, but "promotion is one git mv"

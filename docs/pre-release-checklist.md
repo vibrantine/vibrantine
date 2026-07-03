@@ -211,17 +211,28 @@ src/vibrantine/commissions/my_commission/
   __init__.py
   commission.py
   types.py
-  prompt.md
-  README.md
-tests/test_my_commission.py
+  prompts/
+    system.md
+  tools/              # optional: private deterministic tools
+    __init__.py
+  subcommissions/     # optional: private LLM-bearing children
+    __init__.py
+  tests/
+    test_commission.py
+  BRIEF.md
 ```
 
 Use the folder layout only when the commission has enough prompt, type, test,
-or evaluation material to earn the extra files.
+private tool, private child, or evaluation material to earn the extra files.
 
 ## Nested Commission Pattern
 
 Commissions that own children should follow one consistent constructor pattern.
+Private deterministic tools live under the commission package's `tools/`
+slot when they are too substantial to stay beside their consumer; private
+LLM-bearing children live under `subcommissions/`. Both are still wired in
+`commission.py`, and `toolbox` remains the source of truth for what an LLM
+loop can call.
 
 ```python
 def __init__(
@@ -240,6 +251,8 @@ def __init__(
 Checklist for nested commissions:
 
 - [ ] Parent owns its children.
+- [ ] Private deterministic tools live in `tools/`; private LLM-bearing
+  children live in `subcommissions/`.
 - [ ] Children are invoked through `dispatch`, not direct `invoke`.
 - [ ] Child dependencies are injectable for tests.
 - [ ] Child costs roll up structurally.
