@@ -13,11 +13,13 @@ conclude directly.
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from conftest import FakeClient, llm_response
 from openai import AsyncOpenAI
 
 from vibrantine.commissions.deep_research import (
     DeepResearchCommission,
+    DeepResearchModelMenu,
     ResearchInput,
 )
 from vibrantine.contract import CallContext
@@ -86,6 +88,62 @@ async def test_rolls_up_child_cost_across_depth() -> None:
     assert len(fake.completions.calls) == 5
     # Root cost is the whole subtree: all five turns, not just the root's two.
     assert abs(result.cost.estimated_usd - 5 * CALL_COST) < 1e-9
+
+
+async def test_model_menu_seats_reach_their_levels() -> None:
+    # Three turns in depth-first order: root delegates, child concludes,
+    # root concludes. The shared fake records model= per turn, so the seat
+    # assignment is observable: calls 0 and 2 are the root (researcher
+    # seat), call 1 is the delegated child (subresearcher seat).
+    fake = FakeClient(
+        [
+            llm_response(tool_calls=_delegate("r1", "sub")),
+            llm_response(tool_calls=_conclude("c1")),
+            llm_response(tool_calls=_conclude("r2")),
+        ]
+    )
+    menu = DeepResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
+    agent = DeepResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+
+    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+
+    assert result.status == "success", result.error
+    assert [c["model"] for c in fake.completions.calls] == [
+        "root-model",
+        "leaf-model",
+        "root-model",
+    ]
+
+
+async def test_model_menu_default_fills_unnamed_seats() -> None:
+    # Only the researcher seat is named; the delegated level falls back to
+    # the menu default.
+    fake = FakeClient(
+        [
+            llm_response(tool_calls=_delegate("r1", "sub")),
+            llm_response(tool_calls=_conclude("c1")),
+            llm_response(tool_calls=_conclude("r2")),
+        ]
+    )
+    menu = DeepResearchModelMenu(default="menu-default", researcher="root-model")
+    agent = DeepResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+
+    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+
+    assert result.status == "success", result.error
+    assert [c["model"] for c in fake.completions.calls] == [
+        "root-model",
+        "menu-default",
+        "root-model",
+    ]
+
+
+def test_model_and_menu_together_rejected() -> None:
+    with pytest.raises(ValueError, match="not both"):
+        DeepResearchCommission(
+            model="some/model",
+            models=DeepResearchModelMenu(default="other/model"),
+        )
 
 
 async def test_budget_ceiling_counts_children() -> None:
