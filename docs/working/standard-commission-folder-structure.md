@@ -201,20 +201,10 @@ colliding with `src/vibrantine/contract.py`; `types.py` stands.
   needs per-seat client injection alongside the model, and how the menu
   relates to the planned catalog/grant model-ownership design.
 
-## Next Exercise
+## The Sketches
 
-Sketch each existing commission into the standard without moving code:
-
-- `MorningBriefingCommission`: custom coordinator with children; probes
-  whether helpers stay in `commission.py`.
-- `DeepResearchCommission`: recursive LLM-loop; probes `prompts/`, the
-  one-package-despite-deep-runtime rule, and (as first consumer) the
-  provisional model menu.
-- `EmailHandlerCommission`: parent plus two stub children in one module
-  today; probes `subcommissions/` and how a BRIEF carries provisional
-  status.
-
-For each sketch, ask:
+Each existing commission, sketched into the standard without moving code.
+The audit questions asked of every sketch:
 
 - What file would a human open first?
 - What file would an AI assistant edit for a prompt change?
@@ -222,3 +212,122 @@ For each sketch, ask:
 - Where would a new subcommission be declared?
 - Where would a known prompt failure be recorded?
 - Does the folder make the commission easier to understand, or just wider?
+
+### MorningBriefing (custom coordinator)
+
+Today: one module with two payload types, the commission class, and a
+private `_render_markdown` helper. Its children (`FetchTool`,
+`SynthesizeCommission`) are public siblings, injected at construction.
+
+```text
+src/vibrantine/commissions/morning_briefing/
+  __init__.py          # exports MorningBriefingCommission + I/O types
+  commission.py        # MorningBriefingCommission + _render_markdown
+  types.py             # MorningBriefingInput, MorningBriefingOutput
+  tests/
+    test_commission.py # today's tests/test_morning_briefing.py
+  BRIEF.md
+```
+
+- No `prompts/`: a Python coordinator with no LLM of its own.
+- No `subcommissions/`: both children are public siblings; nothing here
+  is privately owned.
+- `_render_markdown` stays in `commission.py`: a helper, not a commission.
+
+Audit: a human opens BRIEF.md. A prompt change points *outside* the
+package: the only prompt in this tree belongs to `synthesize`, which owns
+it (prompts are internal). A new input field goes in `types.py`. A new
+subcommission is declared in `commission.py`'s `__init__` (import, kwarg,
+toolbox entry) and lives under `subcommissions/` only if private. A known
+failure is recorded in BRIEF.md.
+
+Verdict: the package is barely earned. Owning children does not by itself
+justify the folder; the module form remains fine until the file stops
+being scannable.
+
+### DeepResearch (recursive LLM loop)
+
+Today: one module with one long prompt constant, two payload types, and
+recursive construction (each instance builds a shallower child of the
+same class).
+
+```text
+src/vibrantine/commissions/deep_research/
+  __init__.py          # exports DeepResearchCommission + I/O types
+  commission.py        # DeepResearchCommission
+  types.py             # ResearchInput, ResearchOutput
+  models.py            # DeepResearchModelMenu (provisional slot, first consumer)
+  prompts/
+    system.md          # today's _RESEARCH_SYSTEM_PROMPT
+  tests/
+    test_commission.py # today's tests/test_deep_research.py
+  BRIEF.md
+```
+
+- No `subcommissions/`: the recursive child is this same class (no second
+  file), and `FetchTool` is a public sibling. Runtime depth N, one
+  package: the regime rule in the flesh.
+- `prompts/system.md` would be the library's first externalized prompt,
+  so an actual move must first settle the prompt-loading open decision.
+
+Audit: a human opens BRIEF.md; an assistant edits `prompts/system.md` for
+a prompt change; a new input field goes in `types.py`; a new
+subcommission is declared in `commission.py`'s constructor; a known
+prompt failure goes in BRIEF.md.
+
+Verdict: the strongest fit; earns every slot except `subcommissions/`.
+
+### EmailHandler (parent plus stub children)
+
+Today: one module holding three commission classes and five payload
+types; its most important fact (provisional, handlers are stubs) lives in
+the module docstring.
+
+```text
+src/vibrantine/commissions/email_handler/
+  __init__.py          # exports EmailHandlerCommission + I/O types only
+  commission.py        # EmailHandlerCommission
+  types.py             # IncomingEmail, EmailHandlerInput, Route, EmailHandlerOutput
+  prompts/
+    system.md          # today's _SYSTEM_PROMPT
+  subcommissions/
+    __init__.py        # empty
+    draft_reply.py     # DraftReplyCommission + DraftReplyInput/Output
+    notify_user.py     # NotifyUserTool + NotifyInput/Output
+  tests/
+    test_commission.py # today's tests/test_email_handler.py
+  BRIEF.md             # provisional status, and what each stub probes
+```
+
+- The only sketch that exercises `subcommissions/`. Both children are
+  module-sized, and each keeps its boundary types beside its class.
+- `IncomingEmail` is shared: it appears in the parent's input and inside
+  `DraftReplyInput`. It stays in the parent's `types.py` and the child
+  imports it. Fine while the child is private, but promoting
+  `draft_reply` would have to take the shared type along or split it.
+  First concrete case of promotion friction.
+
+Audit: same answers as above, with two sharpenings: the provisional
+framing moves from module docstring to BRIEF.md, and "where is a new
+subcommission declared" now has a two-part answer (a module under
+`subcommissions/`, plus the constructor wiring in `commission.py`).
+
+Verdict: the sketch where the layout adds the most: the stubs stop
+masquerading as one flat file of six equal classes.
+
+### Findings
+
+- **The escalation threshold sharpened.** Having children does not earn a
+  package (MorningBriefing); an owned prompt, private children, or an
+  unscannable module do.
+- **Module-sized subcommissions keep their boundary types beside their
+  class**, not hoisted into the parent's `types.py`. The same logic
+  partially settles the raw-LLM-models open decision: types live with
+  their owner.
+- **Shared types are the first promotion friction.** A type used by both
+  parent and child lives with the parent; promoting the child means
+  moving or splitting it. Acceptable, but "promotion is one git mv"
+  carries this caveat.
+- **`prompts/` cannot be adopted before the loading decision.** Both LLM
+  sketches hit it immediately; it is the next decision the standard
+  actually blocks on.
