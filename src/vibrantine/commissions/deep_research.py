@@ -16,6 +16,7 @@ This is the first commission wired into an LLM-loop toolbox, so its
 `description` is LLM-facing and follows the tool prose pattern.
 """
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
@@ -49,6 +50,21 @@ _RESEARCH_SYSTEM_PROMPT = (
     "- If the `deep_research` tool is not offered to you, you are at the leaf "
     "level: answer directly from `fetch` results — do not try to delegate."
 )
+
+
+@dataclass(frozen=True)
+class DeepResearchModelMenu:
+    """The tree's LLM seats, filled by the caller at construction.
+
+    The commission declares its seats; the caller fills them (or none).
+    `researcher` is the root's own loop; `subresearcher` is every delegated
+    level below the root. An unfilled seat falls back to `default`, then to
+    the system default model. Dumb data: resolution happens in `__init__`.
+    """
+
+    default: str | Model | None = None
+    researcher: str | Model | None = None
+    subresearcher: str | Model | None = None
 
 
 class ResearchInput(BaseModel):
@@ -102,16 +118,28 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
         max_depth: int = 2,
         fetch: FetchTool | None = None,
         model: str | Model | None = None,
+        models: DeepResearchModelMenu | None = None,
         client: "AsyncOpenAI | None" = None,
         max_iterations: int = 10,
     ) -> None:
+        if model is not None and models is not None:
+            raise ValueError(
+                "Pass model= (one model for the whole tree) or models= (a menu of seats), not both."
+            )
+        own_model = model
+        sub_model = model
+        if models is not None:
+            own_model = models.researcher or models.default
+            sub_model = models.subresearcher or models.default
         resolved_fetch = fetch or FetchTool()
         toolbox: tuple[Commission[Any, Any], ...]
         if max_depth > 0:
+            # The whole chain below the root shares the subresearcher seat,
+            # threaded down as a plain model= like any single-model tree.
             sub = DeepResearchCommission(
                 max_depth=max_depth - 1,
                 fetch=resolved_fetch,
-                model=model,
+                model=sub_model,
                 client=client,
                 max_iterations=max_iterations,
             )
@@ -120,7 +148,7 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
             toolbox = (resolved_fetch,)
         super().__init__(
             toolbox=toolbox,
-            model=model,
+            model=own_model,
             client=client,
             max_iterations=max_iterations,
         )
