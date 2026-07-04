@@ -30,6 +30,9 @@ Audience-facing guides, not architecture.
   what a separate repo gets when it imports `vibrantine` to build
   Commissions: importable surface, contract, types, run flow, authoring
   rules. Line-exact references against source, machine-checked in CI.
+- [`commission-testing.md`](commission-testing.md): how to test commissions
+  at two levels: contract behavior with fake clients, and heuristic
+  evaluation against explicit success/failure criteria.
 - [`pre-release-checklist.md`](pre-release-checklist.md): public-reference
   release checklist covering security/privacy passes, commission audits,
   examples, external consumer proof, and final validation.

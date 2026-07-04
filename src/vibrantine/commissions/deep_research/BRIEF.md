@@ -15,3 +15,28 @@ adding private tools or private subcommission directories.
 Do not break the structural termination rule: `max_depth=0` must offer only
 `fetch`, and every larger instance must construct a strictly shallower
 `DeepResearchCommission`.
+
+## Efficacy Bar
+
+Success criteria:
+
+- Answers the user's question directly and concisely.
+- Every load-bearing factual claim has supporting provenance from a fetched
+  source or delegated sub-answer.
+- Broad questions are decomposed into at most three useful sub-questions when
+  decomposition improves the answer.
+- Leaf researchers answer from `fetch` results instead of attempting to
+  delegate.
+
+Failure criteria:
+
+- Asserts uncited facts that depend on external knowledge.
+- Delegates when a simple fetch would answer the question.
+- Produces claims whose provenance does not support the claim text.
+- Recurses or delegates beyond the offered toolbox.
+
+Eval cases:
+
+- None yet. First cases should cover one direct source question, one broad
+  decomposable question, and one source-conflict question where the answer must
+  preserve uncertainty.
