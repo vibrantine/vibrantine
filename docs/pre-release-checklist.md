@@ -161,16 +161,18 @@ Release decision:
 
 ### DeepResearchCommission
 
-- [ ] Check recursive construction terminates structurally at `max_depth=0`.
-- [ ] Check leaf toolboxes omit `deep_research` and include only fetch.
-- [ ] Check recursive child costs roll up through the default LLM loop.
+- [x] Check recursive construction terminates structurally at `max_depth=0`.
+- [x] Check leaf toolboxes omit `deep_research` and include only fetch.
+- [x] Check recursive child costs roll up through the default LLM loop.
 - [ ] Check output cap / overflow policy is appropriate for sub-answer
   rendering.
-- [ ] Check prompt guidance discourages unsupported claims.
-- [ ] Check tests cover delegation, leaf behavior, cost rollup, and tool menu
+- [x] Check prompt guidance discourages unsupported claims.
+- [x] Check tests cover delegation, leaf behavior, cost rollup, and tool menu
   shape.
 - [ ] Decide whether this is a worked example, a provisional commission, or a
   future examples candidate.
+- [ ] Add heuristic eval cases for the efficacy bar in
+  `src/vibrantine/commissions/deep_research/BRIEF.md`.
 
 ### EmailHandlerCommission
 
@@ -185,16 +187,18 @@ Release decision:
 ## Standard Commission Format
 
 Create an authoring standard before the set of commissions grows much larger.
-This can start as documentation before any file layout change.
+Done in `docs/working/standard-commission-folder-structure.md`, proven by the
+DeepResearch package migration, with testing/evaluation policy in
+`docs/commission-testing.md`.
 
-- [ ] Define where input/output Pydantic models live.
-- [ ] Define where system prompts live.
-- [ ] Define how `description` is written for LLM tool selection.
-- [ ] Define how nested commissions and tools are declared.
-- [ ] Define constructor injection conventions for child commissions, tools,
+- [x] Define where input/output Pydantic models live.
+- [x] Define where system prompts live.
+- [x] Define how `description` is written for LLM tool selection.
+- [x] Define how nested commissions and tools are declared.
+- [x] Define constructor injection conventions for child commissions, tools,
   `model`, and test clients.
-- [ ] Define how tests are organized.
-- [ ] Define how prompt/evaluation notes are recorded.
+- [x] Define how tests are organized.
+- [x] Define how prompt/evaluation notes are recorded.
 
 Possible compact module layout:
 
@@ -211,6 +215,7 @@ src/vibrantine/commissions/my_commission/
   __init__.py
   commission.py
   types.py
+  models.py            # optional/provisional: model menu
   prompts/
     system.md
   tools/              # optional: private deterministic tools
