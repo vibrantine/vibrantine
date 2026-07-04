@@ -210,9 +210,6 @@ in `tools/`), or a commission (belongs in `subcommissions/`). A local
 
 ## Open Decisions
 
-- Prompt loading mechanics: read `prompts/*.md` at import time (via
-  `importlib.resources`) or copy into a Python constant at authoring time?
-  Packaging must include prompt files reliably either way.
 - The module-to-package escalation threshold: currently judgment-based
   (multiple prompt-bearing steps, several children, or a prompt long enough
   to deserve its own file). Does it need a sharper rule?
@@ -222,7 +219,7 @@ in `tools/`), or a commission (belongs in `subcommissions/`). A local
   for provisional and near-public ones. Current lean: required; the slot
   being always present is worth more than the writing cost.
 - The model menu (`models.py`) is provisional until proven by a real
-  consumer. The first wiring landed inline in `deep_research.py`
+  consumer. The first wiring landed in `deep_research/models.py`
   (`DeepResearchModelMenu`), which proved the plumbing but is a
   single-class tree. Open within it: the seat-name vocabulary (per child
   class vs per subtree role, which needs a true multi-seat commission to
@@ -234,16 +231,15 @@ in `tools/`), or a commission (belongs in `subcommissions/`). A local
 
 The open threads in the order they will actually block work:
 
-1. **Prompt loading mechanics** blocks the first real move of a prompt
-   into `prompts/` (DeepResearch is the natural candidate). Everything
-   else in the standard can proceed without it.
-2. **The packaging exclude for colocated tests** is needed the moment the
-   first commission package materializes, not before.
-3. **Model-menu seat vocabulary** waits on a genuine multi-seat
+1. **Model-menu seat vocabulary** waits on a genuine multi-seat
    commission; there is no honest test case yet.
-4. **Shared-type promotion friction** (EmailHandler's `IncomingEmail`)
+2. **Shared-type promotion friction** (EmailHandler's `IncomingEmail`)
    only matters when a subcommission carrying a shared type is actually
    promoted; recorded in the sketch findings.
+
+Settled by the first package migration: prompts load from package resources
+with `importlib.resources`, and the wheel excludes colocated `tests/` while
+including `prompts/*.md`.
 
 ## The Sketches
 
@@ -293,9 +289,9 @@ being scannable.
 
 ### DeepResearch (recursive LLM loop)
 
-Today: one module with one long prompt constant, two payload types, and
-recursive construction (each instance builds a shallower child of the
-same class).
+Today: a folder-sized commission package with the long prompt externalized
+to markdown, two payload types, a provisional model menu, and recursive
+construction (each instance builds a shallower child of the same class).
 
 ```text
 src/vibrantine/commissions/deep_research/
@@ -304,9 +300,9 @@ src/vibrantine/commissions/deep_research/
   types.py             # ResearchInput, ResearchOutput
   models.py            # DeepResearchModelMenu (provisional slot, first consumer)
   prompts/
-    system.md          # today's _RESEARCH_SYSTEM_PROMPT
+    system.md          # loaded via importlib.resources
   tests/
-    test_commission.py # today's tests/test_deep_research.py
+    test_commission.py
   BRIEF.md
 ```
 
@@ -315,8 +311,7 @@ src/vibrantine/commissions/deep_research/
   package: the regime rule in the flesh.
 - No `tools/`: `FetchTool` is a shared public tool, not privately owned by
   this package.
-- `prompts/system.md` would be the library's first externalized prompt,
-  so an actual move must first settle the prompt-loading open decision.
+- `prompts/system.md` is the library's first externalized prompt.
 
 Audit: a human opens BRIEF.md; an assistant edits `prompts/system.md` for
 a prompt change; a new input field goes in `types.py`; a new

@@ -2,7 +2,7 @@
 
 A fake AsyncOpenAI-shaped client plus a response builder and an
 always-cancelled token, hoisted here so the ask / synthesize / email_handler /
-deep_research / morning_briefing / llm_tools tests share one copy instead of
+morning_briefing / llm_tools tests share one copy instead of
 each re-declaring it. Imported as `from conftest import FakeClient,
 llm_response, AlwaysCancelled` — tests/ is on the path via pytest's import
 machinery (and basedpyright's `extraPaths`).

@@ -4,17 +4,17 @@ The recursive research agent is the concrete consumer that forces structural
 cost rollup on the LLM-loop path: a tree of LLM-loop nodes must report the
 summed cost of the whole subtree, and must enforce the budget against it.
 
-Tests inject one shared fake AsyncOpenAI-shaped client across every depth, so a
-single scripted response queue is consumed in depth-first dispatch order. No
-network and no fetches are exercised — `conclude` is always available, so leaves
+Tests inject one fake AsyncOpenAI-shaped client across every depth, so a single
+scripted response queue is consumed in depth-first dispatch order. No network
+and no fetches are exercised — `conclude` is always available, so leaves
 conclude directly.
 """
 
+import json
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from conftest import FakeClient, llm_response
 from openai import AsyncOpenAI
 
 from vibrantine.commissions.deep_research import (
@@ -27,6 +27,47 @@ from vibrantine.contract import CallContext
 # One LLM turn at the fixture model (google/gemini-3-flash-preview):
 # (100 in * $0.50 + 50 out * $3.00) / 1M.
 CALL_COST = (100 * 0.50 + 50 * 3.00) / 1_000_000
+
+
+def llm_response(
+    *,
+    tool_calls: list[tuple[str, str, dict[str, Any]]] | None = None,
+    content: str | None = None,
+    in_tokens: int = 100,
+    out_tokens: int = 50,
+) -> SimpleNamespace:
+    """Fake chat.completions response for this commission's LLM loop."""
+
+    tcs = None
+    if tool_calls is not None:
+        tcs = [
+            SimpleNamespace(
+                id=tc_id,
+                type="function",
+                function=SimpleNamespace(name=name, arguments=json.dumps(args)),
+            )
+            for tc_id, name, args in tool_calls
+        ]
+    return SimpleNamespace(
+        usage=SimpleNamespace(prompt_tokens=in_tokens, completion_tokens=out_tokens),
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content, tool_calls=tcs))],
+    )
+
+
+class FakeCompletions:
+    def __init__(self, responses: list[SimpleNamespace]) -> None:
+        self._responses = list(responses)
+        self.calls: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return self._responses.pop(0)
+
+
+class FakeClient:
+    def __init__(self, responses: list[SimpleNamespace]) -> None:
+        self.completions = FakeCompletions(responses)
+        self.chat = SimpleNamespace(completions=self.completions)
 
 
 def _agent(
@@ -65,6 +106,12 @@ def test_leaf_has_no_recurse_tool() -> None:
 def test_internal_node_offers_recurse_and_fetch() -> None:
     node, _ = _agent([], max_depth=1)
     assert _tool_names(node) == {"deep_research", "fetch"}
+
+
+def test_system_prompt_loads_from_package_resource() -> None:
+    assert DeepResearchCommission.system_prompt is not None
+    assert "You are a research agent." in DeepResearchCommission.system_prompt
+    assert "`deep_research` tool" in DeepResearchCommission.system_prompt
 
 
 async def test_rolls_up_child_cost_across_depth() -> None:
