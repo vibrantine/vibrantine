@@ -1,8 +1,11 @@
 # DeepResearch
 
-Recursive LLM-loop research commission. It answers one research question by
-letting the root researcher delegate narrower sub-questions to shallower copies
-of itself, while leaves ground claims through `FetchTool`.
+Recursive LLM-loop research commission, shipped as a worked example. It exists
+to demonstrate the composition pattern (recursion through the toolbox,
+structural termination, cost rollup); it works, but it is not a supported
+general-use research surface. It answers one research question by letting the
+root researcher delegate narrower sub-questions to shallower copies of itself,
+while leaves ground claims through `FetchTool`.
 
 Input: `ResearchInput(question, seed_urls)`. Output:
 `ResearchOutput(answer, claims)`, where each claim carries supporting

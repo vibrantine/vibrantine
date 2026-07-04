@@ -172,8 +172,13 @@ Release decision:
 - [x] Check prompt guidance discourages unsupported claims.
 - [x] Check tests cover delegation, leaf behavior, cost rollup, and tool menu
   shape.
-- [ ] Decide whether this is a worked example, a provisional commission, or a
-  future examples candidate.
+- [x] Decide whether this is a worked example, a provisional commission, or a
+  future examples candidate. Decision: worked example. It demonstrates the
+  composition pattern (recursion through the toolbox, structural termination,
+  cost rollup) and is not a supported general-use surface. It stays importable
+  under `vibrantine.commissions` for this cut; moving it to an `examples/`
+  area is consciously deferred. A rename is pending because the name is
+  already claimed by other AI research products.
 - [ ] Add heuristic eval cases for the efficacy bar in
   `src/vibrantine/commissions/deep_research/BRIEF.md`.
 
