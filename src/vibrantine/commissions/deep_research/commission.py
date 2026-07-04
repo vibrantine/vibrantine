@@ -56,9 +56,11 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
     output_type: ClassVar[type] = ResearchOutput
     system_prompt: ClassVar[str | None] = load_prompt(_PACKAGE)
 
-    # Sub-answers are rendered whole into the parent loop's context; cap them
-    # so one verbose delegate can't bloat the parent. `partial` keeps the
-    # usable output and flags the truncation through the result jacket.
+    # Sub-answers are rendered whole into the parent loop's context. This cap
+    # does not trim them: `partial` keeps the full output and flags the
+    # overflow through the result jacket, so the parent's LLM sees the size
+    # warning alongside the answer. It is a warning light, not a guard rail;
+    # real context protection arrives when `truncate_with_reference` lands.
     max_output_tokens: int | None = 4000
     overflow_policy: OverflowPolicy = "partial"
 

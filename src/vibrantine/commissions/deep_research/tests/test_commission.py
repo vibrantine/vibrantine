@@ -193,6 +193,33 @@ def test_model_and_menu_together_rejected() -> None:
         )
 
 
+async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
+    # The child's conclude blows past its 4000-token output cap. The `partial`
+    # overflow policy does not trim: the parent's next turn receives the full
+    # answer wrapped as partial_output with an output_too_large error, so the
+    # parent's LLM sees the size warning without losing the child's work.
+    long_answer = "x" * 20_000  # ~5000 estimated tokens, over the 4000 cap
+    agent, fake = _agent(
+        [
+            llm_response(tool_calls=_delegate("r1", "sub")),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": long_answer, "claims": []})]),
+            llm_response(tool_calls=_conclude("r2")),
+        ],
+        max_depth=1,
+    )
+
+    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+
+    assert result.status == "success", result.error
+    # Depth-first turn order: root delegates (0), child concludes (1), root
+    # concludes (2). The root's second turn carries the child's tool result.
+    tool_messages = [m for m in fake.completions.calls[2]["messages"] if m.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    payload = json.loads(tool_messages[0]["content"])
+    assert payload["error"]["kind"] == "output_too_large"
+    assert payload["partial_output"]["answer"] == long_answer
+
+
 async def test_budget_ceiling_counts_children() -> None:
     # Budget $0.0005 = 2.5 turns. The child succeeds (one turn, $0.0002), but
     # its cost rolled into the parent pushes the parent over after its second
