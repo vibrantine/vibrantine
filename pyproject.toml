@@ -43,6 +43,7 @@ testpaths = ["tests", "src/vibrantine/commissions"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that hit real external services; skip without credentials.",
+    "eval: graded live-model efficacy runs; skip without credentials.",
 ]
 
 [tool.ruff]

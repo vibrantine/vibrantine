@@ -38,8 +38,22 @@ Failure criteria:
 - Produces claims whose provenance does not support the claim text.
 - Recurses or delegates beyond the offered toolbox.
 
-Eval cases:
+Eval cases (`tests/test_eval.py`; run `uv run --env-file .env pytest -m eval -s`):
 
-- None yet. First cases should cover one direct source question, one broad
-  decomposable question, and one source-conflict question where the answer must
-  preserve uncertainty.
+- `direct_source_question`: one fixture page carries the target figure and a
+  neighbouring-plant trap figure. Deterministic checks: target present and
+  cited; the trap figure, wherever it appears, is attributed to its own plant
+  (mentioning the neighbour for comparison is fine; misattributing it is the
+  trap).
+- `broad_decomposable_question`: three fixture pages, one aspect each, so no
+  single fetch answers the whole question. Deterministic checks: all three
+  facts present, at least two distinct sources cited.
+- `source_conflict`: two fixture pages disagree on the operational date.
+  Watchlist status, crude heuristic: both dates must survive into the answer;
+  whether the disagreement is framed well is judged from the transcript.
+
+All cases pin the model and serve fictional fixture sources through the real
+`FetchTool` over an injected `httpx.MockTransport`, so the only free variable
+is the commission's competence. Delegation behavior (leaves answer from
+fetches; at most three sub-questions) is not output-observable today and is
+reviewed from transcripts.
