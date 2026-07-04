@@ -179,8 +179,12 @@ Release decision:
   under `vibrantine.commissions` for this cut; moving it to an `examples/`
   area is consciously deferred. A rename is pending because the name is
   already claimed by other AI research products.
-- [ ] Add heuristic eval cases for the efficacy bar in
-  `src/vibrantine/commissions/deep_research/BRIEF.md`.
+- [x] Add heuristic eval cases for the efficacy bar in
+  `src/vibrantine/commissions/deep_research/BRIEF.md`. Three cases in
+  `tests/test_eval.py` (direct source, broad decomposable, source conflict)
+  run a live pinned model over fictional fixture sources served through the
+  real `FetchTool` via `httpx.MockTransport`; marked `eval`, skip without
+  credentials. All three passed live on 2026-07-05.
 
 ### EmailHandlerCommission
 
