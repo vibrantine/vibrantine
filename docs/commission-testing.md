@@ -3,6 +3,34 @@
 How to prove a commission still satisfies its contract and is effective at the
 LLM-shaped work it claims to do.
 
+## Principles
+
+Five principles govern this document. The first four are about truth; the
+fifth is about your time. Everything below is an application of them.
+
+1. **Test the promise, not the interior.** Tests attach to the contract: what
+   goes in, what comes out, what the output promises to be. Prompts,
+   decomposition style, and control flow are interior and free to change. The
+   eval suite is what makes that freedom safe: it catches what a prompt
+   rewrite silently broke.
+2. **Two lanes, never mixed.** A contract-test failure means the code broke. An
+   efficacy-test failure means behavior drifted. A suite that blends the lanes
+   produces failures you cannot interpret.
+3. **Let exactly one thing vary.** In an efficacy run the thing under test is
+   the commission's competence, so pin everything else: fixture sources
+   instead of the live web, a named model instead of the current default. A
+   pinned eval that fails means the commission changed. Swapping the pinned
+   model is a different experiment; run one at a time.
+4. **Write pass/fail rules before seeing output, and give every case a way to
+   fail.** Criteria written after looking at output always pass. Fixtures
+   carry targets and traps, both planted at authoring time. Human judgment is
+   spent once, when the case is written, so the check repeats for free.
+5. **Match the cost of a check to how often it must run.** Deterministic
+   checks run every time. Human review runs when a person has attention to
+   spend, so it reviews the residue that resists pre-written criteria. A
+   judge model is a recurring human review made automatic, adopted only once
+   it earns its maintenance cost.
+
 ## Two Test Lanes
 
 Every shipped or worked-example commission needs two kinds of confidence:
