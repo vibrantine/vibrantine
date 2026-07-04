@@ -30,9 +30,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vibrantine"]
+exclude = [
+    "src/vibrantine/**/tests",
+    "src/vibrantine/**/tests/**",
+]
+artifacts = [
+    "src/vibrantine/**/prompts/*.md",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src/vibrantine/commissions"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that hit real external services; skip without credentials.",

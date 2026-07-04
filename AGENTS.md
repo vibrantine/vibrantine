@@ -141,7 +141,7 @@ src/
       synthesize.py                   # Phase 3
       morning_briefing.py             # post-Phase 4 coordinator commission
       ask.py                          # Phase 13: first LLM-loop commission
-      deep_research.py                # recursive LLM-loop worked example
+      deep_research/                  # recursive LLM-loop worked example
       email_handler.py                # provisional validator (unexported)
     tools/                            # std-lib tools layer (Phases 5–12)
       _helpers.py                     # shared provenance + failure builders

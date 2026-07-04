@@ -232,7 +232,7 @@ The default `invoke` delegates to `run_llm_loop` (`src/vibrantine/llm_tools.py:1
 - Dispatches tool calls through `dispatch`, feeds results back, and **rolls child cost up** into your `CommissionResult.cost` (`llm_tools.py:198-202`, `312`; folded in `contract.py:514-517`).
 - Stops on: `conclude`, budget exceeded, `max_iterations`, cancellation, or the LLM returning no tool call.
 
-**Commission-as-tool:** any commission placed in another commission's `toolbox` is exposed to that LLM via `as_llm_tool`, which uses your `description` **verbatim**. So `description` is a selection prompt — write it for the calling model (see §11). Worked recursive example: `commissions/deep_research.py`.
+**Commission-as-tool:** any commission placed in another commission's `toolbox` is exposed to that LLM via `as_llm_tool`, which uses your `description` **verbatim**. So `description` is a selection prompt — write it for the calling model (see §11). Worked recursive example: `commissions/deep_research/`.
 
 ---
 

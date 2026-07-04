@@ -16,14 +16,13 @@ This is the first commission wired into an LLM-loop toolbox, so its
 `description` is LLM-facing and follows the tool prose pattern.
 """
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, Field
-
+from vibrantine._prompts import load_prompt
+from vibrantine.commissions.deep_research.models import DeepResearchModelMenu
+from vibrantine.commissions.deep_research.types import ResearchInput, ResearchOutput
 from vibrantine.contract import (
     CallContext,
-    Claim,
     Commission,
     OverflowPolicy,
 )
@@ -34,56 +33,7 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-_RESEARCH_SYSTEM_PROMPT = (
-    "You are a research agent. Answer the user's research question accurately "
-    "and concisely.\n"
-    "- If the question is broad or has separable parts, break it into a few "
-    "(at most three) narrower sub-questions and delegate each to the "
-    "`deep_research` tool; it returns a cited answer for that sub-question.\n"
-    "- Ground your answer in sources: call `fetch` to retrieve a URL before "
-    "asserting facts that depend on it.\n"
-    "- When you have enough to answer, call `conclude` with `answer` (your "
-    "synthesized answer) and `claims` (the load-bearing assertions, each "
-    "carrying the source provenances that support it).\n"
-    "- Do not assert facts you have not grounded in a fetched source or a "
-    "delegated sub-answer.\n"
-    "- If the `deep_research` tool is not offered to you, you are at the leaf "
-    "level: answer directly from `fetch` results — do not try to delegate."
-)
-
-
-@dataclass(frozen=True)
-class DeepResearchModelMenu:
-    """The tree's LLM seats, filled by the caller at construction.
-
-    The commission declares its seats; the caller fills them (or none).
-    `researcher` is the root's own loop; `subresearcher` is every delegated
-    level below the root. An unfilled seat falls back to `default`, then to
-    the system default model. Dumb data: resolution happens in `__init__`.
-    """
-
-    default: str | Model | None = None
-    researcher: str | Model | None = None
-    subresearcher: str | Model | None = None
-
-
-class ResearchInput(BaseModel):
-    """Inputs for one research call."""
-
-    question: str = Field(description="The research question to answer.")
-    seed_urls: list[str] = Field(
-        default_factory=list,
-        description="Optional starting sources the agent may fetch.",
-    )
-
-
-class ResearchOutput(BaseModel):
-    """A cited answer to one research question."""
-
-    answer: str = Field(description="Synthesized answer to the question.")
-    claims: list[Claim[str]] = Field(
-        description="Load-bearing assertions, each with supporting source provenances.",
-    )
+_PACKAGE = "vibrantine.commissions.deep_research"
 
 
 class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
@@ -104,7 +54,7 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
     )
     input_type: ClassVar[type] = ResearchInput
     output_type: ClassVar[type] = ResearchOutput
-    system_prompt: ClassVar[str | None] = _RESEARCH_SYSTEM_PROMPT
+    system_prompt: ClassVar[str | None] = load_prompt(_PACKAGE)
 
     # Sub-answers are rendered whole into the parent loop's context; cap them
     # so one verbose delegate can't bloat the parent. `partial` keeps the
