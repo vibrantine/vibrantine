@@ -262,7 +262,8 @@ Checklist for nested commissions:
 ## Testing And Improvement Standard
 
 Every shipped or example commission should have tests at the level of risk it
-carries.
+carries. See [`commission-testing.md`](commission-testing.md) for the full
+standard.
 
 - [ ] Unit tests use fake LLM clients and require no API key.
 - [ ] Integration tests are marked `@pytest.mark.integration`.
@@ -274,12 +275,18 @@ carries.
 - [ ] Tests cover cost rollup where child commissions/tools are used.
 - [ ] Tests cover capability/tool menu shape for LLM-loop commissions.
 - [ ] Tests cover partial results where partial is an expected state.
-- [ ] Prompt changes include at least one targeted regression or scripted fake
-  conversation when practical.
+- [ ] LLM-driven commissions have heuristic evaluation cases with explicit
+  success and failure criteria.
+- [ ] Evaluation cases record their scoring method: deterministic check,
+  heuristic assertion, human review, or judge-model rubric.
+- [ ] Prompt changes update or add at least one targeted regression, scripted
+  fake conversation, or evaluation case when practical.
 
 Optional improvement notes per commission:
 
 ```text
+success criteria:
+failure criteria:
 known failures:
 prompt changes tried:
 example inputs:

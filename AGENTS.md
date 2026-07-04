@@ -114,6 +114,9 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 - **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading `OPENROUTER_API_KEY` from the environment at that point; tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first `invoke`, not at construction. The library never reads `.env` itself — that's a dev/application concern.
 - **Dev + tests**: `uv run --env-file .env <cmd>`, or export in your shell. Both pick it up the same way.
 - **Test policy**: unit tests mock the OpenAI client and require no key. Integration tests are marked `@pytest.mark.integration` and skip when the key is absent. Never commit fixtures containing real API responses with embedded keys.
+  LLM-driven commissions should also grow heuristic evaluation cases with
+  explicit success and failure criteria once they are more than mechanical
+  contract probes; see `docs/commission-testing.md`.
 
 ## Commands
 

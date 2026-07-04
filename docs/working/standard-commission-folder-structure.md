@@ -141,8 +141,11 @@ Every folder-sized commission carries a `BRIEF.md`. The name is deliberate:
 A BRIEF covers, in plain language: purpose, maturity and release status,
 the input and output in one breath, what each subcommission is for (one
 level only, never the whole tree), known limitations and failures, and
-anything a maintainer must not break. Claims that matter should be enforced
-by tests, because prose drifts under years of agentic edits.
+anything a maintainer must not break. For LLM-driven commissions it also
+names the success criteria, failure criteria, and evaluation cases that define
+whether the commission is effective. Claims that matter should be enforced by
+tests or active heuristic evaluation, because prose drifts under years of
+agentic edits.
 
 ## Tests Are Colocated
 
@@ -154,6 +157,8 @@ Tests live inside the commission package, not in the repository's flat
 - **Promotion stays one move.** Because a package carries its code, types,
   prompts, brief, and tests, lifting it out is a single `git mv` plus an
   import fix, not a coordinated multi-directory refactor.
+- **Evaluation travels with behavior.** LLM-driven commissions can keep small
+  heuristic eval cases beside the prompt and code they protect.
 
 Follow-up: the packaging configuration must exclude in-package `tests/`
 directories from the built distribution. The repository's existing flat
