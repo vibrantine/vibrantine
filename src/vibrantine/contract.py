@@ -251,7 +251,7 @@ class CallContext:
     concurrency: int = 4
     # Populated by `dispatch` from the outer call's run_id; None at the root.
     # Commission bodies can read this for provenance/logging; they should not
-    # set it manually — dispatch threads it via ContextVar across nested calls.
+    # set it manually; dispatch threads it via ContextVar across nested calls.
     parent_run_id: str | None = None
     # PersistenceBackend the dispatch helper writes through. Wired by the
     # caller (typically run_one); inherited by children automatically.
@@ -273,7 +273,7 @@ class TextPart(BaseModel):
 class ImagePart(BaseModel):
     """An image in a commission's opening user message.
 
-    Provisional — defined now so the `ContentPart` union and the
+    Provisional: defined now so the `ContentPart` union and the
     `build_user_message` return type are multimodal-ready, but its exact
     fields (URL vs base64 data, mime type) are finalized by the first
     image-bearing consumer (shape-via-consumer). Today it carries only a
@@ -314,8 +314,8 @@ class Commission[InputT, OutputT](ABC):
     One typed input, one typed result, runtime conditions in CallContext.
     A basic commission sets the identity ClassVars, a `system_prompt`, a
     `toolbox`, and a `build_user_message` hook, then rides the default
-    `invoke` (the full LLM loop below). A custom commission — one whose
-    control flow is not the standard loop — overrides `invoke` instead.
+    `invoke` (the full LLM loop below). A custom commission (one whose
+    control flow is not the standard loop) overrides `invoke` instead.
     """
 
     # Identity
@@ -330,16 +330,16 @@ class Commission[InputT, OutputT](ABC):
     system_prompt: ClassVar[str | None] = None
 
     # Toolbox: author-declared dependencies this commission can dispatch (the
-    # sub-commissions/tools it owns). Class-attribute default — () for workers;
+    # sub-commissions/tools it owns). Class-attribute default: () for workers;
     # a basic commission sets a class-level tuple, whose tools are shared
     # across instances and so must be safe to share. Stateful tools are built
     # per-instance in an author __init__ and passed up via the `toolbox=`
-    # kwarg, which overrides this for DI/tests. Not a ClassVar — instance
+    # kwarg, which overrides this for DI/tests. Not a ClassVar; instance
     # override is supported.
     toolbox: "tuple[Commission[Any, Any], ...]" = ()
 
     # Policy: class default; override per-instance via __init__ kwargs.
-    # Not ClassVar — instance assignment is a supported override path.
+    # Not ClassVar; instance assignment is a supported override path.
     persistence_mode: PersistenceMode = "off"
     max_output_tokens: int | None = None
     overflow_policy: OverflowPolicy = "flag"
@@ -348,7 +348,7 @@ class Commission[InputT, OutputT](ABC):
         """Enforce the standard authoring format at class-definition time.
 
         Two checks, so a malformed commission fails when it's defined rather
-        than at first `invoke` — part of making the contract safe to author
+        than at first `invoke`, part of making the contract safe to author
         against (including by non-devs and lesser-model agents):
 
         1. The four identity ClassVars are set (the check follows the MRO, so
@@ -357,7 +357,7 @@ class Commission[InputT, OutputT](ABC):
            basic commission) or `invoke` (a custom one). Overriding neither
            means it could never run. An abstract intermediate defers a slot
            with `@abstractmethod`, which counts as overriding it (and ABC
-           still blocks instantiation) — no opt-out flag needed.
+           still blocks instantiation); no opt-out flag needed.
         """
         super().__init_subclass__(**kwargs)
         missing = [
@@ -407,7 +407,7 @@ class Commission[InputT, OutputT](ABC):
         # `models.resolve` (None → the system default seam, models.DEFAULT_MODEL);
         # a `Model` is taken as-is, enabling local/multi-provider targets. Keep
         # `self._model` as the id string so every id-string site is untouched.
-        # Non-LLM commissions (tools, coordinators) inherit this inertly — they
+        # Non-LLM commissions (tools, coordinators) inherit this inertly; they
         # override `invoke` and never consult it.
         self._model_spec: Model = resolve(model)
         self._model = self._model_spec.id
@@ -462,7 +462,7 @@ class Commission[InputT, OutputT](ABC):
         escape hatch).
         """
         # Lazy import: `run_llm_loop` lives in llm_tools, which imports this
-        # module — importing it at call time breaks the contract<->llm_tools
+        # module; importing it at call time breaks the contract<->llm_tools
         # cycle. After first call it's a cached sys.modules lookup.
         from vibrantine.llm_tools import run_llm_loop
 
@@ -557,7 +557,7 @@ class Commission[InputT, OutputT](ABC):
         """Input/output USD per million tokens; (0.0, 0.0) for unpriced models.
 
         Callers gate on `self._model_spec.is_priced` before trusting these for
-        budgeting — an unpriced model returns zeros here but can't be budgeted.
+        budgeting; an unpriced model returns zeros here but can't be budgeted.
         """
         in_price = self._model_spec.input_usd_per_million
         out_price = self._model_spec.output_usd_per_million
@@ -599,7 +599,7 @@ class Commission[InputT, OutputT](ABC):
 
         `budget_usd` is a hard ceiling, and the framework can only honor it if
         the model carries pricing (`self._model_spec.is_priced`). An unpriced
-        model prices at $0, which would make the budget silently unenforced — so
+        model prices at $0, which would make the budget silently unenforced, so
         rather than run with a budget it can't keep, the call fails fast here.
         A *free* model (priced at $0.0, e.g. local Ollama) is priced and passes.
         Returns None when enforcement is possible (a priced model, or no budget

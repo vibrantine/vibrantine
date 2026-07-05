@@ -127,7 +127,7 @@ class FilesystemBackend:
     def _safe_load(self, path: Path) -> PersistedRecord | None:
         """Load a record, returning None on parse failure.
 
-        Pruning skips corrupt records rather than crashing the whole run —
+        Pruning skips corrupt records rather than crashing the whole run;
         the alternative (failing pruning) defeats the "don't fill the disk"
         guarantee. Listing and explicit load() still raise.
         """

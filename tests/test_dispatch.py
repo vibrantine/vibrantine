@@ -93,7 +93,7 @@ class _Stub(Commission[_Input, _Output]):
 
 
 class _Raiser(Commission[_Input, _Output]):
-    """Raises from invoke — a commission that breaks the errors-as-values rule."""
+    """Raises from invoke: a commission that breaks the errors-as-values rule."""
 
     name: ClassVar[str] = "raiser"
     description: ClassVar[str] = "test stub that raises"

@@ -6,7 +6,7 @@ summed cost of the whole subtree, and must enforce the budget against it.
 
 Tests inject one fake AsyncOpenAI-shaped client across every depth, so a single
 scripted response queue is consumed in depth-first dispatch order. No network
-and no fetches are exercised — `conclude` is always available, so leaves
+and no fetches are exercised; `conclude` is always available, so leaves
 conclude directly.
 """
 

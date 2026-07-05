@@ -120,7 +120,7 @@ async def test_run_one_threads_backend_so_dispatch_persists(
 
 
 async def test_run_one_no_backend_skips_persistence(tmp_path: Path) -> None:
-    # Same commission, but with no backend wired — nothing should be stored.
+    # Same commission, but with no backend wired; nothing should be stored.
     backend = FilesystemBackend(tmp_path)
 
     result = await run_one(

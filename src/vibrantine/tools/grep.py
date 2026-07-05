@@ -4,7 +4,7 @@ Content-search primitive. Files are searched directly; directories are
 walked recursively. Pair with Glob (find by name) for full-filesystem
 discovery; pair with Read or Sample once an interesting match is found.
 
-The first tool whose result size can grow alarmingly — `max_matches`
+The first tool whose result size can grow alarmingly: `max_matches`
 bounds it, with `truncated=True` signalling more remains. This is the
 tool that surfaces the tool-result-budgeting design question
 concretely (see `docs/design.md § Oversized output is a policy the
@@ -85,7 +85,7 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
         "  are walked recursively. Binary files are skipped silently during\n"
         "  directory walks.\n"
         "- `max_matches` (default 100) bounds output size. Check the\n"
-        "  `truncated` flag — if true, narrow your pattern or raise the cap\n"
+        "  `truncated` flag: if true, narrow your pattern or raise the cap\n"
         "  (mind the context budget).\n"
         "- Set `ignore_case=true` for case-insensitive matching.\n"
         "\n"

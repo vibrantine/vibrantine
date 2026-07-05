@@ -2,7 +2,7 @@
 
 Two-step LLM flow: a free-form synthesis pass produces neutral prose; a
 structured-output pass converts that prose into typed claims. The LLM emits
-source indices, not full provenances — provenances are re-attached on the way
+source indices, not full provenances; provenances are re-attached on the way
 out so the call's output stays grounded in its inputs.
 
 The default model is `google/gemini-3-flash-preview` via OpenRouter, accessed
@@ -101,7 +101,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         "- Call this with two or more `sources` (each text plus its provenance) "
         "to merge into a single neutral summary; pass an optional `focus` to "
         "steer it toward one question.\n"
-        "- Use it when you already hold the source texts — it does not fetch. "
+        "- Use it when you already hold the source texts; it does not fetch. "
         "Gather sources first (e.g. via `fetch`), then synthesize.\n"
         "\n"
         "Returns `summary_text` (neutral prose) and `claims` (load-bearing "
@@ -365,7 +365,7 @@ def _resolve_claims(
             continue
         # Explicit bounds check: Python accepts negative indices, so a
         # model-emitted -1 would otherwise silently attach the *last*
-        # source's provenance to the claim — a misattribution, not an error.
+        # source's provenance to the claim: a misattribution, not an error.
         for i in rc.source_indices:
             if i < 0 or i >= len(sources):
                 raise IndexError(f"source index {i} is outside 0..{len(sources) - 1}")

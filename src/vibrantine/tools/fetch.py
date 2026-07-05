@@ -2,7 +2,7 @@
 
 The HTTP primitive for the std-lib tools layer. Migrated in Phase 8
 from `src/vibrantine/commissions/fetch.py` where it lived as
-`FetchCommission` — a tool dressed in the commission contract during
+`FetchCommission`, a tool dressed in the commission contract during
 v0 for composition convenience. Now properly a tool.
 """
 
@@ -132,7 +132,7 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
                 provenance=prov,
             )
 
-        # Anything non-2xx fails — the description promises "only 2xx
+        # Anything non-2xx fails; the description promises "only 2xx
         # responses populate output". Redirects are followed above, so a
         # 3xx here means redirection didn't resolve to a final document.
         if not response.is_success:

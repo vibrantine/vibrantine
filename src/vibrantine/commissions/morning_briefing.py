@@ -1,8 +1,8 @@
 """MorningBriefing commission: a coordinator that exercises recursive composition.
 
 Fans out Fetches in parallel, hands survivors to Synthesize, writes a markdown
-briefing to disk. Sits behind the same contract as a worker — typed
-input/output, errors-as-values, structural cost rollup — so it can itself be
+briefing to disk. Sits behind the same contract as a worker (typed
+input/output, errors-as-values, structural cost rollup), so it can itself be
 invoked by another coordinator.
 
 File-writing is a deliberate side effect inside the contract: the typed

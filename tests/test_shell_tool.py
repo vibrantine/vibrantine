@@ -1,6 +1,6 @@
 """Tests for the Shell tool.
 
-Uses `python -c` for cross-platform commands — host shells differ
+Uses `python -c` for cross-platform commands; host shells differ
 between Windows (cmd.exe) and POSIX (/bin/sh), but the Python
 interpreter behaves identically on both.
 """

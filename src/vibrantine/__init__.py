@@ -5,13 +5,13 @@ are the SemVer-protected surface a third party may import and depend on:
 
     from vibrantine import Commission, run_one, CommissionResult
 
-The frozen surface is the *bones* — the contract envelope, the closed
+The frozen surface is the *bones*: the contract envelope, the closed
 `Literal` vocabularies, and the `run_one` / `invoke_sync` / `dispatch`
 entry points. Everything not in `__all__` (including the std-lib
 commissions in `vibrantine.commissions`, the tools in `vibrantine.tools`,
 and any underscore-prefixed name) is internal and provisional: importable,
 but not covered by the stability promise. `commission.invoke` is the
-override hook authors implement, not the call API — invoke a commission
+override hook authors implement, not the call API; invoke a commission
 through `run_one` / `invoke_sync` / `dispatch` so run_id stamping, overflow
 enforcement, and persistence happen uniformly.
 """
@@ -48,7 +48,7 @@ from vibrantine.orchestrator import invoke_sync, run_one
 from vibrantine.persistence import FilesystemBackend
 
 __all__ = [
-    # Contract — the commission and its result envelope
+    # Contract: the commission and its result envelope
     "Commission",
     "CommissionResult",
     "CommissionStatus",
@@ -73,7 +73,7 @@ __all__ = [
     "PersistedRecord",
     "PersistenceBackend",
     "FilesystemBackend",
-    # Models — the vocabulary callers use to pick or build a model target
+    # Models: the vocabulary callers use to pick or build a model target
     "Model",
     "KNOWN_MODELS",
     "DEFAULT_MODEL",

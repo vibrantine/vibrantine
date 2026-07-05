@@ -1,6 +1,6 @@
 """SummariseCommission: shorten one piece of content to a target length.
 
-A basic LLM-loop commission — it declares its identity, I/O types, a
+A basic LLM-loop commission: it declares its identity, I/O types, a
 `system_prompt`, and a `build_user_message` hook, then rides the base's
 default `invoke`. The toolbox is empty: summarisation is pure judgment over
 content already in hand, so there is nothing to fetch. The LLM reads the
@@ -28,7 +28,7 @@ SummaryLength = Literal["one_sentence", "short", "medium", "long"]
 
 A closed vocabulary on the *input* (not the output), so it carries none of the
 dynamic-`output_type` tension that per-call labels raise for Classify. The
-prose meaning of each member is pinned in the system prompt — an LLM hits a
+prose meaning of each member is pinned in the system prompt; an LLM hits a
 described size far more reliably than an exact word count.
 """
 
@@ -44,7 +44,7 @@ _SYSTEM_PROMPT = (
     "- long: a thorough multi-paragraph summary that still reads shorter and "
     "tighter than the source.\n"
     "\n"
-    "Summarise only what the content supports — never add facts, opinions, or "
+    "Summarise only what the content supports; never add facts, opinions, or "
     "details that are not in it. If a focus is given, foreground the parts "
     "relevant to it while staying faithful to the source. When you have the "
     "summary, call `conclude` with a single `summary` field. Do not produce "
@@ -86,7 +86,7 @@ class SummariseCommission(Commission[SummariseInput, SummariseOutput]):
         "- Call this with the `content` to shorten and an optional `length` "
         "('one_sentence', 'short', 'medium', 'long'; default 'short'); pass an "
         "optional `focus` to steer the summary toward one aspect.\n"
-        "- Single source in hand — it does not fetch, and it does not cite. To "
+        "- Single source in hand; it does not fetch, and it does not cite. To "
         "merge several sources into a summary with provenance, use `synthesize` "
         "instead.\n"
         "\n"

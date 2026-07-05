@@ -112,7 +112,7 @@ def test_injected_client_runs_the_loop_without_a_key(monkeypatch: pytest.MonkeyP
 
     assert res.status == "success"
     assert res.output is not None and res.output.answer == "42"
-    # A duck-typed SimpleNamespace client satisfies the seam — no real AsyncOpenAI.
+    # A duck-typed SimpleNamespace client satisfies the seam: no real AsyncOpenAI.
     assert isinstance(fake, FakeClient)
 
 
@@ -130,7 +130,7 @@ def test_override_neither_fails_at_definition_time() -> None:
 
 
 def test_override_both_is_allowed() -> None:
-    # Overriding both must NOT raise — invoke wins, build_user_message is unused.
+    # Overriding both must NOT raise: invoke wins, build_user_message is unused.
     class _Both(Commission[_AnswerInput, _AnswerOutput]):
         name: ClassVar[str] = "both"
         description: ClassVar[str] = "d"

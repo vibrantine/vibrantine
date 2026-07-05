@@ -3,7 +3,7 @@
 An incoming email is classified into one of three routes and the route is
 executed in the same loop: file as `non_urgent` (conclude directly), `draft` a
 reply (dispatch the DraftReply sub-commission), or `notify` the user (dispatch
-the NotifyUser tool). A basic commission — it rides the default `invoke`, with
+the NotifyUser tool). A basic commission: it rides the default `invoke`, with
 its toolbox holding a *sub-commission* and a *tool* rather than leaf tools only.
 
 This exists to stress the LLM-loop-routing surface of the contract before the
@@ -100,7 +100,7 @@ class DraftReplyInput(BaseModel):
 
 
 class DraftReplyOutput(BaseModel):
-    """A drafted reply. Drafting only — sending stays with the human."""
+    """A drafted reply. Drafting only; sending stays with the human."""
 
     draft_text: str = Field(description="The drafted reply text.")
 
@@ -110,7 +110,7 @@ class DraftReplyCommission(Commission[DraftReplyInput, DraftReplyOutput]):
 
     name: ClassVar[str] = "draft_reply"
     description: ClassVar[str] = (
-        "Draft a reply to an email. Drafting only — it never sends.\n"
+        "Draft a reply to an email. Drafting only; it never sends.\n"
         "\n"
         "Usage:\n"
         "- Call this with the `email` to reply to when a written response is "
@@ -178,7 +178,7 @@ class NotifyUserTool(Commission[NotifyInput, NotifyOutput]):
         "\n"
         "Usage:\n"
         "- Call this with a short `reason` when an email can't be handled "
-        "automatically and the user must see it. Use it sparingly — for "
+        "automatically and the user must see it. Use it sparingly: for "
         "genuinely urgent or judgment-needing mail.\n"
         "\n"
         "Returns `delivered`: whether the notification went out."
