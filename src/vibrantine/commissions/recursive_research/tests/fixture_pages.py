@@ -1,4 +1,4 @@
-"""Pinned fixture sources for the DeepResearch eval cases.
+"""Pinned fixture sources for the RecursiveResearch eval cases.
 
 A small corpus about the fictional Meridian Vale desalination project.
 Fictional on purpose: the model cannot know these facts, so every correct

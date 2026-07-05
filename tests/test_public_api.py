@@ -41,7 +41,7 @@ def test_provisional_commissions_are_not_in_the_frozen_surface() -> None:
     # commissions/ is iced: importable from its submodule, not the top-level
     # frozen __all__.
     assert "AskCommission" not in vibrantine.__all__
-    assert "DeepResearchCommission" not in vibrantine.__all__
+    assert "RecursiveResearchCommission" not in vibrantine.__all__
     assert "ReadTool" not in vibrantine.__all__
 
 

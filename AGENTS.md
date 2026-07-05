@@ -50,7 +50,7 @@ Follow the same five-element pattern as mature agent-harness tool prose (opening
 - **Required:** opening sentence (what it does), when-to-call (usage), return-shape (what comes back).
 - **Edge cases / recovery guidance:** only when *caller-actionable*. A Commission's failures already return as a structured `CommissionResult` error jacket (rendered to the calling LLM by `_render_tool_result`), so recovery prose is usually redundant. This is the one place a Commission legitimately carries less than a raw tool, which returns rawer results.
 
-A one-sentence description is the exception, justified only when a Commission genuinely can never be LLM-called. `DeepResearchCommission` is the worked example: opening + `Usage:` bullets + return-shape inline, no edge/recovery because none is caller-actionable.
+A one-sentence description is the exception, justified only when a Commission genuinely can never be LLM-called. `RecursiveResearchCommission` is the worked example: opening + `Usage:` bullets + return-shape inline, no edge/recovery because none is caller-actionable.
 
 ## CallContext fields: what's load-bearing, what's not
 
@@ -144,7 +144,7 @@ src/
       synthesize.py                   # Phase 3
       morning_briefing.py             # post-Phase 4 coordinator commission
       ask.py                          # Phase 13: first LLM-loop commission
-      deep_research/                  # recursive LLM-loop worked example
+      recursive_research/                  # recursive LLM-loop worked example
       email_handler.py                # provisional validator (unexported)
     tools/                            # std-lib tools layer (Phases 5–12)
       _helpers.py                     # shared provenance + failure builders

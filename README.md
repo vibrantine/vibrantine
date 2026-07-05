@@ -296,7 +296,7 @@ Available on `main`:
 - Cost and provenance on results, with child cost rollup.
 - Optional filesystem persistence.
 - Worked Commissions including `Ask`, `Summarise`, `Synthesize`,
-  `MorningBriefing`, `DeepResearch`, and provisional validation examples.
+  `MorningBriefing`, `RecursiveResearch`, and provisional validation examples.
 
 Still settling:
 

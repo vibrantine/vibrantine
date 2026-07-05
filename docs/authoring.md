@@ -38,7 +38,7 @@ reads the document and returns a one-sentence summary plus a handful of topic
 tags. Small enough to finish in a sitting, real enough to need every part of
 the pattern.
 
-Each step ends with a pointer to the same step in `DeepResearchCommission`,
+Each step ends with a pointer to the same step in `RecursiveResearchCommission`,
 the worked example that ships with the library, so you can compare your small
 version against a finished specimen.
 
@@ -154,7 +154,7 @@ Two things to notice:
 - The output is deliberately small. A Commission promises a deliverable, not
   a transcript of its work.
 
-**Specimen:** `src/vibrantine/commissions/deep_research/types.py` does exactly
+**Specimen:** `src/vibrantine/commissions/recursive_research/types.py` does exactly
 this and nothing more.
 
 ## Step 2: The Identity
@@ -225,7 +225,7 @@ The four identity attributes (`name`, `description`, `input_type`,
 class fails to even define, with a message saying what's missing. Malformed
 Commissions fail at authoring time, not at first run.
 
-**Specimen:** `src/vibrantine/commissions/deep_research/commission.py` (the
+**Specimen:** `src/vibrantine/commissions/recursive_research/commission.py` (the
 ClassVar block) and its `prompts/system.md`.
 
 ## Step 3: The Interior
@@ -261,7 +261,7 @@ Whichever way you choose, it is invisible from outside: same input type, same
 result jacket. The choice is never part of your contract, which means you can
 change your mind later without breaking a single caller.
 
-**Specimen:** DeepResearch is also a basic Commission; its entire "recursion"
+**Specimen:** RecursiveResearch is also a basic Commission; its entire "recursion"
 is toolbox contents plus this same one-line hook. For a your-code-decides
 specimen, see `MorningBriefingCommission`, or Part II below.
 
@@ -318,7 +318,7 @@ print(f"cost: ${result.cost.estimated_usd:.4f}")
 uv run --env-file .env python tag_one.py
 ```
 
-**Specimen:** the DeepResearch constructor builds its own child researcher
+**Specimen:** the RecursiveResearch constructor builds its own child researcher
 and fetch tool the same way, including the `model=`/`client=` pass-through.
 
 ## Step 5: The Guard Rails
@@ -357,7 +357,7 @@ else:
 timeout) or cannot (a validation failure). Nothing in this block can raise;
 that is the contract.
 
-**Specimen:** `DeepResearchCommission` sets `max_output_tokens` and
+**Specimen:** `RecursiveResearchCommission` sets `max_output_tokens` and
 `overflow_policy` explicitly, with a comment stating exactly what the policy
 does and does not protect.
 
@@ -459,7 +459,7 @@ budget behavior, tool menu shape) is listed in
 [`commission-testing.md`](commission-testing.md); work through it as your
 Commission grows up.
 
-**Specimen:** `src/vibrantine/commissions/deep_research/tests/test_commission.py`
+**Specimen:** `src/vibrantine/commissions/recursive_research/tests/test_commission.py`
 runs this exact pattern across a recursive tree, including budget and
 cost-rollup coverage.
 
@@ -497,7 +497,7 @@ Eval cases:
 The BRIEF is the quality contract in plain language. The eval cases in the
 next step exist to turn its sentences into pass/fail.
 
-**Specimen:** `src/vibrantine/commissions/deep_research/BRIEF.md`.
+**Specimen:** `src/vibrantine/commissions/recursive_research/BRIEF.md`.
 
 ## Step 8: The Evals
 
@@ -604,7 +604,7 @@ When a criterion turns out to be wrong (a good answer fails it), fix the
 criterion and record why; that history is how prompt changes stop being
 vibes-only.
 
-**Specimen:** `src/vibrantine/commissions/deep_research/tests/test_eval.py`,
+**Specimen:** `src/vibrantine/commissions/recursive_research/tests/test_eval.py`,
 three cases including a source-conflict case graded by crude heuristic plus
 human transcript review.
 
@@ -676,7 +676,7 @@ claims, then **consolidates** into a follow-up question; after the rounds, an
 **assemble** Commission writes the report. Five basic Commissions plus one
 custom coordinator.
 
-(Contrast with the shipped `DeepResearchCommission`, which does research
+(Contrast with the shipped `RecursiveResearchCommission`, which does research
 with the *opposite* interior: an LLM loop deciding dispatch. Same job family,
 different owner of control flow, identical boundary. That is the point.)
 
@@ -899,7 +899,7 @@ exception across a boundary, and never stored state inside a Commission.
 
 For the design rationale behind all of this, read
 [`design.md`](design.md); for the shipped LLM-decides
-counterpart, read `src/vibrantine/commissions/deep_research/` end to end
+counterpart, read `src/vibrantine/commissions/recursive_research/` end to end
 (it is one page of code).
 
 ---

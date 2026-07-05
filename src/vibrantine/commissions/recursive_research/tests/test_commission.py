@@ -1,4 +1,4 @@
-"""Tests for DeepResearchCommission.
+"""Tests for RecursiveResearchCommission.
 
 The recursive research agent is the concrete consumer that forces structural
 cost rollup on the LLM-loop path: a tree of LLM-loop nodes must report the
@@ -17,9 +17,9 @@ from typing import Any, cast
 import pytest
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.deep_research import (
-    DeepResearchCommission,
-    DeepResearchModelMenu,
+from vibrantine.commissions.recursive_research import (
+    RecursiveResearchCommission,
+    RecursiveResearchModelMenu,
     ResearchInput,
 )
 from vibrantine.contract import CallContext
@@ -74,9 +74,9 @@ def _agent(
     responses: list[SimpleNamespace],
     *,
     max_depth: int,
-) -> tuple[DeepResearchCommission, FakeClient]:
+) -> tuple[RecursiveResearchCommission, FakeClient]:
     fake = FakeClient(responses)
-    agent = DeepResearchCommission(
+    agent = RecursiveResearchCommission(
         max_depth=max_depth,
         client=cast(AsyncOpenAI, fake),
         model="google/gemini-3-flash-preview",  # stable fixture for pricing math
@@ -84,7 +84,7 @@ def _agent(
     return agent, fake
 
 
-def _tool_names(commission: DeepResearchCommission) -> set[str]:
+def _tool_names(commission: RecursiveResearchCommission) -> set[str]:
     return {child.name for child in commission.toolbox}
 
 
@@ -93,7 +93,7 @@ def _conclude(tc_id: str) -> list[tuple[str, str, dict[str, Any]]]:
 
 
 def _delegate(tc_id: str, question: str) -> list[tuple[str, str, dict[str, Any]]]:
-    return [(tc_id, "deep_research", {"question": question})]
+    return [(tc_id, "recursive_research", {"question": question})]
 
 
 def test_leaf_has_no_recurse_tool() -> None:
@@ -105,13 +105,13 @@ def test_leaf_has_no_recurse_tool() -> None:
 
 def test_internal_node_offers_recurse_and_fetch() -> None:
     node, _ = _agent([], max_depth=1)
-    assert _tool_names(node) == {"deep_research", "fetch"}
+    assert _tool_names(node) == {"recursive_research", "fetch"}
 
 
 def test_system_prompt_loads_from_package_resource() -> None:
-    assert DeepResearchCommission.system_prompt is not None
-    assert "You are a research agent." in DeepResearchCommission.system_prompt
-    assert "`deep_research` tool" in DeepResearchCommission.system_prompt
+    assert RecursiveResearchCommission.system_prompt is not None
+    assert "You are a research agent." in RecursiveResearchCommission.system_prompt
+    assert "`recursive_research` tool" in RecursiveResearchCommission.system_prompt
 
 
 async def test_rolls_up_child_cost_across_depth() -> None:
@@ -149,8 +149,8 @@ async def test_model_menu_seats_reach_their_levels() -> None:
             llm_response(tool_calls=_conclude("r2")),
         ]
     )
-    menu = DeepResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
-    agent = DeepResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+    menu = RecursiveResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
+    agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
 
     result = await agent.invoke(ResearchInput(question="q"), CallContext())
 
@@ -172,8 +172,8 @@ async def test_model_menu_default_fills_unnamed_seats() -> None:
             llm_response(tool_calls=_conclude("r2")),
         ]
     )
-    menu = DeepResearchModelMenu(default="menu-default", researcher="root-model")
-    agent = DeepResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+    menu = RecursiveResearchModelMenu(default="menu-default", researcher="root-model")
+    agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
 
     result = await agent.invoke(ResearchInput(question="q"), CallContext())
 
@@ -187,9 +187,9 @@ async def test_model_menu_default_fills_unnamed_seats() -> None:
 
 def test_model_and_menu_together_rejected() -> None:
     with pytest.raises(ValueError, match="not both"):
-        DeepResearchCommission(
+        RecursiveResearchCommission(
             model="some/model",
-            models=DeepResearchModelMenu(default="other/model"),
+            models=RecursiveResearchModelMenu(default="other/model"),
         )
 
 
