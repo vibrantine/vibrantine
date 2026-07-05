@@ -1,8 +1,7 @@
 """Known-models table: model identity + endpoint + per-token pricing facts.
 
-Lives at the library level (per `docs/vision.md § Conventions for commissions`)
-so every LLM-using commission consults one table rather than carrying its own
-copy. Add a model here once; consumers resolve it by identifier at
+Lives at the library level so every LLM-using commission consults one table
+rather than carrying its own copy. Add a model here once; consumers resolve it by identifier at
 construction. Unknown identifiers are permitted — they fall back to a bare
 `Model` pointed at the OpenRouter endpoint with no context window and no
 pricing, so a caller can target any OpenRouter model without first registering
@@ -18,7 +17,8 @@ still resolve through `KNOWN_MODELS` / `resolve()` for backward compatibility.
 Pricing is `float | None`. `None` means *unpriced/unknown* — the model simply
 carries no price here. `$0` (`0.0`) means *genuinely free*, e.g. a local Ollama
 model. The distinction matters: a call's cost rolls up structurally into its
-parents (`composition.md § Cost rollup`), so an *unpriced* model anywhere in a
+parents (`design.md § Cost and provenance are structural`), so an *unpriced*
+model anywhere in a
 tree silently under-reports the whole tree's cost — register it for accurate
 accounting. A commission invoked with a `budget_usd` but an *unpriced* model
 can't have that budget enforced, so it fails fast at invoke; a *free* model

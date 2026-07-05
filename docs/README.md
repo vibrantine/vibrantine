@@ -1,8 +1,7 @@
 # Vibrantine Docs
 
 Index of the docs directory. Start with the root [`README.md`](../README.md)
-for the public front door, then read `vision.md` and `composition.md` for the
-architecture.
+for the public front door, then read `design.md` for the architecture.
 
 ## Public front door
 
@@ -11,14 +10,10 @@ architecture.
 
 ## Architecture source of truth
 
-The authoritative pair. Stable, frequently referenced, the single source of
-truth for what Vibrantine is and how its pieces fit together.
-
-- [`vision.md`](vision.md): what Vibrantine is and why: use cases, library
-  scope, distribution layering, bounded agency, the bet.
-- [`composition.md`](composition.md): how the pieces fit: contract jacket,
-  three-type model, Python-coordinator / LLM-loop interiors, information
-  flow, output discipline, persistence, coordinator templates.
+- [`design.md`](design.md): the design record and single source of truth.
+  The goal and the two-sentence core, every settled decision with its
+  reason and what it rules out, what the library refuses to do, the
+  trades, what is not built yet, and the thesis.
 
 ## Guides
 
