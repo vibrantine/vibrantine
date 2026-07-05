@@ -121,7 +121,7 @@ def test_omitting_policy_kwargs_falls_back_to_class_defaults() -> None:
 
     assert probe.persistence_mode == "off"
     assert probe.max_output_tokens is None
-    assert probe.overflow_policy == "flag"
+    assert probe.overflow_policy == "partial"
 
 
 def test_persistence_mode_kwarg_overrides_class_default() -> None:
@@ -130,7 +130,7 @@ def test_persistence_mode_kwarg_overrides_class_default() -> None:
     assert probe.persistence_mode == "always"
     # Other policies untouched.
     assert probe.max_output_tokens is None
-    assert probe.overflow_policy == "flag"
+    assert probe.overflow_policy == "partial"
 
 
 def test_overflow_policy_kwarg_overrides_class_default() -> None:
