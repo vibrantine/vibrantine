@@ -140,12 +140,12 @@ class CommissionResult[OutputT](BaseModel):
 
 
 class CapabilitySet(BaseModel):
-    """Tool names a commission's LLM is permitted to call.
+    """Tool names a Commission's LLM is permitted to call.
 
     None means unrestricted (the root default). A set is an explicit
     allow-list, including the empty set, which permits nothing. Enforced by
     `run_llm_loop`, which builds the LLM's tool menu from the intersection of
-    the commission's toolbox and this allow-list.
+    the Commission's toolbox and this allow-list.
     """
 
     tools: frozenset[str] | None = Field(
@@ -175,9 +175,9 @@ NEVER_CANCELLED: Final[CancelToken] = _NeverCancelled()
 
 
 class ProgressEvent(BaseModel):
-    """Observability event emitted by a commission. Not a control surface."""
+    """Observability event emitted by a Commission. Not a control surface."""
 
-    commission_name: str = Field(description="Name of the commission emitting this event.")
+    commission_name: str = Field(description="Name of the Commission emitting this event.")
     phase: str = Field(description="Short label for the phase being entered.")
     detail: str | None = Field(default=None, description="Optional extra context.")
 
@@ -186,7 +186,7 @@ class ProgressEvent(BaseModel):
 
 
 class PersistedRecord(BaseModel):
-    """One persisted commission run, as written/read by a PersistenceBackend."""
+    """One persisted Commission run, as written/read by a PersistenceBackend."""
 
     run_id: str = Field(description="UUID4 identifier for this run.")
     parent_run_id: str | None = Field(
@@ -217,7 +217,7 @@ class PersistedRecord(BaseModel):
 
 @runtime_checkable
 class PersistenceBackend(Protocol):
-    """Storage interface for persisted commission runs.
+    """Storage interface for persisted Commission runs.
 
     The library ships a default filesystem backend; apps can substitute
     any implementation that satisfies this protocol (KV store, SQLite,
@@ -264,14 +264,14 @@ _DEFAULT_MAX_ITERATIONS = 10
 
 
 class TextPart(BaseModel):
-    """A text span in a commission's opening user message."""
+    """A text span in a Commission's opening user message."""
 
     type: Literal["text"] = "text"
     text: str = Field(description="The text content.")
 
 
 class ImagePart(BaseModel):
-    """An image in a commission's opening user message.
+    """An image in a Commission's opening user message.
 
     Provisional: defined now so the `ContentPart` union and the
     `build_user_message` return type are multimodal-ready, but its exact
@@ -309,12 +309,12 @@ def _message_text(message: "str | list[ContentPart]") -> str:
 
 
 class Commission[InputT, OutputT](ABC):
-    """The contract every commission implements.
+    """The contract every Commission implements.
 
     One typed input, one typed result, runtime conditions in CallContext.
-    A basic commission sets the identity ClassVars, a `system_prompt`, a
+    A basic Commission sets the identity ClassVars, a `system_prompt`, a
     `toolbox`, and a `build_user_message` hook, then rides the default
-    `invoke` (the full LLM loop below). A custom commission (one whose
+    `invoke` (the full LLM loop below). A custom Commission (one whose
     control flow is not the standard loop) overrides `invoke` instead.
     """
 
@@ -323,15 +323,15 @@ class Commission[InputT, OutputT](ABC):
     description: ClassVar[str]
     input_type: ClassVar[type[BaseModel]]
     output_type: ClassVar[type[BaseModel]]
-    # Commission-layer system prompt. None = this commission doesn't need
+    # Commission-layer system prompt. None = this Commission doesn't need
     # one (typical for Tools); a string = the prompt the framework feeds
-    # to the commission's own LLM. Application and envelope layers are
+    # to the Commission's own LLM. Application and envelope layers are
     # planned but not yet shipped.
     system_prompt: ClassVar[str | None] = None
 
-    # Toolbox: author-declared dependencies this commission can dispatch (the
-    # sub-commissions/tools it owns). Class-attribute default: () for workers;
-    # a basic commission sets a class-level tuple, whose tools are shared
+    # Toolbox: author-declared dependencies this Commission can dispatch (the
+    # sub-Commissions/tools it owns). Class-attribute default: () for workers;
+    # a basic Commission sets a class-level tuple, whose tools are shared
     # across instances and so must be safe to share. Stateful tools are built
     # per-instance in an author __init__ and passed up via the `toolbox=`
     # kwarg, which overrides this for DI/tests. Not a ClassVar; instance
@@ -347,14 +347,14 @@ class Commission[InputT, OutputT](ABC):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Enforce the standard authoring format at class-definition time.
 
-        Two checks, so a malformed commission fails when it's defined rather
+        Two checks, so a malformed Commission fails when it's defined rather
         than at first `invoke`, part of making the contract safe to author
         against (including by non-devs and lesser-model agents):
 
         1. The four identity ClassVars are set (the check follows the MRO, so
            a subclass inheriting them from a parent passes).
-        2. The override rule: a commission overrides `build_user_message` (a
-           basic commission) or `invoke` (a custom one). Overriding neither
+        2. The override rule: a Commission overrides `build_user_message` (a
+           basic Commission) or `invoke` (a custom one). Overriding neither
            means it could never run. An abstract intermediate defers a slot
            with `@abstractmethod`, which counts as overriding it (and ABC
            still blocks instantiation); no opt-out flag needed.
@@ -368,7 +368,7 @@ class Commission[InputT, OutputT](ABC):
         if missing:
             raise TypeError(
                 f"{cls.__name__} must set required Commission class "
-                f"attribute(s): {', '.join(missing)}. A commission declares "
+                f"attribute(s): {', '.join(missing)}. A Commission declares "
                 f"name, description, input_type, and output_type."
             )
         overrides = {
@@ -381,8 +381,8 @@ class Commission[InputT, OutputT](ABC):
         if not overrides:
             raise TypeError(
                 f"{cls.__name__} overrides neither build_user_message nor "
-                f"invoke, so it could never run. A basic commission overrides "
-                f"build_user_message; a custom commission overrides invoke."
+                f"invoke, so it could never run. A basic Commission overrides "
+                f"build_user_message; a custom Commission overrides invoke."
             )
 
     def __init__(
@@ -407,13 +407,13 @@ class Commission[InputT, OutputT](ABC):
         # `models.resolve` (None → the system default seam, models.DEFAULT_MODEL);
         # a `Model` is taken as-is, enabling local/multi-provider targets. Keep
         # `self._model` as the id string so every id-string site is untouched.
-        # Non-LLM commissions (tools, coordinators) inherit this inertly; they
+        # Non-LLM Commissions (tools, coordinators) inherit this inertly; they
         # override `invoke` and never consult it.
         self._model_spec: Model = resolve(model)
         self._model = self._model_spec.id
         self._max_iterations = max_iterations
         # Built lazily by `_resolved_client` on first use; stays None for
-        # commissions that never run the default loop, so tools/coordinators
+        # Commissions that never run the default loop, so tools/coordinators
         # never construct a client.
         self._client = client
         # Size gate: unset auto-resolves from the model's context window; an
@@ -439,11 +439,11 @@ class Commission[InputT, OutputT](ABC):
     ) -> "str | list[ContentPart]":
         """Turn the typed input into the LLM loop's opening user message.
 
-        A basic commission overrides this. A bare `str` is sugar for a single
+        A basic Commission overrides this. A bare `str` is sugar for a single
         `TextPart`; return `list[ContentPart]` for multimodal input. It
         receives `ctx` so future per-call information (the planned envelope
         layer, which lands inside `CallContext`) reaches it without a
-        signature change. A custom commission overrides `invoke` instead and
+        signature change. A custom Commission overrides `invoke` instead and
         never triggers this.
         """
         raise NotImplementedError(
@@ -457,7 +457,7 @@ class Commission[InputT, OutputT](ABC):
     ) -> CommissionResult[OutputT]:
         """The default pipeline: the full LLM loop over `toolbox`.
 
-        A custom commission overrides this entirely. The contract invariants
+        A custom Commission overrides this entirely. The contract invariants
         upheld here are documented in docs/design.md (§ One base class, one
         escape hatch).
         """

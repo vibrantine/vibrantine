@@ -3,7 +3,7 @@
 Foundation of the std-lib file-I/O layer. The `truncated` and
 `total_lines` fields in the output let an LLM-driven caller decide
 whether to paginate further. 2000-line default matches Claude Code;
-local-model commissions may want a smaller default.
+local-model Commissions may want a smaller default.
 """
 
 from pathlib import Path

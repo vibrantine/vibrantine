@@ -134,7 +134,7 @@ class SummariseInput(BaseModel):
     instructions: str = Field(description="Extra instructions for the prompt.")
 
 
-# Better: the caller fills the work order; the commission owns the wording.
+# Better: the caller fills the work order; the Commission owns the wording.
 class SummariseInput(BaseModel):
     content: str = Field(
         min_length=1,

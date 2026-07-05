@@ -1,4 +1,4 @@
-"""MorningBriefing commission: a coordinator that exercises recursive composition.
+"""MorningBriefing Commission: a coordinator that exercises recursive composition.
 
 Fans out Fetches in parallel, hands survivors to Synthesize, writes a markdown
 briefing to disk. Sits behind the same contract as a worker (typed

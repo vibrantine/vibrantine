@@ -290,7 +290,7 @@ standard.
 - [ ] Tests cover cancellation.
 - [ ] Tests cover malformed provider responses for LLM-backed Commissions.
 - [ ] Tests cover budget behavior where the Commission spends money.
-- [ ] Tests cover cost rollup where child commissions/tools are used.
+- [ ] Tests cover cost rollup where child Commissions/tools are used.
 - [ ] Tests cover capability/tool menu shape for LLM-loop Commissions.
 - [ ] Tests cover partial results where partial is an expected state.
 - [ ] LLM-driven Commissions have heuristic evaluation cases with explicit
@@ -396,7 +396,7 @@ Potential future tasks:
 ## Final Wrap Checklist
 
 - [ ] Security/privacy passes complete.
-- [ ] Commission-by-commission audit complete or consciously deferred.
+- [ ] Commission-by-Commission audit complete or consciously deferred.
 - [ ] Examples folder exists or is explicitly deferred.
 - [ ] External consumer repo smoke test complete or explicitly deferred.
 - [ ] README reflects current maturity.

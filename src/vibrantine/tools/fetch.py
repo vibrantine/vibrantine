@@ -2,7 +2,7 @@
 
 The HTTP primitive for the std-lib tools layer. Migrated in Phase 8
 from `src/vibrantine/commissions/fetch.py` where it lived as
-`FetchCommission`, a tool dressed in the commission contract during
+`FetchCommission`, a tool dressed in the Commission contract during
 v0 for composition convenience. Now properly a tool.
 """
 

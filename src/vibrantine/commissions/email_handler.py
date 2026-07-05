@@ -1,10 +1,10 @@
-"""EmailHandler: a route-and-execute LLM-loop commission (provisional validator).
+"""EmailHandler: a route-and-execute LLM-loop Commission (provisional validator).
 
 An incoming email is classified into one of three routes and the route is
 executed in the same loop: file as `non_urgent` (conclude directly), `draft` a
-reply (dispatch the DraftReply sub-commission), or `notify` the user (dispatch
-the NotifyUser tool). A basic commission: it rides the default `invoke`, with
-its toolbox holding a *sub-commission* and a *tool* rather than leaf tools only.
+reply (dispatch the DraftReply sub-Commission), or `notify` the user (dispatch
+the NotifyUser tool). A basic Commission: it rides the default `invoke`, with
+its toolbox holding a *sub-Commission* and a *tool* rather than leaf tools only.
 
 This exists to stress the LLM-loop-routing surface of the contract before the
 contract is frozen. The handlers are stubs: DraftReply returns canned text but
@@ -90,7 +90,7 @@ class EmailHandlerOutput(BaseModel):
     )
 
 
-# --- Stub handler 1: a sub-commission (LLM judgment), stubbed body ------------
+# --- Stub handler 1: a sub-Commission (LLM judgment), stubbed body ------------
 
 
 class DraftReplyInput(BaseModel):
@@ -207,7 +207,7 @@ class NotifyUserTool(Commission[NotifyInput, NotifyOutput]):
         )
 
 
-# --- The triage: a basic commission routing over a sub-commission + a tool ----
+# --- The triage: a basic Commission routing over a sub-Commission + a tool ----
 
 
 class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):

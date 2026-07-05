@@ -1,7 +1,7 @@
 """Delete tool: remove a file from the filesystem.
 
 The `D` in text CRUD. Destructive and irreversible at the tool level.
-The caller (commission or its consuming LLM) is responsible for
+The caller (Commission or its consuming LLM) is responsible for
 confirmation or capability gating; this tool just deletes the named
 file when invoked.
 

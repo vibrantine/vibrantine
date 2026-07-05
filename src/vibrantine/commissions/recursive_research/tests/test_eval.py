@@ -1,11 +1,11 @@
 """Heuristic evaluation cases for RecursiveResearchCommission.
 
 This is the evaluation lane of docs/commission-testing.md: a real model runs
-the commission and the output is graded against criteria written in advance.
+the Commission and the output is graded against criteria written in advance.
 The sources are pinned, not live: fixture pages about a fictional
 desalination project are served through the real `FetchTool` via an injected
 `httpx.MockTransport`, and the model is pinned to `EVAL_MODEL`. The only free
-variable is the commission's competence (fetch, ground, cite, synthesize).
+variable is the Commission's competence (fetch, ground, cite, synthesize).
 The subject is fictional so the model cannot answer from its own knowledge;
 every correct fact must come from a fixture page.
 
@@ -50,7 +50,7 @@ pytestmark = [
     ),
 ]
 
-# Pinned so a failing case means the commission changed, not the default
+# Pinned so a failing case means the Commission changed, not the default
 # model. Swapping this constant is a deliberate, separate experiment.
 EVAL_MODEL = "google/gemini-3-flash-preview"
 

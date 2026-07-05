@@ -113,7 +113,7 @@ and safety, not permission for a particular run.**
   **Planned:** the object also carrying generation settings (temperature and
   similar), so two profiles on one underlying model (precise vs creative) are
   distinct objects.
-- **`toolbox`**: the tools and sub-commissions this instance *can* call. The
+- **`toolbox`**: the tools and sub-Commissions this instance *can* call. The
   unit of composition.
 - **`max_iterations`**: a hard ceiling on AI-loop turns. A backstop against a
   loop that never converges.

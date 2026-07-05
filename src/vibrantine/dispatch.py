@@ -1,6 +1,6 @@
-"""Dispatch helper for invoking commissions through the framework.
+"""Dispatch helper for invoking Commissions through the framework.
 
-Every commission invocation that crosses a contract boundary (top-level
+Every Commission invocation that crosses a contract boundary (top-level
 from `run_one`, child invocations from Python coordinators, tool
 dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
 `dispatch`. This is where:
@@ -13,7 +13,7 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
     `CallContext.backend` if one is wired
   - a raised exception from a misbehaving `invoke` is converted to an
     `internal` failure result, so errors-as-values holds at the boundary
-    even when a commission breaks the contract
+    even when a Commission breaks the contract
 
 Calling `commission.invoke` directly bypasses all of this; don't.
 """
@@ -56,7 +56,7 @@ async def dispatch[InputT, OutputT](
     parent = _current_run_id.get()
     my_run_id = str(uuid.uuid4())
 
-    # The commission body sees its parent's run_id via ctx; it does not see
+    # The Commission body sees its parent's run_id via ctx; it does not see
     # its own (dispatch stamps that onto the result after invoke returns).
     ctx_for_invoke = replace(ctx, parent_run_id=parent)
 
@@ -64,8 +64,8 @@ async def dispatch[InputT, OutputT](
     try:
         result = await commission.invoke(input, ctx_for_invoke)
     except Exception as exc:
-        # Errors are values: a commission that *raises* instead of returning a
-        # failure (a custom-invoke bug, a third-party commission) has broken the
+        # Errors are values: a Commission that *raises* instead of returning a
+        # failure (a custom-invoke bug, a third-party Commission) has broken the
         # contract. Convert it here so the exception can't escape `run_one`, and
         # so the failure still flows through stamping + persistence below.
         # CancelledError is a BaseException, not an Exception; task
@@ -121,7 +121,7 @@ def _exception_to_failure[OutputT](
     that *guarantees* it: a raising `invoke` becomes a failure result rather
     than propagating out of `run_one`. Cost is reported as $0; any spend
     before the raise unwound with the stack and is unrecoverable here; the real
-    remedy is commissions returning failures instead of raising.
+    remedy is Commissions returning failures instead of raising.
     """
     return cast(
         CommissionResult[OutputT],
@@ -248,7 +248,7 @@ def _apply_overflow_policy[InputT, OutputT](
         # STUB: the full mechanic is a near-term TODO.
         # The real mechanic chops the output to fit, persists the full output via
         # the backend, and embeds its run_id as a reference. The chop step needs
-        # commission-specific knowledge (how to shrink a typed OutputT without
+        # Commission-specific knowledge (how to shrink a typed OutputT without
         # making it invalid or self-contradicting: a `summary_text` vs a
         # `list[Claim]` vs an opaque payload), which wants a real consumer to
         # design against. Until that authoring interface lands we degrade to

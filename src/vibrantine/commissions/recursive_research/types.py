@@ -1,4 +1,4 @@
-"""RecursiveResearch's boundary types stay beside the commission that owns them."""
+"""RecursiveResearch's boundary types stay beside the Commission that owns them."""
 
 from pydantic import BaseModel, Field
 

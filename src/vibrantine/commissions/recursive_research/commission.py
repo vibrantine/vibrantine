@@ -1,4 +1,4 @@
-"""RecursiveResearch commission: a recursive, LLM-loop research agent.
+"""RecursiveResearch Commission: a recursive, LLM-loop research agent.
 
 Answers a research question by letting its LLM decompose it into narrower
 sub-questions, delegate each to a shallower sub-researcher (recursion), and
@@ -12,7 +12,7 @@ only `FetchTool`, so the recurse tool is absent from the LLM's menu and a leaf
 must answer from fetches alone. No reliance on the LLM to stop, no reference
 cycle, no new CallContext field.
 
-This is the first commission wired into an LLM-loop toolbox, so its
+This is the first Commission wired into an LLM-loop toolbox, so its
 `description` is LLM-facing and follows the tool prose pattern.
 """
 

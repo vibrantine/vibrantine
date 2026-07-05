@@ -54,7 +54,7 @@ the scripted response is.
 Cover the contract surface the Commission exercises:
 
 - Public import works from the intended module or package path.
-- Constructor injection works for `model`, `client`, child commissions/tools,
+- Constructor injection works for `model`, `client`, child Commissions/tools,
   and test doubles.
 - Typed input is rendered correctly by `build_user_message`, or a custom
   `invoke` preserves the typed input semantics.

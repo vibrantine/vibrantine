@@ -1,6 +1,6 @@
 """Tests for the dispatch helper.
 
-Built around stub commissions that emit a known result. Each test
+Built around stub Commissions that emit a known result. Each test
 exercises one slice of dispatch's wrapping behavior: run_id generation,
 parent_run_id threading across nested dispatch calls (including under
 asyncio.gather), persistence-mode honoring, and overflow_policy
@@ -93,7 +93,7 @@ class _Stub(Commission[_Input, _Output]):
 
 
 class _Raiser(Commission[_Input, _Output]):
-    """Raises from invoke: a commission that breaks the errors-as-values rule."""
+    """Raises from invoke: a Commission that breaks the errors-as-values rule."""
 
     name: ClassVar[str] = "raiser"
     description: ClassVar[str] = "test stub that raises"
@@ -404,7 +404,7 @@ async def test_dispatch_persists_raised_exception_on_failure(tmp_path: Path) -> 
     raiser = _Raiser(RuntimeError("kaboom"), persistence_mode="on_failure")
     result = await dispatch(raiser, _Input(q="?"), CallContext(backend=backend))
 
-    # The gap this closes: a raising commission still gets its failure recorded.
+    # The gap this closes: a raising Commission still gets its failure recorded.
     assert result.run_id is not None
     refs = await backend.list_references()
     assert refs == [result.run_id]

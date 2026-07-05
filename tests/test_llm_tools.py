@@ -1,6 +1,6 @@
 """Tests for the LLM-loop helpers.
 
-Covers how `run_llm_loop` translates a commission's opening message
+Covers how `run_llm_loop` translates a Commission's opening message
 (`str | list[ContentPart]`) into the content the provider actually receives,
 how child results are rendered back to the LLM (partial keeps its output),
 and the free-text nudge. A fake AsyncOpenAI-shaped client records each call

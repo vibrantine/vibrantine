@@ -89,7 +89,7 @@ class _PolicyProbe(Commission[_PolicyProbeInput, _PolicyProbeOutput]):
     """Minimal Commission for exercising the policy-override kwargs."""
 
     name: ClassVar[str] = "policy_probe"
-    description: ClassVar[str] = "Test commission for policy override kwargs."
+    description: ClassVar[str] = "Test Commission for policy override kwargs."
     input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
     output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
 
@@ -174,7 +174,7 @@ def test_toolbox_kwarg_is_stored() -> None:
 
 
 def test_toolbox_does_not_leak_between_instances() -> None:
-    # toolbox is per-instance, not a ClassVar: giving one commission a
+    # toolbox is per-instance, not a ClassVar: giving one Commission a
     # toolbox must never change another's empty default.
     with_dep = _PolicyProbe(toolbox=(_PolicyProbe(),))
     without = _PolicyProbe()
@@ -187,10 +187,10 @@ def test_toolbox_does_not_leak_between_instances() -> None:
 
 
 class _BasicProbe(Commission[_PolicyProbeInput, _PolicyProbeOutput]):
-    """A basic commission: declarations + build_user_message, default invoke."""
+    """A basic Commission: declarations + build_user_message, default invoke."""
 
     name: ClassVar[str] = "basic_probe"
-    description: ClassVar[str] = "Test commission that uses the default invoke."
+    description: ClassVar[str] = "Test Commission that uses the default invoke."
     input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
     output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
 
@@ -199,13 +199,13 @@ class _BasicProbe(Commission[_PolicyProbeInput, _PolicyProbeOutput]):
 
 
 class _ToolboxProbe(_BasicProbe):
-    """Declares a class-level toolbox, like a real basic commission."""
+    """Declares a class-level toolbox, like a real basic Commission."""
 
     toolbox = (_PolicyProbe(),)
 
 
 def test_build_user_message_default_raises_not_implemented() -> None:
-    # A custom commission overrides invoke and never triggers
+    # A custom Commission overrides invoke and never triggers
     # build_user_message; the inherited base default still raises if a caller
     # pokes it directly.
     with pytest.raises(NotImplementedError, match="build_user_message"):
@@ -244,7 +244,7 @@ def test_client_is_not_constructed_eagerly(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_class_level_toolbox_is_the_default() -> None:
     # The class-attribute toolbox is used when no kwarg is passed (the path a
-    # basic commission like AskCommission relies on); the kwarg still overrides.
+    # basic Commission like AskCommission relies on); the kwarg still overrides.
     assert len(_ToolboxProbe().toolbox) == 1
     assert _ToolboxProbe(toolbox=()).toolbox == ()
     # And the override does not mutate the class-level default.
@@ -295,7 +295,7 @@ def test_subclass_inherits_required_classvars() -> None:
 
 def test_overriding_neither_build_nor_invoke_fails_at_definition() -> None:
     # The standard format requires exactly one of the two extension points;
-    # a commission that overrides neither could never run.
+    # a Commission that overrides neither could never run.
     with pytest.raises(TypeError, match="overrides neither"):
 
         class _Inert(  # pyright: ignore[reportUnusedClass]

@@ -7,7 +7,7 @@ Three pieces, kept in one module while there's only one caller:
   Used to fill the `tools=` parameter on a chat.completions call.
 
 - `make_conclude_tool(output_type)` builds the framework-injected
-  `conclude` tool. Its schema mirrors the consuming commission's
+  `conclude` tool. Its schema mirrors the consuming Commission's
   declared `output_type`; the LLM signals completion by calling it with
   args that validate as that type. No free-form "the LLM said done."
 
@@ -16,8 +16,8 @@ Three pieces, kept in one module while there's only one caller:
   or the call is cancelled. Returns a typed `LoopOutcome` the caller
   packages into its own `CommissionResult`.
 
-Provenance and the final cost USD belong to the consuming commission,
-not the loop; the loop returns token counts and lets the commission
+Provenance and the final cost USD belong to the consuming Commission,
+not the loop; the loop returns token counts and lets the Commission
 do the model-specific pricing lookup.
 """
 
@@ -64,9 +64,9 @@ def as_llm_tool(commission: Commission[Any, Any]) -> ChatCompletionToolParam:
 
 
 def make_conclude_tool(output_type: type[BaseModel]) -> ChatCompletionToolParam:
-    """Build the framework-injected conclude tool for an LLM-loop commission.
+    """Build the framework-injected conclude tool for an LLM-loop Commission.
 
-    Its parameter schema equals the commission's declared output_type.
+    Its parameter schema equals the Commission's declared output_type.
     Calling it with valid args is the only way for the LLM to exit the
     loop with a structured success.
     """
@@ -77,7 +77,7 @@ def make_conclude_tool(output_type: type[BaseModel]) -> ChatCompletionToolParam:
             "description": (
                 "Finalize and return your typed result. Call this exactly "
                 "once when you have a complete answer. The arguments you "
-                "pass become the commission's output."
+                "pass become the Commission's output."
             ),
             "parameters": output_type.model_json_schema(),
         },
@@ -91,7 +91,7 @@ class LoopOutcome[OutputT]:
     On success: `output` populated, `error` is None.
     On failure: `error` populated, `output` is None.
     Token counts are always populated so the caller can compute cost.
-    `children_cost` is the summed cost of every sub-commission this loop
+    `children_cost` is the summed cost of every sub-Commission this loop
     dispatched, so the caller can roll it into its own CommissionResult.cost.
     """
 
@@ -121,12 +121,12 @@ async def run_llm_loop[OutputT: BaseModel](
     failure; the loop disallows free-form completion).
 
     Tool errors are fed back to the LLM as tool results, not raised as
-    commission failures; the LLM gets to decide whether to retry or
+    Commission failures; the LLM gets to decide whether to retry or
     conclude with an apologetic answer.
     """
     in_price, out_price = prices_per_million
     # Capability ceiling: the LLM is only offered the intersection of this
-    # commission's toolbox and ctx.capabilities. None = unrestricted. A
+    # Commission's toolbox and ctx.capabilities. None = unrestricted. A
     # forbidden tool is simply absent from the menu, so any call to it falls
     # through the unknown-tool branch below; no separate gate. `conclude` is
     # framework-injected and never gated. See docs/design.md.
@@ -145,7 +145,7 @@ async def run_llm_loop[OutputT: BaseModel](
 
     in_tokens = 0
     out_tokens = 0
-    # Summed cost of every sub-commission dispatched below. Folded into the
+    # Summed cost of every sub-Commission dispatched below. Folded into the
     # budget check and returned so the caller's CommissionResult.cost includes
     # the subtree: the structural cost rollup the contract promises.
     children_cost = 0.0
@@ -201,7 +201,7 @@ async def run_llm_loop[OutputT: BaseModel](
             out_tokens += usage.completion_tokens
 
         # Own token cost plus everything dispatched children spent, so a
-        # recursive or sub-commission-bearing loop enforces the budget against
+        # recursive or sub-Commission-bearing loop enforces the budget against
         # its whole subtree, not just its own turns (may overshoot by one turn).
         own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
         cost_so_far = own_cost + children_cost
