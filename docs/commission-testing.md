@@ -115,7 +115,7 @@ tests/test_my_commission.py
 Folder-sized Commission:
 
 ```text
-src/vibrantine/commissions/my_commission/
+src/vibrantine/examples/my_commission/
   tests/
     test_commission.py
     test_eval.py       # when heuristic cases exist
@@ -125,7 +125,7 @@ Evaluation fixtures may live under the Commission package when they are owned
 by that Commission:
 
 ```text
-src/vibrantine/commissions/my_commission/
+src/vibrantine/examples/my_commission/
   tests/
     fixtures/
       cases.jsonl

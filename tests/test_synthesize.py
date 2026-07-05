@@ -13,12 +13,12 @@ from typing import cast
 from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.synthesize import (
+from vibrantine.contract import CallContext, ProgressEvent, Provenance
+from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.contract import CallContext, ProgressEvent, Provenance
 
 
 def _src(idx: int, content: str = "fact") -> SynthesisSource:

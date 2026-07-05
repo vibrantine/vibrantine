@@ -13,12 +13,12 @@ import httpx
 from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.morning_briefing import (
+from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine.examples.morning_briefing import (
     MorningBriefingCommission,
     MorningBriefingInput,
 )
-from vibrantine.commissions.synthesize import SynthesizeCommission
-from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine.examples.synthesize import SynthesizeCommission
 from vibrantine.orchestrator import run_one
 from vibrantine.tools.fetch import FetchTool
 

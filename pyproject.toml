@@ -39,7 +39,7 @@ artifacts = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/vibrantine/commissions"]
+testpaths = ["tests", "src/vibrantine/examples"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that hit real external services; skip without credentials.",

@@ -19,13 +19,13 @@ This is the first Commission wired into an LLM-loop toolbox, so its
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibrantine._prompts import load_prompt
-from vibrantine.commissions.recursive_research.models import RecursiveResearchModelMenu
-from vibrantine.commissions.recursive_research.types import ResearchInput, ResearchOutput
 from vibrantine.contract import (
     CallContext,
     Commission,
     OverflowPolicy,
 )
+from vibrantine.examples.recursive_research.models import RecursiveResearchModelMenu
+from vibrantine.examples.recursive_research.types import ResearchInput, ResearchOutput
 from vibrantine.models import Model
 from vibrantine.tools.fetch import FetchTool
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-_PACKAGE = "vibrantine.commissions.recursive_research"
+_PACKAGE = "vibrantine.examples.recursive_research"
 
 
 class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):

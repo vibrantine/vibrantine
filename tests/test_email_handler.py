@@ -13,12 +13,12 @@ from typing import cast
 from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.email_handler import (
+from vibrantine.contract import CallContext
+from vibrantine.examples.email_handler import (
     EmailHandlerCommission,
     EmailHandlerInput,
     IncomingEmail,
 )
-from vibrantine.contract import CallContext
 
 _EMAIL_ARGS = {"sender": "a@b.test", "subject": "Quick question", "body": "Body text."}
 

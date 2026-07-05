@@ -14,11 +14,11 @@ from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from vibrantine.commissions.summarize import (
+from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
 )
-from vibrantine.contract import CallContext, ProgressEvent
 
 _SOURCE = (
     "The cat sat on the mat. It was a warm afternoon and the cat was content. "

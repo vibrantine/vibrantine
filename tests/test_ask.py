@@ -12,8 +12,8 @@ from typing import Any, cast
 from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.ask import AskCommission, AskInput
 from vibrantine.contract import CallContext, CapabilitySet, ProgressEvent
+from vibrantine.examples.ask import AskCommission, AskInput
 from vibrantine.tools.read import ReadTool
 
 

@@ -17,12 +17,6 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.commissions.synthesize import (
-    SynthesisSource,
-    SynthesizeCommission,
-    SynthesizeInput,
-    SynthesizeOutput,
-)
 from vibrantine.contract import (
     CallContext,
     Commission,
@@ -34,6 +28,12 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.dispatch import dispatch
+from vibrantine.examples.synthesize import (
+    SynthesisSource,
+    SynthesizeCommission,
+    SynthesizeInput,
+    SynthesizeOutput,
+)
 from vibrantine.tools.fetch import (
     FetchInput,
     FetchOutput,

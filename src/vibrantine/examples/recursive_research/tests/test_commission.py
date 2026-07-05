@@ -17,12 +17,12 @@ from typing import Any, cast
 import pytest
 from openai import AsyncOpenAI
 
-from vibrantine.commissions.recursive_research import (
+from vibrantine.contract import CallContext
+from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
     RecursiveResearchModelMenu,
     ResearchInput,
 )
-from vibrantine.contract import CallContext
 
 # One LLM turn at the fixture model (google/gemini-3-flash-preview):
 # (100 in * $0.50 + 50 out * $3.00) / 1M.
