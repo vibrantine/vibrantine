@@ -1,12 +1,12 @@
 """Std-lib tools layer for Vibrantine.
 
 Tools are the deterministic peer to Commissions: typed input, typed
-output, errors-as-state, no LLM. Under Shape A (per
-`docs/design.md § Three types, not four`), tools subclass
+output, errors-as-state, no LLM. Per
+`docs/design.md § Three categories, no fourth`, tools subclass
 `Commission[InputT, OutputT]` with `max_input_tokens=None`
-and no constructor model argument. The "is this a commission or a
+and no constructor model argument. The "is this a Commission or a
 tool" distinction is enforced by authoring discipline, not by the type
-system — both wear the same contract jacket.
+system; both wear the same contract jacket.
 """
 
 from vibrantine.tools.delete import DeleteInput, DeleteOutput, DeleteTool

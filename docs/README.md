@@ -1,19 +1,20 @@
 # Vibrantine Docs
 
 Index of the docs directory. Start with the root [`README.md`](../README.md)
-for the public front door, then read `design.md` for the architecture.
+for the public front door, then read `design.md` for the design record.
 
 ## Public front door
 
-- [`../README.md`](../README.md): the professional overview: what Vibrantine
+- [`../README.md`](../README.md): the source of truth: what Vibrantine
   is, why Commissions, what ships today, and where to go next.
 
-## Architecture source of truth
+## Design record
 
-- [`design.md`](design.md): the design record and single source of truth.
-  The goal and the two-sentence core, every settled decision with its
-  reason and what it rules out, what the library refuses to do, the
-  trades, what is not built yet, and the thesis.
+- [`design.md`](design.md): why the library is shaped the way it is, what
+  that shape costs, and what is planned but not built. The goal and the
+  two-sentence core, every settled decision with its reason and what it
+  rules out, what the library refuses to do, the trades, what is not
+  built yet, and the thesis.
 
 ## Guides
 
@@ -26,18 +27,18 @@ Audience-facing guides, not architecture.
   composition, the custom-coordinator path, and where state lives. Part III:
   the contract reference, machine-checked in CI by
   `tests/test_external_authoring.py`.
-- [`commission-testing.md`](commission-testing.md): how to test commissions
+- [`commission-testing.md`](commission-testing.md): how to test Commissions
   at two levels: contract behavior with fake clients, and heuristic
   evaluation against explicit success/failure criteria.
 - [`pre-release-checklist.md`](pre-release-checklist.md): public-reference
-  release checklist covering security/privacy passes, commission audits,
+  release checklist covering security/privacy passes, Commission audits,
   examples, external consumer proof, and final validation.
 
 ## Working drafts ([`working/concepts/`](working/concepts/))
 
-Aspirational and fenced: concept drafts that may feed a later
-tutorial/reference layer. The root README owns the front-door role; this
-folder shrinks as material promotes into live docs or retires. See its
+Aspirational and fenced: deeper concept drafts, not live guidance. The
+root README owns the front-door role; this folder shrinks as material
+promotes into live docs or retires. See its
 [`README.md`](working/concepts/README.md) for contents.
 
 Process records, retired drafts, and external research notes live outside

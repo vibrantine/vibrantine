@@ -1,6 +1,6 @@
 # Commission Testing
 
-How to prove a commission still satisfies its contract and is effective at the
+How to prove a Commission still satisfies its contract and is effective at the
 LLM-shaped work it claims to do.
 
 ## Principles
@@ -17,9 +17,9 @@ fifth is about your time. Everything below is an application of them.
    efficacy-test failure means behavior drifted. A suite that blends the lanes
    produces failures you cannot interpret.
 3. **Let exactly one thing vary.** In an efficacy run the thing under test is
-   the commission's competence, so pin everything else: fixture sources
+   the Commission's competence, so pin everything else: fixture sources
    instead of the live web, a named model instead of the current default. A
-   pinned eval that fails means the commission changed. Swapping the pinned
+   pinned eval that fails means the Commission changed. Swapping the pinned
    model is a different experiment; run one at a time.
 4. **Write pass/fail rules before seeing output, and give every case a way to
    fail.** Criteria written after looking at output always pass. Fixtures
@@ -33,25 +33,25 @@ fifth is about your time. Everything below is an application of them.
 
 ## Two Test Lanes
 
-Every shipped or worked-example commission needs two kinds of confidence:
+Every shipped or worked-example Commission needs two kinds of confidence:
 
 1. **Contract tests** prove the component boundary works. They use fake clients,
    scripted model responses, deterministic tools, and no API key.
-2. **Heuristic evaluation tests** prove the commission is actually good enough
+2. **Heuristic evaluation tests** prove the Commission is actually good enough
    at its stated LLM task. They run representative cases with explicit success
    and failure criteria.
 
-Contract tests answer "does this commission obey the framework contract?"
-Evaluation tests answer "does this commission do useful work?"
+Contract tests answer "does this Commission obey the framework contract?"
+Evaluation tests answer "does this Commission do useful work?"
 
 ## Contract Tests
 
-Unit tests must require no credentials. LLM-backed commissions inject a fake
+Unit tests must require no credentials. LLM-backed Commissions inject a fake
 `AsyncOpenAI`-shaped client through `client=` and script provider responses.
-The model's intelligence is not under test; the commission's behavior around
+The model's intelligence is not under test; the Commission's behavior around
 the scripted response is.
 
-Cover the contract surface the commission exercises:
+Cover the contract surface the Commission exercises:
 
 - Public import works from the intended module or package path.
 - Constructor injection works for `model`, `client`, child commissions/tools,
@@ -62,14 +62,14 @@ Cover the contract surface the commission exercises:
 - Failures and partials return `CommissionResult(status="failure"|"partial")`;
   no exception crosses the `invoke` boundary.
 - Cancellation is checked before expensive or irreversible work.
-- Budget behavior is covered where the commission spends model money.
+- Budget behavior is covered where the Commission spends model money.
 - Cost is reported, and child cost rolls up when children are dispatched.
-- Progress events are covered if the commission emits them.
-- LLM-loop commissions cover tool menu shape, malformed/no-tool provider
+- Progress events are covered if the Commission emits them.
+- LLM-loop Commissions cover tool menu shape, malformed/no-tool provider
   responses, and conclusion through the `conclude` tool.
 - Coordinators cover child dispatch order/parallelism policy, partial child
   failures, and output assembly.
-- Folder-sized commissions cover prompt/resource loading if they use
+- Folder-sized Commissions cover prompt/resource loading if they use
   `prompts/`.
 
 Integration tests are optional, marked `@pytest.mark.integration`, and skip
@@ -77,8 +77,8 @@ when credentials are absent. They are smoke tests, not the backbone.
 
 ## Evaluation Tests
 
-Every LLM-driven commission should carry active heuristic evaluation once it is
-more than a mechanical contract probe. A commission's `BRIEF.md` states the
+Every LLM-driven Commission should carry active heuristic evaluation once it is
+more than a mechanical contract probe. A Commission's `BRIEF.md` states the
 behavioral promise in plain language; its evaluation cases should turn that
 promise into pass/fail criteria.
 
@@ -98,7 +98,7 @@ Prefer deterministic or cheap heuristic checks first:
 - The answer contains required facts and omits known-bad facts.
 - The route/decision matches a labeled fixture.
 - The output stays within requested scope, tone, or safety constraints.
-- The commission uses or avoids tools as the case requires.
+- The Commission uses or avoids tools as the case requires.
 
 Use judge-model evaluation only when deterministic checks cannot express the
 quality bar. Judge prompts are themselves test assets: keep them stable, version
@@ -106,13 +106,13 @@ them with the cases, and treat changed judge prompts as evaluation changes.
 
 ## Where Tests Live
 
-Module-sized commission:
+Module-sized Commission:
 
 ```text
 tests/test_my_commission.py
 ```
 
-Folder-sized commission:
+Folder-sized Commission:
 
 ```text
 src/vibrantine/commissions/my_commission/
@@ -121,8 +121,8 @@ src/vibrantine/commissions/my_commission/
     test_eval.py       # when heuristic cases exist
 ```
 
-Evaluation fixtures may live under the commission package when they are owned
-by that commission:
+Evaluation fixtures may live under the Commission package when they are owned
+by that Commission:
 
 ```text
 src/vibrantine/commissions/my_commission/
@@ -137,7 +137,7 @@ fixtures that are safe to publish, and document external/private corpora in
 
 ## BRIEF.md Notes
 
-Each folder-sized commission's `BRIEF.md` should name its efficacy bar:
+Each folder-sized Commission's `BRIEF.md` should name its efficacy bar:
 
 ```text
 success criteria:
@@ -149,4 +149,4 @@ prompt changes tried:
 
 The goal is not to pretend LLM behavior is perfectly unit-testable. The goal is
 to make quality claims falsifiable, keep prompt changes from being vibes-only,
-and preserve a trail of what the commission is known to handle.
+and preserve a trail of what the Commission is known to handle.

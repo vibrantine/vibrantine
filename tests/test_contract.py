@@ -220,14 +220,14 @@ def test_default_model_resolves_the_size_gate() -> None:
 
 
 def test_explicit_none_disables_the_size_gate() -> None:
-    # max_input_tokens=None is Shape A's "no gate" — it must mean no gate,
+    # max_input_tokens=None is the tools' "no gate": it must mean no gate,
     # not "auto-resolve from the model" (that's what leaving it unset does).
     from vibrantine.tools.read import ReadTool
 
     probe = _PolicyProbe(max_input_tokens=None)
     assert probe.max_input_tokens is None
     assert probe.fits(10**9)
-    # The std-lib tools construct with None, so Shape A holds literally.
+    # The std-lib tools construct with None, so the no-gate shape holds.
     assert ReadTool().max_input_tokens is None
 
 

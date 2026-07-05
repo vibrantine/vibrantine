@@ -417,8 +417,8 @@ class Commission[InputT, OutputT](ABC):
         # never construct a client.
         self._client = client
         # Size gate: unset auto-resolves from the model's context window; an
-        # explicit None disables the gate entirely (the tools' Shape A — no
-        # LLM, no gate); an int pins it (the conservative path for unknown
+        # explicit None disables the gate entirely (the standard tool shape:
+        # no LLM, no gate); an int pins it (the conservative path for unknown
         # models). None and unset must stay distinct, hence the sentinel.
         if isinstance(max_input_tokens, _Unset):
             self.max_input_tokens = self._model_spec.context_window

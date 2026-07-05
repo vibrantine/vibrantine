@@ -86,8 +86,8 @@ Vibrantine without relying on the checkout layout.
 
 ## Commission-By-Commission Audit
 
-Use the template below for every included commission. The point is to review
-each commission as a component: typed boundary, interior, dependencies, failure
+Use the template below for every included Commission. The point is to review
+each Commission as a component: typed boundary, interior, dependencies, failure
 shape, costs, tests, and release status.
 
 ### Audit Template
@@ -172,7 +172,7 @@ Release decision:
 - [x] Check prompt guidance discourages unsupported claims.
 - [x] Check tests cover delegation, leaf behavior, cost rollup, and tool menu
   shape.
-- [x] Decide whether this is a worked example, a provisional commission, or a
+- [x] Decide whether this is a worked example, a provisional Commission, or a
   future examples candidate. Decision: worked example. It demonstrates the
   composition pattern (recursion through the toolbox, structural termination,
   cost rollup) and is not a supported general-use surface. It stays importable
@@ -194,11 +194,11 @@ Release decision:
 - [ ] Check stub handlers cannot be mistaken for production email behavior.
 - [ ] Check tests continue to validate LLM-loop routing and child cost rollup.
 - [ ] Consider moving it to examples or a `probes` area if it reads too much
-  like a shipped standard commission.
+  like a shipped standard Commission.
 
 ## Standard Commission Format
 
-Create an authoring standard before the set of commissions grows much larger.
+Create an authoring standard before the set of Commissions grows much larger.
 Done in `docs/working/standard-commission-folder-structure.md`, proven by the
 DeepResearch package migration, with testing/evaluation policy in
 `docs/commission-testing.md`.
@@ -206,8 +206,8 @@ DeepResearch package migration, with testing/evaluation policy in
 - [x] Define where input/output Pydantic models live.
 - [x] Define where system prompts live.
 - [x] Define how `description` is written for LLM tool selection.
-- [x] Define how nested commissions and tools are declared.
-- [x] Define constructor injection conventions for child commissions, tools,
+- [x] Define how nested Commissions and tools are declared.
+- [x] Define constructor injection conventions for child Commissions, tools,
   `model`, and test clients.
 - [x] Define how tests are organized.
 - [x] Define how prompt/evaluation notes are recorded.
@@ -220,7 +220,7 @@ tests/test_my_commission.py
 docs/commissions/my_commission.md
 ```
 
-Possible folder layout for larger commissions:
+Possible folder layout for larger Commissions:
 
 ```text
 src/vibrantine/commissions/my_commission/
@@ -239,13 +239,13 @@ src/vibrantine/commissions/my_commission/
   BRIEF.md
 ```
 
-Use the folder layout only when the commission has enough prompt, type, test,
+Use the folder layout only when the Commission has enough prompt, type, test,
 private tool, private child, or evaluation material to earn the extra files.
 
 ## Nested Commission Pattern
 
 Commissions that own children should follow one consistent constructor pattern.
-Private deterministic tools live under the commission package's `tools/`
+Private deterministic tools live under the Commission package's `tools/`
 slot when they are too substantial to stay beside their consumer; private
 LLM-bearing children live under `subcommissions/`. Both are still wired in
 `commission.py`, and `toolbox` remains the source of truth for what an LLM
@@ -265,7 +265,7 @@ def __init__(
     super().__init__(toolbox=(resolved_child, resolved_tool), model=model, client=client)
 ```
 
-Checklist for nested commissions:
+Checklist for nested Commissions:
 
 - [ ] Parent owns its children.
 - [ ] Private deterministic tools live in `tools/`; private LLM-bearing
@@ -278,7 +278,7 @@ Checklist for nested commissions:
 
 ## Testing And Improvement Standard
 
-Every shipped or example commission should have tests at the level of risk it
+Every shipped or example Commission should have tests at the level of risk it
 carries. See [`commission-testing.md`](commission-testing.md) for the full
 standard.
 
@@ -287,19 +287,19 @@ standard.
 - [ ] Integration tests skip when credentials are absent.
 - [ ] Tests cover validation failures.
 - [ ] Tests cover cancellation.
-- [ ] Tests cover malformed provider responses for LLM-backed commissions.
-- [ ] Tests cover budget behavior where the commission spends money.
+- [ ] Tests cover malformed provider responses for LLM-backed Commissions.
+- [ ] Tests cover budget behavior where the Commission spends money.
 - [ ] Tests cover cost rollup where child commissions/tools are used.
-- [ ] Tests cover capability/tool menu shape for LLM-loop commissions.
+- [ ] Tests cover capability/tool menu shape for LLM-loop Commissions.
 - [ ] Tests cover partial results where partial is an expected state.
-- [ ] LLM-driven commissions have heuristic evaluation cases with explicit
+- [ ] LLM-driven Commissions have heuristic evaluation cases with explicit
   success and failure criteria.
 - [ ] Evaluation cases record their scoring method: deterministic check,
   heuristic assertion, human review, or judge-model rubric.
 - [ ] Prompt changes update or add at least one targeted regression, scripted
   fake conversation, or evaluation case when practical.
 
-Optional improvement notes per commission:
+Optional improvement notes per Commission:
 
 ```text
 success criteria:
@@ -357,8 +357,8 @@ vibrantine-example-commissions/
 Checklist:
 
 - [ ] Consume Vibrantine through a git dependency.
-- [ ] Author at least one custom LLM-backed commission.
-- [ ] Author or wrap at least one deterministic tool-like commission.
+- [ ] Author at least one custom LLM-backed Commission.
+- [ ] Author or wrap at least one deterministic tool-like Commission.
 - [ ] Import the frozen surface from `vibrantine`.
 - [ ] Import provisional tools from `vibrantine.tools` only when consciously
   accepting provisional status.
@@ -388,7 +388,7 @@ Potential future tasks:
 
 - [ ] Generate a tree from `commission.toolbox`.
 - [ ] Include max depth and child names.
-- [ ] Mark tools vs LLM-backed commissions.
+- [ ] Mark tools vs LLM-backed Commissions.
 - [ ] Optionally show cost after a run using persisted records.
 - [ ] Consider Mermaid output for docs.
 

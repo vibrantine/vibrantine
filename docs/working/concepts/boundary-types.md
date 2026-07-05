@@ -4,10 +4,10 @@
 > folder role.
 >
 > A how-to companion to [`commission-fundamentals.md`](commission-fundamentals.md).
-> That doc maps *who owns what* across a commission. This one is narrower: **how
-> do you write the two types a commission declares, and why do they matter?**
-> Field-by-field detail belongs in a future reference doc; today's live contract
-> reference is [`../../authoring.md`](../../authoring.md) (Part III).
+> That doc maps *who owns what* across a Commission. This one is narrower: **how
+> do you write the two types a Commission declares, and why do they matter?**
+> Field-by-field detail lives in [`../../authoring.md`](../../authoring.md)
+> (Part III).
 > Written for a novice AI coder: plain language first, type names second.
 
 **Legend.** 🔭 **Planned** = designed and decided, not yet shipped. Everything
@@ -17,7 +17,7 @@ unmarked is live on `main` today.
 
 ## Why these two types exist
 
-You do not chat with a commission. You issue a bounded **order of work**: hand it
+You do not chat with a Commission. You issue a bounded **order of work**: hand it
 the task-shaped value it needs, get a result-shaped value back. The input and
 output types are what make that possible, and that is the whole reason to care
 about them.
@@ -42,11 +42,11 @@ keep that commissioning promise solid. Hold onto that shape and the rest
 follows.
 
 > But a model only understands words, not types. So where does the instruction
-> go? The author writes it **once**, inside the commission, so no caller ever has
+> go? The author writes it **once**, inside the Commission, so no caller ever has
 > to. That is the job of `build_user_message`, and it is where the typed input
 > becomes the concrete request the model sees.
 
-This guide builds both types for a real commission, `Summarise` (shorten one
+This guide builds both types for a real Commission, `Summarise` (shorten one
 piece of content), and shows where `Synthesize` (merge several sources) needs
 more.
 
@@ -91,7 +91,7 @@ content: str = Field(min_length=1, ...)
 ```
 
 If the caller constructs the input model, `SummariseInput(content="")` raises a
-`ValidationError` in the caller's code before the commission ever runs. The work
+`ValidationError` in the caller's code before the Commission ever runs. The work
 never starts on that bad request, and the interior does not have to defend
 against it. Use `min_length`, numeric bounds, and a `Literal` for closed choices
 (`length` is a `Literal` of four sizes). Give every field a `description`: it is
@@ -117,7 +117,7 @@ def build_user_message(self, input: SummariseInput, ctx: CallContext) -> str:
 
 This is where the instruction becomes concrete, written once by the author.
 Every caller after that just fills in the shape. That single method is what
-turns "craft a prompt each time" into "commission this work with these inputs",
+turns "craft a prompt each time" into "Commission this work with these inputs",
 which is the entire point of the input type.
 
 > A good input type: one clear subject, a few well-defaulted knobs, every field
@@ -157,13 +157,13 @@ class SummariseInput(BaseModel):
 The output type is the value the caller gets back, and it carries a guarantee an
 ordinary AI reply cannot.
 
-**A successful AI-loop commission can only finish by producing the promised
-deliverable.** For a commission whose interior is an AI loop, the `output_type`
+**A successful AI-loop Commission can only finish by producing the promised
+deliverable.** For a Commission whose interior is an AI loop, the `output_type`
 becomes the schema of a framework-supplied `conclude` tool. The model cannot
 successfully finish by writing "done" in prose. It must call `conclude` with a
 value that fits the type, and that value is validated on the way out. If it
 never calls `conclude`, calls it with invalid arguments, runs out of budget, or
-hits the iteration cap, the commission returns a structured failure instead.
+hits the iteration cap, the Commission returns a structured failure instead.
 That is why a successful return is a typed object you can use directly, not text
 you have to parse and hope about. Two moves design a good one.
 
@@ -186,10 +186,10 @@ Some return values are plain answers. Others make claims a caller will act on,
 and those should say *where each claim came from*. Three reusable pieces exist
 for this:
 
-- **`Provenance`** — where a piece of data came from and how grounded it is.
-- **`ConfidenceLevel`** — the shared vocabulary: `verified`, `grounded`,
+- **`Provenance`**: where a piece of data came from and how grounded it is.
+- **`ConfidenceLevel`**: the shared vocabulary: `verified`, `grounded`,
   `speculative`.
-- **`Claim[T]`** — an asserted value carried with the provenances that back it.
+- **`Claim[T]`**: an asserted value carried with the provenances that back it.
 
 This is the one upgrade from Summarise to Synthesize, which merges many sources,
 so the trail has to survive the merge:
@@ -219,21 +219,21 @@ changes what every caller relies on.
 
 - **Reusable primitives stay domain-neutral.** Name fields for the work, not for
   one caller. `content` and `focus` serve everyone; `email_thread` belongs on an
-  inbox-specific commission. General parameters are what let unrelated callers
-  reuse a primitive. Domain-specific commissions are still valid; their boundary
+  inbox-specific Commission. General parameters are what let unrelated callers
+  reuse a primitive. Domain-specific Commissions are still valid; their boundary
   should simply be honest about the domain they serve.
 - **Simplest shape that carries the weight.** Fewer fields, each earning its
   place. A short signature is easier to call and harder to break.
 - **Shape via the consumer.** When you do not yet have a real use for a field,
   do not invent its exact form. (`ImagePart`, the multimodal input piece, ships
-  carrying only a URL string until the first image-bearing commission reveals
+  carrying only a URL string until the first image-bearing Commission reveals
   what it needs.) Let the consumer pin the shape.
 
 ---
 
 ## 🔭 One gotcha: the return type can't vary per call
 
-`output_type` is part of the commission's identity. It is welded to the class
+`output_type` is part of the Commission's identity. It is welded to the class
 and immutable, so the promised deliverable is fixed for every call. That is
 right almost always, but it bites classification: a `Classify` whose caller
 passes the labels at call time would want its return constrained to *those*
