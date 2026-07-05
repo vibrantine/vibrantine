@@ -1,6 +1,6 @@
 """Glob tool: discover files by glob pattern.
 
-Discovery primitive — the LLM names a pattern and gets back matching
+Discovery primitive: the LLM names a pattern and gets back matching
 paths without loading any content. Pairs with Read or Sample once the
 agent has decided which matches to inspect, and with Grep for content
 search. Cheap enough that an agent can run many Glob calls during
@@ -60,7 +60,7 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
 
     name: ClassVar[str] = "glob"
     description: ClassVar[str] = (
-        "Discovers files matching a glob pattern. Returns paths only —\n"
+        "Discovers files matching a glob pattern. Returns paths only;\n"
         "does not load file content.\n"
         "\n"
         "Usage:\n"
@@ -68,10 +68,10 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
         "  number of segments, `?` matches one character, `[abc]` a set.\n"
         "- `base` should be an absolute directory; defaults to the current\n"
         "  working directory.\n"
-        "- Returns files only — directories are filtered out. Use the\n"
+        "- Returns files only; directories are filtered out. Use the\n"
         "  `list_dir` tool to list directory contents.\n"
         "- `max_matches` (default 1000) bounds output size. If `truncated`\n"
-        "  is true, more matches exist — narrow the pattern or raise the\n"
+        "  is true, more matches exist; narrow the pattern or raise the\n"
         "  cap (mind the context budget).\n"
         "- Follow up with `read` or `sample` to inspect matches, or `grep`\n"
         "  to search them.\n"

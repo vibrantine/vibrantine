@@ -4,7 +4,7 @@ Cheaper than Write for small modifications because the LLM only emits
 the changed substring. Models Claude Code's Edit: `old_string` must
 match exactly, once by default. Set `replace_all=True` to substitute
 every occurrence. Empty or zero-match `old_string` fails with a
-validation error — no silent no-ops.
+validation error; no silent no-ops.
 """
 
 from pathlib import Path

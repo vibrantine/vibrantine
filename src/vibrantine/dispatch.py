@@ -1,8 +1,8 @@
 """Dispatch helper for invoking commissions through the framework.
 
-Every commission invocation that crosses a contract boundary — top-level
+Every commission invocation that crosses a contract boundary (top-level
 from `run_one`, child invocations from Python coordinators, tool
-dispatches from `run_llm_loop` and the LLM-tool wrapper — calls
+dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
 `dispatch`. This is where:
 
   - a `run_id` (UUID4) is generated for the call
@@ -68,7 +68,7 @@ async def dispatch[InputT, OutputT](
         # failure (a custom-invoke bug, a third-party commission) has broken the
         # contract. Convert it here so the exception can't escape `run_one`, and
         # so the failure still flows through stamping + persistence below.
-        # CancelledError is a BaseException, not an Exception — task
+        # CancelledError is a BaseException, not an Exception; task
         # cancellation deliberately propagates rather than being swallowed.
         result = _exception_to_failure(commission, exc)
     finally:
@@ -119,7 +119,7 @@ def _exception_to_failure[OutputT](
 
     Upholding errors-as-values is the author's job, but dispatch is the seam
     that *guarantees* it: a raising `invoke` becomes a failure result rather
-    than propagating out of `run_one`. Cost is reported as $0 — any spend
+    than propagating out of `run_one`. Cost is reported as $0; any spend
     before the raise unwound with the stack and is unrecoverable here; the real
     remedy is commissions returning failures instead of raising.
     """
@@ -249,7 +249,7 @@ def _apply_overflow_policy[InputT, OutputT](
         # The real mechanic chops the output to fit, persists the full output via
         # the backend, and embeds its run_id as a reference. The chop step needs
         # commission-specific knowledge (how to shrink a typed OutputT without
-        # making it invalid or self-contradicting — a `summary_text` vs a
+        # making it invalid or self-contradicting: a `summary_text` vs a
         # `list[Claim]` vs an opaque payload), which wants a real consumer to
         # design against. Until that authoring interface lands we degrade to
         # `partial`: the full output is preserved and the jacket flags that real

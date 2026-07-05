@@ -122,7 +122,7 @@ class _PartialTool(Commission[_PartialIn, _PartialOut]):
 
 
 async def test_partial_child_result_renders_output_and_error() -> None:
-    # A partial child's output must reach the calling LLM — partial is the
+    # A partial child's output must reach the calling LLM; partial is the
     # policy that *preserves* usable output, so rendering only the error
     # would waste the child's spend.
     fake = FakeClient(

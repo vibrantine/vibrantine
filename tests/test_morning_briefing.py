@@ -243,7 +243,7 @@ async def test_briefing_unwritable_path_fails_with_real_cost(tmp_path: Path) -> 
 
 async def test_briefing_empty_urls_returns_validation_failure(tmp_path: Path) -> None:
     # Pass a fake synth so default construction doesn't hit AsyncOpenAI's
-    # credential check — the validation path runs before any sub-invoke anyway.
+    # credential check; the validation path runs before any sub-invoke anyway.
     synth, _fake = _synthesize(_structured([]))
     result = await run_one(
         MorningBriefingCommission(synthesize=synth),

@@ -30,7 +30,7 @@ async def run_one[InputT, OutputT](
     Capabilities, cancellation, progress, and concurrency take dataclass
     defaults. `backend` (if given) is stuffed into the context so children
     inherit it automatically. Returns the commission's CommissionResult
-    unchanged — errors surface as ErrorState in the result, not as raised
+    unchanged: errors surface as ErrorState in the result, not as raised
     exceptions.
     """
     ctx = CallContext(budget_usd=budget_usd, backend=backend)

@@ -5,7 +5,7 @@ Skips automatically when `OPENROUTER_API_KEY` is not set, so the default
 
     uv run --env-file .env pytest -m integration
 
-This is the first LLM-loop integration test — it validates the full
+This is the first LLM-loop integration test; it validates the full
 LLM-tool-wrapper + dispatch-loop machinery end-to-end against a live
 model. If this passes, the conclude-tool mechanic, the tool dispatch,
 and the cost rollup are all proven.

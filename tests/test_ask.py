@@ -309,7 +309,7 @@ async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
 
 async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> None:
     # The refusal bites only at budget+unpriced; an unregistered model with no
-    # budget runs normally — pointing at any OpenRouter model stays permitted.
+    # budget runs normally; pointing at any OpenRouter model stays permitted.
     file = tmp_path / "f.txt"
     file.write_text("hello", encoding="utf-8")
     commission, fake = _commission(

@@ -1,7 +1,7 @@
 """Tests for the known-models table and the `Model` value type.
 
 Pins the invariants the budget machinery leans on (every entry well-formed,
-the system default registered *with* real pricing — see
+the system default registered *with* real pricing; see
 `Commission._budget_unenforceable_failure`) plus the multi-provider menu:
 a `Model` bundles identity + endpoint + facts, `resolve` turns a spec into a
 `Model`, and unpriced (`None`) is distinct from free (`0.0`).

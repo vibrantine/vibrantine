@@ -41,9 +41,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Claude Code on the web — local session / agent worktree scratch
+# Claude Code on the web: local session / agent worktree scratch
 .claude/
 .agents/
 
-# Private scratchpad — working notes, retired docs, external research; never ships
+# Private scratchpad: working notes, retired docs, external research; never ships
 notes/

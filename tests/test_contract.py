@@ -6,7 +6,7 @@ loudly. AGENTS.md classifies `ErrorState.kind` as the canonical SSOT for
 failure categories; the other two are smaller but share the same discipline.
 
 Also exercises the Commission constructor's policy-override surface
-(persistence_mode / max_output_tokens / overflow_policy) — the
+(persistence_mode / max_output_tokens / overflow_policy): the
 sentinel-driven kwargs that let one Commission class run with different
 policies in different environments.
 """
@@ -148,7 +148,7 @@ def test_max_output_tokens_kwarg_overrides_class_default() -> None:
 
 def test_max_output_tokens_none_is_a_meaningful_override() -> None:
     # _CappedProbe declares max_output_tokens=1000 at class level.
-    # Passing None explicitly should disable enforcement on this instance —
+    # Passing None explicitly should disable enforcement on this instance:
     # the case the _UNSET sentinel exists for, since None can't double as
     # "use class default".
     probe = _CappedProbe(max_output_tokens=None)
@@ -234,7 +234,7 @@ def test_explicit_none_disables_the_size_gate() -> None:
 def test_client_is_not_constructed_eagerly(monkeypatch: pytest.MonkeyPatch) -> None:
     # The base must not build an LLM client at construction. Tools and
     # coordinators never run the default loop, and building a client with no
-    # credentials raises — so eager construction would break them. Absence of
+    # credentials raises, so eager construction would break them. Absence of
     # a raise here is the lazy-client guarantee; the client is built only when
     # the default loop actually runs.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -288,7 +288,7 @@ def test_missing_identity_classvars_are_reported() -> None:
 
 def test_subclass_inherits_required_classvars() -> None:
     # _CappedProbe inherits all four from _PolicyProbe and is defined at
-    # import without error — inheritance satisfies the definition-time check.
+    # import without error; inheritance satisfies the definition-time check.
     assert _CappedProbe.name == "policy_probe"
     assert _CappedProbe.output_type is _PolicyProbeOutput
 

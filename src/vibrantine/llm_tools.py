@@ -17,7 +17,7 @@ Three pieces, kept in one module while there's only one caller:
   packages into its own `CommissionResult`.
 
 Provenance and the final cost USD belong to the consuming commission,
-not the loop — the loop returns token counts and lets the commission
+not the loop; the loop returns token counts and lets the commission
 do the model-specific pricing lookup.
 """
 
@@ -118,17 +118,17 @@ async def run_llm_loop[OutputT: BaseModel](
 
     Stop conditions: conclude tool called, budget exceeded, max_iterations
     hit, cancellation, no tool call returned by the LLM (treated as a
-    failure — the loop disallows free-form completion).
+    failure; the loop disallows free-form completion).
 
     Tool errors are fed back to the LLM as tool results, not raised as
-    commission failures — the LLM gets to decide whether to retry or
+    commission failures; the LLM gets to decide whether to retry or
     conclude with an apologetic answer.
     """
     in_price, out_price = prices_per_million
     # Capability ceiling: the LLM is only offered the intersection of this
     # commission's toolbox and ctx.capabilities. None = unrestricted. A
     # forbidden tool is simply absent from the menu, so any call to it falls
-    # through the unknown-tool branch below — no separate gate. `conclude` is
+    # through the unknown-tool branch below; no separate gate. `conclude` is
     # framework-injected and never gated. See docs/design.md.
     allowed = ctx.capabilities.tools
     permitted = [c for c in toolbox if allowed is None or c.name in allowed]
@@ -147,10 +147,10 @@ async def run_llm_loop[OutputT: BaseModel](
     out_tokens = 0
     # Summed cost of every sub-commission dispatched below. Folded into the
     # budget check and returned so the caller's CommissionResult.cost includes
-    # the subtree — the structural cost rollup the contract promises.
+    # the subtree: the structural cost rollup the contract promises.
     children_cost = 0.0
     # One free-text reply (no tool call) gets a corrective nudge instead of
-    # failing the whole run — smaller models drift into prose often enough
+    # failing the whole run; smaller models drift into prose often enough
     # that forfeiting the entire spend on the first slip is a bad trade. The
     # second slip fails as before.
     nudged_for_missing_tool_call = False
@@ -200,7 +200,7 @@ async def run_llm_loop[OutputT: BaseModel](
             in_tokens += usage.prompt_tokens
             out_tokens += usage.completion_tokens
 
-        # Own token cost plus everything dispatched children spent — so a
+        # Own token cost plus everything dispatched children spent, so a
         # recursive or sub-commission-bearing loop enforces the budget against
         # its whole subtree, not just its own turns (may overshoot by one turn).
         own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
@@ -379,7 +379,7 @@ def _render_tool_result(result: CommissionResult[Any]) -> str:
     """Render a CommissionResult for the LLM.
 
     Success: the output alone. Partial: the output *and* the error in one
-    object — partial output is usable by contract (it's what overflow_policy
+    object; partial output is usable by contract (it's what overflow_policy
     "partial" exists to preserve), so rendering only the error would throw
     away the child's work. Failure: the error alone.
     """

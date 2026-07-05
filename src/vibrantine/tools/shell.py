@@ -1,13 +1,13 @@
 """Shell tool: run a shell command and capture its output.
 
-The escape-hatch tool — anything the std lib doesn't have a dedicated
+The escape-hatch tool: anything the std lib doesn't have a dedicated
 tool for, an LLM can fall back to via Shell. The most powerful and
 most side-effectful tool in the std lib; placed last in the build
 order so the protocol's failure surface was well-exercised on simpler
 tools first.
 
 Captures stdout, stderr, exit code, and wall-clock runtime. Honours a
-timeout — exceeding it terminates the process and returns
+timeout; exceeding it terminates the process and returns
 ErrorState(kind="timeout", retryable=True). The kill targets the shell
 process itself; on Windows especially, grandchildren the shell spawned
 may survive it (no process-tree kill).
@@ -55,7 +55,7 @@ class ShellInput(BaseModel):
         description=(
             "Maximum characters of stdout and of stderr to return (each capped "
             "independently). A finished command's output can't be re-paginated, "
-            "so anything past the cap is dropped — narrow the command (pipe "
+            "so anything past the cap is dropped; narrow the command (pipe "
             "through grep/tail), redirect to a file and Read it, or raise the cap."
         ),
         gt=0,
@@ -105,8 +105,8 @@ class ShellTool(Commission[ShellInput, ShellOutput]):
         "  On timeout the shell process is killed; processes it spawned may\n"
         "  survive (especially on Windows).\n"
         "- Prefer specific tools (read, write, glob, etc.) when one exists\n"
-        "  for the task — Shell is for cases not covered by them.\n"
-        "- Non-zero `exit_code` is returned as success — interpretation is\n"
+        "  for the task; Shell is for cases not covered by them.\n"
+        "- Non-zero `exit_code` is returned as success; interpretation is\n"
         "  the caller's job. Only timeouts and pre-launch failures return\n"
         "  ErrorState.\n"
         "- `stdout`/`stderr` are each capped at `max_output_chars` (default\n"

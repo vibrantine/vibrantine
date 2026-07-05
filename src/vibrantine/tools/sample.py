@@ -1,7 +1,7 @@
 """Sample tool: file metadata + head/tail without loading the whole file.
 
 Structural-discovery primitive load-bearing for the doc-management
-use case — an agent learning corpus shape by sampling files cheaply
+use case: an agent learning corpus shape by sampling files cheaply
 before committing context budget to a full Read. The agent runs many
 Sample calls during exploration; Read is reserved for files that
 warrant full content load.

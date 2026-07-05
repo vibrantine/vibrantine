@@ -1,6 +1,6 @@
 """AskCommission: answer a question about a single file.
 
-A basic LLM-loop commission — it declares its identity, I/O types, system
+A basic LLM-loop commission: it declares its identity, I/O types, system
 prompt, and a `ReadTool` toolbox, then rides the base's default `invoke`. The
 LLM decides when to call `read` (possibly multiple times for paginated files),
 then signals completion through the framework-injected `conclude` tool.
@@ -23,7 +23,7 @@ _SYSTEM_PROMPT = (
     "You answer questions about a single file. You have one tool: `read`, "
     "which loads a slice of the file given a path, offset, and limit. The "
     "user message tells you which file to read and what question to answer. "
-    "Read enough of the file to answer confidently — paginate if `truncated` "
+    "Read enough of the file to answer confidently; paginate if `truncated` "
     "is true and the answer hasn't appeared. When you have an answer, call "
     "`conclude` with a single `answer` field. Do not produce free-form text "
     "outside of tool calls."

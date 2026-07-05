@@ -5,7 +5,7 @@ The caller (commission or its consuming LLM) is responsible for
 confirmation or capability gating; this tool just deletes the named
 file when invoked.
 
-Directories are intentionally out of scope — `path` must be a regular
+Directories are intentionally out of scope: `path` must be a regular
 file. A separate RemoveDirectory tool would handle that case if it
 ever earns its slot.
 """
@@ -41,7 +41,7 @@ class DeleteTool(Commission[DeleteInput, DeleteOutput]):
         "Usage:\n"
         "- `path` must be absolute.\n"
         "- `path` must point to a regular file, not a directory.\n"
-        "- Confirm intent before calling — no recovery is available\n"
+        "- Confirm intent before calling; no recovery is available\n"
         "  through this tool.\n"
         "\n"
         "Returns `path` (for confirmation)."
