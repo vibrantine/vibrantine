@@ -1,4 +1,4 @@
-"""Heuristic evaluation cases for DeepResearchCommission.
+"""Heuristic evaluation cases for RecursiveResearchCommission.
 
 This is the evaluation lane of docs/commission-testing.md: a real model runs
 the commission and the output is graded against criteria written in advance.
@@ -24,8 +24,8 @@ import os
 import httpx
 import pytest
 
-from vibrantine.commissions.deep_research import (
-    DeepResearchCommission,
+from vibrantine.commissions.recursive_research import (
+    RecursiveResearchCommission,
     ResearchInput,
     ResearchOutput,
 )
@@ -67,8 +67,8 @@ def _fixture_transport() -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
-def _agent() -> DeepResearchCommission:
-    return DeepResearchCommission(
+def _agent() -> RecursiveResearchCommission:
+    return RecursiveResearchCommission(
         max_depth=1,
         fetch=FetchTool(transport=_fixture_transport()),
         model=EVAL_MODEL,

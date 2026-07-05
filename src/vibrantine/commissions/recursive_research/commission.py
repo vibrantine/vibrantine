@@ -1,4 +1,4 @@
-"""DeepResearch commission: a recursive, LLM-loop research agent.
+"""RecursiveResearch commission: a recursive, LLM-loop research agent.
 
 Answers a research question by letting its LLM decompose it into narrower
 sub-questions, delegate each to a shallower sub-researcher (recursion), and
@@ -19,8 +19,8 @@ This is the first commission wired into an LLM-loop toolbox, so its
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibrantine._prompts import load_prompt
-from vibrantine.commissions.deep_research.models import DeepResearchModelMenu
-from vibrantine.commissions.deep_research.types import ResearchInput, ResearchOutput
+from vibrantine.commissions.recursive_research.models import RecursiveResearchModelMenu
+from vibrantine.commissions.recursive_research.types import ResearchInput, ResearchOutput
 from vibrantine.contract import (
     CallContext,
     Commission,
@@ -33,13 +33,13 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-_PACKAGE = "vibrantine.commissions.deep_research"
+_PACKAGE = "vibrantine.commissions.recursive_research"
 
 
-class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
+class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     """Answer a research question recursively, grounding leaf answers in fetches."""
 
-    name: ClassVar[str] = "deep_research"
+    name: ClassVar[str] = "recursive_research"
     description: ClassVar[str] = (
         "Answer a research question with citations. Decomposes broad questions "
         "into narrower sub-questions, delegates them to sub-researchers, and "
@@ -70,7 +70,7 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
         max_depth: int = 2,
         fetch: FetchTool | None = None,
         model: str | Model | None = None,
-        models: DeepResearchModelMenu | None = None,
+        models: RecursiveResearchModelMenu | None = None,
         client: "AsyncOpenAI | None" = None,
         max_iterations: int = 10,
     ) -> None:
@@ -88,7 +88,7 @@ class DeepResearchCommission(Commission[ResearchInput, ResearchOutput]):
         if max_depth > 0:
             # The whole chain below the root shares the subresearcher seat,
             # threaded down as a plain model= like any single-model tree.
-            sub = DeepResearchCommission(
+            sub = RecursiveResearchCommission(
                 max_depth=max_depth - 1,
                 fetch=resolved_fetch,
                 model=sub_model,

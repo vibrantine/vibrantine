@@ -159,10 +159,10 @@ Release decision:
 - [ ] Decide whether this remains a worked coordinator in the library or moves
   toward examples later.
 
-### DeepResearchCommission
+### RecursiveResearchCommission
 
 - [x] Check recursive construction terminates structurally at `max_depth=0`.
-- [x] Check leaf toolboxes omit `deep_research` and include only fetch.
+- [x] Check leaf toolboxes omit `recursive_research` and include only fetch.
 - [x] Check recursive child costs roll up through the default LLM loop.
 - [x] Check output cap / overflow policy is appropriate for sub-answer
   rendering. Decision: `partial` flags oversized sub-answers without trimming
@@ -177,10 +177,11 @@ Release decision:
   composition pattern (recursion through the toolbox, structural termination,
   cost rollup) and is not a supported general-use surface. It stays importable
   under `vibrantine.commissions` for this cut; moving it to an `examples/`
-  area is consciously deferred. A rename is pending because the name is
-  already claimed by other AI research products.
+  area is consciously deferred. Renamed from DeepResearch to
+  RecursiveResearch on 2026-07-05 because the old name is claimed by other
+  AI research products; the new name states the pattern it demonstrates.
 - [x] Add heuristic eval cases for the efficacy bar in
-  `src/vibrantine/commissions/deep_research/BRIEF.md`. Three cases in
+  `src/vibrantine/commissions/recursive_research/BRIEF.md`. Three cases in
   `tests/test_eval.py` (direct source, broad decomposable, source conflict)
   run a live pinned model over fictional fixture sources served through the
   real `FetchTool` via `httpx.MockTransport`; marked `eval`, skip without
@@ -200,7 +201,7 @@ Release decision:
 
 Create an authoring standard before the set of Commissions grows much larger.
 Done in `docs/working/standard-commission-folder-structure.md`, proven by the
-DeepResearch package migration, with testing/evaluation policy in
+RecursiveResearch package migration, with testing/evaluation policy in
 `docs/commission-testing.md`.
 
 - [x] Define where input/output Pydantic models live.
@@ -376,9 +377,9 @@ work.
 Useful future output:
 
 ```text
-DeepResearch
-|-- DeepResearch(depth=1)
-|   |-- DeepResearch(depth=0)
+RecursiveResearch
+|-- RecursiveResearch(depth=1)
+|   |-- RecursiveResearch(depth=0)
 |   |   `-- FetchTool
 |   `-- FetchTool
 `-- FetchTool

@@ -12,7 +12,7 @@ becomes a package with this available shape; optional slots such as
 earned:
 
 ```text
-src/vibrantine/commissions/deep_research/
+src/vibrantine/commissions/recursive_research/
   __init__.py            # re-exports the public class + I/O types; no behavior
   commission.py          # the Commission subclass: identity, toolbox, control flow
   types.py               # input/output/intermediate Pydantic models
@@ -65,7 +65,7 @@ of any depth stays workable:
   regardless of how much mass accretes underneath:
 
   ```python
-  from vibrantine.commissions.deep_research import DeepResearchCommission
+  from vibrantine.commissions.recursive_research import RecursiveResearchCommission
   ```
 
 - **Navigation is level by level, the way the runtime works.** Each BRIEF
@@ -76,7 +76,7 @@ of any depth stays workable:
 
 Filesystem depth is still not invocation depth. A directory is earned by
 authoring size and private ownership, never by call-graph position.
-DeepResearch calling itself three levels deep at runtime is still one
+RecursiveResearch calling itself three levels deep at runtime is still one
 package, because the recursion reuses one class.
 
 ## The Slots
@@ -224,8 +224,8 @@ in `tools/`), or a Commission (belongs in `subcommissions/`). A local
   for provisional and near-public ones. Current lean: required; the slot
   being always present is worth more than the writing cost.
 - The model menu (`models.py`) is provisional until proven by a real
-  consumer. The first wiring landed in `deep_research/models.py`
-  (`DeepResearchModelMenu`), which proved the plumbing but is a
+  consumer. The first wiring landed in `recursive_research/models.py`
+  (`RecursiveResearchModelMenu`), which proved the plumbing but is a
   single-class tree. Open within it: the seat-name vocabulary (per child
   class vs per subtree role, which needs a true multi-seat Commission to
   answer), whether a menu ever needs per-seat client injection alongside
@@ -292,18 +292,18 @@ Verdict: the package is barely earned. Owning children does not by itself
 justify the folder; the module form remains fine until the file stops
 being scannable.
 
-### DeepResearch (recursive LLM loop)
+### RecursiveResearch (recursive LLM loop)
 
 Today: a folder-sized Commission package with the long prompt externalized
 to markdown, two payload types, a provisional model menu, and recursive
 construction (each instance builds a shallower child of the same class).
 
 ```text
-src/vibrantine/commissions/deep_research/
-  __init__.py          # exports DeepResearchCommission + I/O types
-  commission.py        # DeepResearchCommission
+src/vibrantine/commissions/recursive_research/
+  __init__.py          # exports RecursiveResearchCommission + I/O types
+  commission.py        # RecursiveResearchCommission
   types.py             # ResearchInput, ResearchOutput
-  models.py            # DeepResearchModelMenu (provisional slot, first consumer)
+  models.py            # RecursiveResearchModelMenu (provisional slot, first consumer)
   prompts/
     system.md          # loaded via importlib.resources
   tests/

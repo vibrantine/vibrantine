@@ -1,4 +1,4 @@
-"""DeepResearch needs a provisional model menu before the general API freezes."""
+"""RecursiveResearch needs a provisional model menu before the general API freezes."""
 
 from dataclasses import dataclass
 
@@ -6,7 +6,7 @@ from vibrantine.models import Model
 
 
 @dataclass(frozen=True)
-class DeepResearchModelMenu:
+class RecursiveResearchModelMenu:
     """The tree's LLM seats, filled by the caller at construction.
 
     The commission declares its seats; the caller fills them (or none).

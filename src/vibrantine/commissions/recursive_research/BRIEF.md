@@ -1,4 +1,4 @@
-# DeepResearch
+# RecursiveResearch
 
 Recursive LLM-loop research Commission, shipped as a worked example. It exists
 to demonstrate the composition pattern (recursion through the toolbox,
@@ -17,7 +17,7 @@ adding private tools or private subcommission directories.
 
 Do not break the structural termination rule: `max_depth=0` must offer only
 `fetch`, and every larger instance must construct a strictly shallower
-`DeepResearchCommission`.
+`RecursiveResearchCommission`.
 
 ## Efficacy Bar
 
