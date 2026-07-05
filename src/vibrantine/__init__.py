@@ -7,7 +7,7 @@ are the SemVer-protected surface a third party may import and depend on:
 
 The frozen surface is the *bones*: the contract envelope, the closed
 `Literal` vocabularies, and the `run_one` / `invoke_sync` / `dispatch`
-entry points. Everything not in `__all__` (including the std-lib
+entry points. Everything not in `__all__` (including the example
 Commissions in `vibrantine.examples`, the tools in `vibrantine.tools`,
 and any underscore-prefixed name) is internal and provisional: importable,
 but not covered by the stability promise. `commission.invoke` is the
