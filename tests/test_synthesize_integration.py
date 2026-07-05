@@ -14,12 +14,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from vibrantine.commissions.synthesize import (
+from vibrantine.contract import Provenance
+from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.contract import Provenance
 from vibrantine.orchestrator import run_one
 
 pytestmark = [

@@ -307,9 +307,9 @@ Still settling:
 - Budget handoff and richer resource accounting for broad/deep workloads.
 
 The SemVer promise is deliberately tight: the public contract exported from
-`vibrantine.__all__` is the dependency surface. Standard-library Commissions,
-tools, and authoring helpers are useful, but may remain provisional until more
-real consumers exercise them.
+`vibrantine.__all__` is the dependency surface. The worked example Commissions
+under `vibrantine.examples`, the tools, and authoring helpers are useful, but
+may remain provisional until more real consumers exercise them.
 
 ## What Vibrantine Is Not
 

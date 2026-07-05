@@ -140,7 +140,7 @@ src/
     persistence.py                    # PersistenceBackend Protocol + FilesystemBackend default
     models.py                         # KNOWN_MODELS: context window + pricing
     llm_tools.py                      # LLM-tool wrapper + LLM dispatch loop
-    commissions/
+    examples/                         # worked example Commissions (was commissions/)
       synthesize.py                   # Phase 3
       morning_briefing.py             # post-Phase 4 coordinator Commission
       ask.py                          # Phase 13: first LLM-loop Commission

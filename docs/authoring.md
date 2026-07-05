@@ -24,7 +24,7 @@ This is the one document about building Commissions, in three parts:
 
 **Stability promise.** Names exported from `vibrantine` itself (the import
 block in Part III) are the frozen, SemVer-protected surface. Everything else,
-including `vibrantine.tools` and `vibrantine.commissions`, is importable but
+including `vibrantine.tools` and `vibrantine.examples`, is importable but
 provisional: use it, but expect movement. The runnable claims in this
 document are machine-checked by `tests/test_external_authoring.py`, so they
 fail loudly rather than rot silently.
@@ -154,7 +154,7 @@ Two things to notice:
 - The output is deliberately small. A Commission promises a deliverable, not
   a transcript of its work.
 
-**Specimen:** `src/vibrantine/commissions/recursive_research/types.py` does exactly
+**Specimen:** `src/vibrantine/examples/recursive_research/types.py` does exactly
 this and nothing more.
 
 ## Step 2: The Identity
@@ -225,7 +225,7 @@ The four identity attributes (`name`, `description`, `input_type`,
 class fails to even define, with a message saying what's missing. Malformed
 Commissions fail at authoring time, not at first run.
 
-**Specimen:** `src/vibrantine/commissions/recursive_research/commission.py` (the
+**Specimen:** `src/vibrantine/examples/recursive_research/commission.py` (the
 ClassVar block) and its `prompts/system.md`.
 
 ## Step 3: The Interior
@@ -459,7 +459,7 @@ budget behavior, tool menu shape) is listed in
 [`commission-testing.md`](commission-testing.md); work through it as your
 Commission grows up.
 
-**Specimen:** `src/vibrantine/commissions/recursive_research/tests/test_commission.py`
+**Specimen:** `src/vibrantine/examples/recursive_research/tests/test_commission.py`
 runs this exact pattern across a recursive tree, including budget and
 cost-rollup coverage.
 
@@ -497,7 +497,7 @@ Eval cases:
 The BRIEF is the quality contract in plain language. The eval cases in the
 next step exist to turn its sentences into pass/fail.
 
-**Specimen:** `src/vibrantine/commissions/recursive_research/BRIEF.md`.
+**Specimen:** `src/vibrantine/examples/recursive_research/BRIEF.md`.
 
 ## Step 8: The Evals
 
@@ -604,7 +604,7 @@ When a criterion turns out to be wrong (a good answer fails it), fix the
 criterion and record why; that history is how prompt changes stop being
 vibes-only.
 
-**Specimen:** `src/vibrantine/commissions/recursive_research/tests/test_eval.py`,
+**Specimen:** `src/vibrantine/examples/recursive_research/tests/test_eval.py`,
 three cases including a source-conflict case graded by crude heuristic plus
 human transcript review.
 
@@ -899,7 +899,7 @@ exception across a boundary, and never stored state inside a Commission.
 
 For the design rationale behind all of this, read
 [`design.md`](design.md); for the shipped LLM-decides
-counterpart, read `src/vibrantine/commissions/recursive_research/` end to end
+counterpart, read `src/vibrantine/examples/recursive_research/` end to end
 (it is one page of code).
 
 ---

@@ -159,8 +159,9 @@ Release decision:
   cost.
 - [ ] Check progress events are emitted and child progress can bubble through
   the shared callback.
-- [ ] Decide whether this remains a worked coordinator in the library or moves
-  toward examples later.
+- [x] Decide whether this remains a worked coordinator in the library or moves
+  toward examples later. Decision (2026-07-05): moved to `vibrantine.examples`
+  with all shipped Commissions.
 
 ### RecursiveResearchCommission
 
@@ -178,13 +179,13 @@ Release decision:
 - [x] Decide whether this is a worked example, a provisional Commission, or a
   future examples candidate. Decision: worked example. It demonstrates the
   composition pattern (recursion through the toolbox, structural termination,
-  cost rollup) and is not a supported general-use surface. It stays importable
-  under `vibrantine.commissions` for this cut; moving it to an `examples/`
-  area is consciously deferred. Renamed from DeepResearch to
+  cost rollup) and is not a supported general-use surface. Moved to
+  `vibrantine.examples` on 2026-07-05, when the examples area landed and all
+  shipped Commissions moved into it. Renamed from DeepResearch to
   RecursiveResearch on 2026-07-05 because the old name is claimed by other
   AI research products; the new name states the pattern it demonstrates.
 - [x] Add heuristic eval cases for the efficacy bar in
-  `src/vibrantine/commissions/recursive_research/BRIEF.md`. Three cases in
+  `src/vibrantine/examples/recursive_research/BRIEF.md`. Three cases in
   `tests/test_eval.py` (direct source, broad decomposable, source conflict)
   run a live pinned model over fictional fixture sources served through the
   real `FetchTool` via `httpx.MockTransport`; marked `eval`, skip without
@@ -192,7 +193,7 @@ Release decision:
 
 ### EmailHandlerCommission
 
-- [ ] Decide whether it should remain importable under `vibrantine.commissions`
+- [ ] Decide whether it should remain importable under `vibrantine.examples`
   for the public reference cut.
 - [ ] If kept, make the provisional/stubbed status unmistakable in docs.
 - [ ] Check stub handlers cannot be mistaken for production email behavior.
@@ -219,7 +220,7 @@ RecursiveResearch package migration, with testing/evaluation policy in
 Possible compact module layout:
 
 ```text
-src/vibrantine/commissions/my_commission.py
+src/vibrantine/examples/my_commission.py
 tests/test_my_commission.py
 docs/commissions/my_commission.md
 ```
@@ -227,7 +228,7 @@ docs/commissions/my_commission.md
 Possible folder layout for larger Commissions:
 
 ```text
-src/vibrantine/commissions/my_commission/
+src/vibrantine/examples/my_commission/
   __init__.py
   commission.py
   types.py
@@ -400,7 +401,9 @@ Potential future tasks:
 
 - [ ] Security/privacy passes complete.
 - [ ] Commission-by-Commission audit complete or consciously deferred.
-- [ ] Examples folder exists or is explicitly deferred.
+- [x] Examples folder exists or is explicitly deferred. `vibrantine.examples`
+  landed 2026-07-05; all shipped Commissions live there, importable but not
+  part of the frozen surface.
 - [ ] External consumer repo smoke test complete or explicitly deferred.
 - [ ] README reflects current maturity.
 - [ ] Docs index points to this checklist.

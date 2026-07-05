@@ -12,7 +12,7 @@ becomes a package with this available shape; optional slots such as
 earned:
 
 ```text
-src/vibrantine/commissions/recursive_research/
+src/vibrantine/examples/recursive_research/
   __init__.py            # re-exports the public class + I/O types; no behavior
   commission.py          # the Commission subclass: identity, toolbox, control flow
   types.py               # input/output/intermediate Pydantic models
@@ -65,7 +65,7 @@ of any depth stays workable:
   regardless of how much mass accretes underneath:
 
   ```python
-  from vibrantine.commissions.recursive_research import RecursiveResearchCommission
+  from vibrantine.examples.recursive_research import RecursiveResearchCommission
   ```
 
 - **Navigation is level by level, the way the runtime works.** Each BRIEF
@@ -169,7 +169,7 @@ framework itself.
 
 A subcommission stays private to its parent while its parent is its only
 plausible consumer. The moment it has a second consumer, promote it to a
-public sibling package under `src/vibrantine/commissions/`. Because it is
+public sibling package under `src/vibrantine/examples/`. Because it is
 already in standard shape, promotion is a directory move, not a rewrite.
 
 The same reuse trigger applies to private tools. A deterministic tool that
@@ -265,7 +265,7 @@ private `_render_markdown` helper. Its children (`FetchTool`,
 `SynthesizeCommission`) are public siblings, injected at construction.
 
 ```text
-src/vibrantine/commissions/morning_briefing/
+src/vibrantine/examples/morning_briefing/
   __init__.py          # exports MorningBriefingCommission + I/O types
   commission.py        # MorningBriefingCommission + _render_markdown
   types.py             # MorningBriefingInput, MorningBriefingOutput
@@ -299,7 +299,7 @@ to markdown, two payload types, a provisional model menu, and recursive
 construction (each instance builds a shallower child of the same class).
 
 ```text
-src/vibrantine/commissions/recursive_research/
+src/vibrantine/examples/recursive_research/
   __init__.py          # exports RecursiveResearchCommission + I/O types
   commission.py        # RecursiveResearchCommission
   types.py             # ResearchInput, ResearchOutput
@@ -333,7 +333,7 @@ types; its most important fact (provisional, handlers are stubs) lives in
 the module docstring.
 
 ```text
-src/vibrantine/commissions/email_handler/
+src/vibrantine/examples/email_handler/
   __init__.py          # exports EmailHandlerCommission + I/O types only
   commission.py        # EmailHandlerCommission
   types.py             # IncomingEmail, EmailHandlerInput, Route, EmailHandlerOutput

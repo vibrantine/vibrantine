@@ -1,7 +1,7 @@
 """The package's public boundary.
 
 `vibrantine.__all__` is the SemVer-protected surface: the frozen contract
-bones plus the entry points. Std-lib Commissions and tools stay importable
+bones plus the entry points. Example Commissions and tools stay importable
 from their submodules but are deliberately *not* part of the frozen surface.
 """
 
@@ -38,8 +38,8 @@ def test_core_contract_and_entry_points_are_exported() -> None:
 
 
 def test_provisional_commissions_are_not_in_the_frozen_surface() -> None:
-    # commissions/ is iced: importable from its submodule, not the top-level
-    # frozen __all__.
+    # examples/ is demonstration material: importable from its submodule,
+    # not the top-level frozen __all__.
     assert "AskCommission" not in vibrantine.__all__
     assert "RecursiveResearchCommission" not in vibrantine.__all__
     assert "ReadTool" not in vibrantine.__all__
