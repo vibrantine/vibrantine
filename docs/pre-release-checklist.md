@@ -150,15 +150,29 @@ Release decision:
 
 ### MorningBriefingCommission
 
-- [ ] Check fan-out fetch behavior and cost rollup.
-- [ ] Check partial result semantics when some URLs fail.
-- [ ] Check all-fetch-failed behavior.
-- [ ] Check cancellation before fetch, between fetch and synthesize, and before
-  write where practical.
-- [ ] Check write failure returns a structured failure carrying real accumulated
-  cost.
-- [ ] Check progress events are emitted and child progress can bubble through
-  the shared callback.
+Reinterpreted 2026-07-06 as the substantive worked example for the
+author-decided pole of composition: a heterogeneous three-level tree (a
+Weather leaf, N configured NewsDigest coordinators, an executive-summary
+Summarize call) behind one contract boundary, living at
+`src/vibrantine/examples/morning_briefing/` under the folder standard with
+`subcommissions/` and colocated tests. See its BRIEF.md.
+
+- [ ] Check section fan-out behavior and two-level cost rollup (sections and
+  their fetches).
+- [ ] Check two-level partial semantics: failed source makes a section
+  partial; failed section is skipped and named; failed executive summary
+  degrades the briefing instead of killing it; all-sections-failed fails.
+- [ ] Check budget slicing: per-section shares with one reserved for the
+  executive summary; digests slice their share across fetches.
+- [ ] Check cancellation before sections and between sections and the
+  executive summary.
+- [ ] Check write failure returns a structured failure carrying real
+  accumulated cost.
+- [ ] Check progress events bubble from all three levels through the shared
+  callback.
+- [ ] Check the configured-reuse pattern reads well: one NewsDigest class,
+  N instances, parent labels the sections (instances share the class-level
+  name).
 - [x] Decide whether this remains a worked coordinator in the library or moves
   toward examples later. Decision (2026-07-05): moved to `vibrantine.examples`
   with all shipped Commissions.
