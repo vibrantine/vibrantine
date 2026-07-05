@@ -226,10 +226,13 @@ What the invoker holds.
 #### Capabilities bound what a Commission may do; gating is the caller's policy
 
 - **Decision.** The caller hands down an allow-list of tool names. The
-  LLM's menu is the Commission's toolbox intersected with that list, and a
-  parent can only narrow, never widen, a child's grant. Whether a
-  Commission acts on the world or merely drafts is decided by what the
-  caller granted, not by any contract property.
+  LLM's menu is the Commission's toolbox intersected with that list, and
+  children inherit the caller's grant, so on the default path a grant
+  only ever narrows. A custom coordinator builds its children's contexts
+  itself; keeping grants narrowing there is authoring discipline, not a
+  framework check. Whether a Commission acts on the world or merely
+  drafts is decided by what the caller granted, not by any contract
+  property.
 - **Why.** Authority delegated to a fallible worker must be bounded by the
   delegator, and the same Commission must be safely reusable at different
   trust levels: grant the write tool and it acts, withhold it and the same
@@ -244,8 +247,12 @@ What the invoker holds.
 #### Oversized output is a policy the caller picks
 
 - **Decision.** Every Commission can declare an output budget and an
-  overflow policy (reject, keep-but-flag, truncate-with-reference),
-  enforced at dispatch: at the boundary, not inside the unit.
+  overflow policy, enforced at dispatch: at the boundary, not inside the
+  unit. Four policies: `reject` fails the result; `partial` keeps the
+  output and flags it on the envelope (the default);
+  `truncate_with_reference` chops the output and persists the full
+  version (planned); `flag` keeps the output and emits only a progress
+  event, an explicit opt-out for callers that watch progress.
 - **Why.** An oversized child result poisons an LLM-loop parent's context,
   and the parent cannot defend itself after the fact. The budget lives in
   the contract because the victim is upstream of the offender.
@@ -253,7 +260,9 @@ What the invoker holds.
   - Silent truncation.
   - LLM-summarised fallbacks, which put non-determinism in the failure
     path.
-  - Warnings without a record.
+  - Unrecorded overflow by default: the default policy marks the
+    envelope, and the progress-only `flag` policy must be chosen
+    deliberately.
 
 #### Persistence records runs, never state
 
@@ -393,7 +402,7 @@ wishes do not belong in the design record.
   whole tree.
 - **`truncate_with_reference`.** The overflow policy that chops an
   oversized output and persists the full version, reachable by run id.
-  Stubbed today, degrading safely to keep-but-flag. Built when the first
+  Stubbed today, degrading safely to `partial`. Built when the first
   Commission arrives whose overflow is expected rather than exceptional.
 - **Honest local-model accounting.** Cost is USD-only today, so a free
   local worker rolls up as $0 while consuming real compute. Per-model

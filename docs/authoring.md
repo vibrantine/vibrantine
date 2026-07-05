@@ -972,7 +972,7 @@ Behavior slots (class attributes, instance-overridable via constructor):
 | `toolbox` | `()` | What the LLM loop may dispatch; instance override via `toolbox=` kwarg |
 | `persistence_mode` | `"off"` | `PersistenceMode` |
 | `max_output_tokens` | `None` | Output cap; `None` = no enforcement |
-| `overflow_policy` | `"flag"` | `OverflowPolicy`; enforced by `dispatch` |
+| `overflow_policy` | `"partial"` | `OverflowPolicy`; enforced by `dispatch` |
 
 Constructor kwargs (all keyword-only):
 
@@ -986,8 +986,10 @@ Constructor kwargs (all keyword-only):
 | `target_input_fraction` | `0.75` | Fraction of the window the gate allows |
 | `persistence_mode` / `max_output_tokens` / `overflow_policy` | class default | Per-instance policy override (sentinel-based, so omission is not `None`) |
 
-Protected helpers available to a custom `invoke` (underscore means
-caller-facing leave-alone, not unstable; see `design.md`):
+Protected helpers available to a custom `invoke`. The underscore warns
+*callers* off; for authors these are the supported interior surface,
+provisional until the authoring-surface freeze (see
+`design.md § Not built yet`):
 
 | Helper | Use |
 |---|---|

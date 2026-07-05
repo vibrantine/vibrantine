@@ -342,7 +342,7 @@ class Commission[InputT, OutputT](ABC):
     # Not ClassVar; instance assignment is a supported override path.
     persistence_mode: PersistenceMode = "off"
     max_output_tokens: int | None = None
-    overflow_policy: OverflowPolicy = "flag"
+    overflow_policy: OverflowPolicy = "partial"
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Enforce the standard authoring format at class-definition time.
