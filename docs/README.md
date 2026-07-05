@@ -24,12 +24,13 @@ truth for what Vibrantine is and how its pieces fit together.
 
 Audience-facing guides, not architecture.
 
-- [`building-a-commission.md`](building-a-commission.md): the current
-  authoring guide; builds a set of Commissions from first principles.
-- [`authoring-from-an-external-repo.md`](authoring-from-an-external-repo.md):
-  what a separate repo gets when it imports `vibrantine` to build
-  Commissions: importable surface, contract, types, run flow, authoring
-  rules. Line-exact references against source, machine-checked in CI.
+- [`authoring.md`](authoring.md): the one document about building
+  Commissions, in three parts. Part I: a step-by-step tutorial building a
+  first Commission in an external project against the frozen public surface,
+  every code block verified end to end against a live model. Part II:
+  composition, the custom-coordinator path, and where state lives. Part III:
+  the contract reference, machine-checked in CI by
+  `tests/test_external_authoring.py`.
 - [`commission-testing.md`](commission-testing.md): how to test commissions
   at two levels: contract behavior with fake clients, and heuristic
   evaluation against explicit success/failure criteria.

@@ -1,9 +1,8 @@
-"""Machine-checks for the claims in `docs/authoring-from-an-external-repo.md`.
+"""Machine-checks for the claims in `docs/authoring.md`.
 
 That doc is written for a third party who builds against the public surface
 with nothing but the doc in hand. Each runnable claim it makes is pinned here
 so the doc fails loudly in CI rather than rotting silently between refreshes.
-Every test name maps to a section of the doc.
 """
 
 import inspect

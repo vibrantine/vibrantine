@@ -7,7 +7,7 @@
 > That doc maps *who owns what* across a commission. This one is narrower: **how
 > do you write the two types a commission declares, and why do they matter?**
 > Field-by-field detail belongs in a future reference doc; today's live contract
-> reference is [`../../authoring-from-an-external-repo.md`](../../authoring-from-an-external-repo.md).
+> reference is [`../../authoring.md`](../../authoring.md) (Part III).
 > Written for a novice AI coder: plain language first, type names second.
 
 **Legend.** 🔭 **Planned** = designed and decided, not yet shipped. Everything

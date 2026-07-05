@@ -46,7 +46,7 @@ Sustain), mapped to the target docs.
   docs should link here only when explicitly labeling the target as a working
   draft.
 - **Not machine-checked (yet).** At production, the contract section's
-  machine-check (today on `authoring-from-an-external-repo.md`) moves onto
+  machine-check (today on `authoring.md`) moves onto
   the README.
 - **Promote, don't accumulate.** When a draft is true and polished it moves
   into the live docs, folds into the root README, or retires.

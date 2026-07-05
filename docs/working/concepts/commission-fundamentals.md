@@ -11,7 +11,7 @@
 > It is a *map of ownership*, not an exhaustive list of fields. It names each
 > surface, says who owns it, and shows the dials that live on it. Field-by-field
 > detail belongs in a future reference doc; today's live contract reference is
-> [`../../authoring-from-an-external-repo.md`](../../authoring-from-an-external-repo.md).
+> [`../../authoring.md`](../../authoring.md) (Part III).
 > Written for a novice AI coder: plain language first, type names second.
 >
 > Standalone for now. It will likely feed the README's "the model" section and
