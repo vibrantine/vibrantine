@@ -386,7 +386,7 @@ wishes do not belong in the design record.
   when a second real coordinator repeats a shape; a template extracts
   what coordinators turn out to share, never speculation.
 - **The envelope prompt layer.** An application-level prompt that flows
-  unchanged through every commission in a tree, plus per-call named
+  unchanged through every Commission in a tree, plus per-call named
   sections a parent can add to without disturbing the others. Direction
   settled; section shape, ordering, and cache discipline still open.
   Built when the first application above the library needs to speak to a
@@ -394,7 +394,7 @@ wishes do not belong in the design record.
 - **`truncate_with_reference`.** The overflow policy that chops an
   oversized output and persists the full version, reachable by run id.
   Stubbed today, degrading safely to keep-but-flag. Built when the first
-  commission arrives whose overflow is expected rather than exceptional.
+  Commission arrives whose overflow is expected rather than exceptional.
 - **Honest local-model accounting.** Cost is USD-only today, so a free
   local worker rolls up as $0 while consuming real compute. Per-model
   budgets and token/time accounting are the settled direction. Built

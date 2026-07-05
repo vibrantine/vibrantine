@@ -1,6 +1,6 @@
 # DeepResearch
 
-Recursive LLM-loop research commission, shipped as a worked example. It exists
+Recursive LLM-loop research Commission, shipped as a worked example. It exists
 to demonstrate the composition pattern (recursion through the toolbox,
 structural termination, cost rollup); it works, but it is not a supported
 general-use research surface. It answers one research question by letting the
@@ -11,7 +11,7 @@ Input: `ResearchInput(question, seed_urls)`. Output:
 `ResearchOutput(answer, claims)`, where each claim carries supporting
 provenance.
 
-This is the first real folder-sized commission package. It proves the standard
+This is the first real folder-sized Commission package. It proves the standard
 layout's prompt slot, colocated tests, and provisional model-menu slot without
 adding private tools or private subcommission directories.
 
@@ -54,6 +54,6 @@ Eval cases (`tests/test_eval.py`; run `uv run --env-file .env pytest -m eval -s`
 
 All cases pin the model and serve fictional fixture sources through the real
 `FetchTool` over an injected `httpx.MockTransport`, so the only free variable
-is the commission's competence. Delegation behavior (leaves answer from
+is the Commission's competence. Delegation behavior (leaves answer from
 fetches; at most three sub-questions) is not output-observable today and is
 reviewed from transcripts.

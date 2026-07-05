@@ -4,9 +4,9 @@
 > folder role.
 >
 > A companion to [`commission-fundamentals.md`](commission-fundamentals.md) and
-> [`boundary-types.md`](boundary-types.md). Those explain *what a commission is*
+> [`boundary-types.md`](boundary-types.md). Those explain *what a Commission is*
 > and *how to design its boundary*. This one explains the next question:
-> **how do small commissions become larger behavior?**
+> **how do small Commissions become larger behavior?**
 >
 > Field-by-field detail belongs in a future reference doc; today's live contract
 > reference is [`../../authoring.md`](../../authoring.md) (Part III).
@@ -21,7 +21,7 @@ unmarked is live on `main` today.
 
 Composition in Vibrantine is delegated work with receipts.
 
-A parent commission calls a child commission, gets back one
+A parent Commission calls a child Commission, gets back one
 `CommissionResult`, inspects it, and decides what to do next. The child does
 not know who its siblings are. It does not write to shared state. It does not
 send messages sideways. Everything flows through the parent.
@@ -31,7 +31,7 @@ That sounds restrictive until you notice what it buys:
 - The data path is easy to read.
 - Failures arrive as values the parent can handle.
 - Cost and provenance roll upward through the structure.
-- A small commission can be tested alone, then reused inside a larger one.
+- A small Commission can be tested alone, then reused inside a larger one.
 
 The whole model is:
 
@@ -47,7 +47,7 @@ caller
 
 The parent is the hub. The result envelope is the joint.
 
-**The whole model reduces to two sentences.** A commission is one typed function
+**The whole model reduces to two sentences.** A Commission is one typed function
 with an LLM somewhere inside it: one input in, one result envelope out. The
 parent is the only path between children: no sibling channel. If a design keeps
 growing machinery that no longer obviously reduces to those two sentences, doubt
@@ -58,14 +58,14 @@ does not actually need was conversational sediment, not architecture.
 
 ## The two ways a parent decides what runs next
 
-Every commission has the same outside: typed input in, `CommissionResult` out.
+Every Commission has the same outside: typed input in, `CommissionResult` out.
 What changes is the inside. For composition, the key question is simple:
 
 > Who decides which child gets called next: your Python code, or the model?
 
 ### Python coordinator: you decide
 
-A Python coordinator is a commission whose `invoke` method calls children in an
+A Python coordinator is a Commission whose `invoke` method calls children in an
 order you wrote. Use this when the workflow is known:
 
 - fetch these URLs, then synthesize the successful ones
@@ -104,12 +104,12 @@ class BriefingCommission(Commission[BriefingInput, BriefingOutput]):
 The model may still be involved inside the children. The coordinator simply
 owns the traffic pattern.
 
-### AI-loop commission: the model decides
+### AI-loop Commission: the model decides
 
-An AI-loop commission gives the model a toolbox. On each turn, the model chooses
+An AI-loop Commission gives the model a toolbox. On each turn, the model chooses
 which tool or sub-commission to call, with what input, and when it has enough to
 finish. It finishes by calling the framework-supplied `conclude` tool, whose
-schema is the commission's `output_type`.
+schema is the Commission's `output_type`.
 
 Use this when the routing itself needs judgment:
 
@@ -132,7 +132,7 @@ class AskCommission(Commission[AskInput, AskOutput]):
         return f"File path: {input.file_path}\nQuestion: {input.question}"
 ```
 
-You did not write the loop. The base commission owns it.
+You did not write the loop. The base Commission owns it.
 
 Rule of thumb: keep control flow in Python when you already know the steps.
 Reach for an AI loop when choosing the steps is itself the work.
@@ -143,10 +143,10 @@ Reach for an AI loop when choosing the steps is itself the work.
 
 Composition has two separate questions that are easy to blur:
 
-- **What can this commission reach if fully trusted?**
+- **What can this Commission reach if fully trusted?**
 - **What is this run allowed to reach right now?**
 
-The first is **capacity**. It lives on the commission instance, usually through
+The first is **capacity**. It lives on the Commission instance, usually through
 its `toolbox`. The builder wires it at construction:
 
 ```python
@@ -165,13 +165,13 @@ ctx = CallContext(
 )
 ```
 
-If a tool is in the toolbox but not in `capabilities`, an AI-loop commission's
-model is not offered it. The commission may be able to fetch and write in
+If a tool is in the toolbox but not in `capabilities`, an AI-loop Commission's
+model is not offered it. The Commission may be able to fetch and write in
 general, while this particular run is allowed only to fetch.
 
 That split is the safety lever:
 
-- Build powerful commissions.
+- Build powerful Commissions.
 - Grant narrow permissions per run.
 - Expand the grant only when the caller means to.
 
@@ -185,7 +185,7 @@ context to that child.
 ## Children return values, not vibes
 
 When a parent calls a child, it receives a `CommissionResult`. That result has
-the same shape whether the child is a simple tool, an AI-loop commission, or a
+the same shape whether the child is a simple tool, an AI-loop Commission, or a
 coordinator with its own subtree.
 
 The first parent decision is always:
@@ -230,7 +230,7 @@ return CommissionResult(
 )
 ```
 
-For an AI-loop commission, the framework does the child-cost rollup for calls
+For an AI-loop Commission, the framework does the child-cost rollup for calls
 made through the loop. A sub-commission used as a tool spends money; the parent
 result includes it.
 
@@ -241,7 +241,7 @@ remembers what happened underneath it.
 
 ## State stays above the tree
 
-A commission can keep local variables while one invocation is running. A parent
+A Commission can keep local variables while one invocation is running. A parent
 can collect child results, build a list of claims, or carry a question from one
 round to the next.
 
@@ -267,14 +267,14 @@ stays a pure function of the world it read. The rule of thumb is **reads look,
 writes carry**: many runs can read the same files in place, since shared reads do
 not race, while *writes to that shared state* serialize through a single owner
 rather than many workers editing it at once. This is not a ban on side effects: a
-commission may act and write on its own (the acting-vs-drafting choice, gated by
+Commission may act and write on its own (the acting-vs-drafting choice, gated by
 capabilities). The funnel applies specifically when a wide fan shares one
 underlying state, because concurrent independent writes reintroduce the race the
 tree exists to prevent. The clean shape there is workers that *draft* the change
 as a typed value and one owner that applies it.
 
 Persistence records are for inspection and replay. They are not hidden memory.
-This keeps a commission testable: same input, same permissions, same declared
+This keeps a Commission testable: same input, same permissions, same declared
 capacity, one result envelope.
 
 ---
@@ -327,7 +327,7 @@ round cap, budget, deadline, or a typed "done" signal from a child.
 
 These are not framework types. They are authoring patterns. Write the plain
 Python shape first; extract a reusable template only after the second or third
-real commission asks for it.
+real Commission asks for it.
 
 ---
 
@@ -362,7 +362,7 @@ child A -> parent -> child B
 That is less expressive than a graph runtime. It is also much easier to inspect,
 test, and trust. When the work really does need graph-shaped state, that is a
 sign you may be building an application layer above Vibrantine, not a single
-commission tree inside it.
+Commission tree inside it.
 
 ---
 
@@ -377,7 +377,7 @@ A good composition has a few visible properties:
 - Costs from children appear in the parent's `cost`.
 - Partial success is represented honestly, not flattened into success.
 - State that must survive the run is threaded through input/output, not hidden
-  inside the commission.
+  inside the Commission.
 
 If a boundary type turns an AI instruction into a typed order of work,
 composition lets you delegate larger work through smaller orders without losing

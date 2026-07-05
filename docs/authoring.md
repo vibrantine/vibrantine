@@ -9,7 +9,7 @@ the quality claim falsifiable.
 
 That is also the whole contract, stated as a rule:
 
-> **A commission is one typed input in, one `CommissionResult` out. What
+> **A Commission is one typed input in, one `CommissionResult` out. What
 > happens inside is entirely yours.**
 
 This is the one document about building Commissions, in three parts:
@@ -454,7 +454,7 @@ You scripted the model's decisions and everything else was live machinery.
 
 This one test proves import, construction, injection, dispatch, tool
 execution, conclusion, and the jacket. The full coverage bar for a shipped
-commission (validation failures, cancellation, malformed model responses,
+Commission (validation failures, cancellation, malformed model responses,
 budget behavior, tool menu shape) is listed in
 [`commission-testing.md`](commission-testing.md); work through it as your
 Commission grows up.
@@ -622,7 +622,7 @@ Commission, however large, is this same shape.
 Every Commission subclasses `Commission[InputT, OutputT]` and picks exactly
 one path:
 
-| | **Basic commission** | **Custom commission** |
+| | **Basic Commission** | **Custom Commission** |
 |---|---|---|
 | You write | a `build_user_message` method | an `async def invoke` method |
 | Control flow | the framework's LLM loop: it calls the model, lets it use your toolbox, ends when the model concludes | yours: plain Python, your own sequencing, fan-out, rounds |
@@ -650,7 +650,7 @@ A parent owns its children and depends on them only through the contract:
   independent.
 - **Sum children's costs** into the `CostMetrics` you return. A child's cost
   already includes its own subtree, so rollup is plain addition. (Basic
-  commissions get this automatically.)
+  Commissions get this automatically.)
 - **Narrow a child's context** by copying it: `CallContext` is immutable, so
   `replace(ctx, capabilities=CapabilitySet(tools=frozenset({"read"})))` hands
   a child a read-only tool menu without affecting anyone else.
@@ -671,9 +671,9 @@ the caller's job, not the Commission's.
 ## Worked build: a corpus-research coordinator
 
 The system: a custom **coordinator** that, for each round, dispatches a
-**plan** commission, **fans out** read-workers in parallel, **reviews** their
+**plan** Commission, **fans out** read-workers in parallel, **reviews** their
 claims, then **consolidates** into a follow-up question; after the rounds, an
-**assemble** commission writes the report. Five basic commissions plus one
+**assemble** Commission writes the report. Five basic Commissions plus one
 custom coordinator.
 
 (Contrast with the shipped `DeepResearchCommission`, which does research
@@ -968,7 +968,7 @@ Behavior slots (class attributes, instance-overridable via constructor):
 
 | Attribute | Default | Notes |
 |---|---|---|
-| `system_prompt` | `None` | The commission's own prompt; `None` is fine for tools and coordinators |
+| `system_prompt` | `None` | The Commission's own prompt; `None` is fine for tools and coordinators |
 | `toolbox` | `()` | What the LLM loop may dispatch; instance override via `toolbox=` kwarg |
 | `persistence_mode` | `"off"` | `PersistenceMode` |
 | `max_output_tokens` | `None` | Output cap; `None` = no enforcement |
@@ -1059,7 +1059,7 @@ directly; the entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 ## The default LLM loop
 
-What a basic commission rides:
+What a basic Commission rides:
 
 - Composes your system prompt and opening message, calls the model with a
   tool menu built from `toolbox` intersected with `ctx.capabilities`.
@@ -1077,8 +1077,8 @@ written as a selection prompt.
 
 ## Models and cost
 
-- `DEFAULT_MODEL` is the system default seam; every commission uses it
-  unless its caller passes `model=`. Never hardcode a model in a commission
+- `DEFAULT_MODEL` is the system default seam; every Commission uses it
+  unless its caller passes `model=`. Never hardcode a model in a Commission
   body.
 - A bare string resolves through `KNOWN_MODELS` to identity, endpoint, and
   pricing. For uncatalogued targets use `openai_compatible(name, address)`
@@ -1103,7 +1103,7 @@ written as a selection prompt.
 
 ## Authoring discipline
 
-- **Commission vs tool.** A commission has an LLM call somewhere in its
+- **Commission vs tool.** A Commission has an LLM call somewhere in its
   subtree; a tool has none. Both wear the same jacket; the distinction is
   discipline, not a separate type. Tools use `max_input_tokens=None` and no
   `model`.

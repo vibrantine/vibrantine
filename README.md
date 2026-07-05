@@ -13,6 +13,11 @@ testable, and safe to nest.
 
 ## Why Vibrantine?
 
+Vibrantine is built toward one goal: **agentic behavior that is effective,
+reliable, and maintainable.** Effective: real work that needs judgment, not
+just retrieval or templating. Reliable: results you can depend on without
+watching every step. Maintainable: change one part without fearing the rest.
+
 AI-agent systems become hard to reason about when every part can read shared
 state, mutate shared context, or hand vague prose to another agent. Errors,
 assumptions, tool misuse, and wasted budget can compound without a clear place
@@ -64,7 +69,7 @@ Inside the boundary, a Commission may plan, search, read, call tools, invoke
 child Commissions, revise, verify, or loop until it can responsibly conclude.
 The outside stays the same.
 
-That is the central bet: if every act of delegated work has the same reliable
+That is the central thesis: if every act of delegated work has the same reliable
 boundary, larger agentic behavior can be built by nesting smaller units without
 losing the ability to inspect, test, budget, and recover.
 
@@ -326,15 +331,15 @@ compositional discipline.
 
 Start here:
 
-- [docs/design.md](docs/design.md): the design record: what Vibrantine is,
-  why it exists, and how Commissions, tools, and application code fit
-  together.
+- [docs/design.md](docs/design.md): the design record: why the library is
+  shaped the way it is, what that shape costs, and what is planned but not
+  built.
 - [docs/authoring.md](docs/authoring.md): the one document about building
   Commissions: a verified step-by-step tutorial, the composition patterns,
   and the full contract reference.
 
-Working concept drafts that may feed future tutorial/reference docs live in
-[docs/working/concepts/](docs/working/concepts/).
+Working concept drafts live in [docs/working/concepts/](docs/working/concepts/);
+they promote into the live docs or retire.
 
 ## Development
 

@@ -1,12 +1,12 @@
 # Standard Commission Folder Structure
 
-This note records the chosen standard layout for folder-sized commissions,
+This note records the chosen standard layout for folder-sized Commissions,
 the decisions behind it, and what remains open. It supersedes the earlier
 alternatives analysis (summarized at the end).
 
 ## The Standard
 
-A commission is a single module until it outgrows one. When it does, it
+A Commission is a single module until it outgrows one. When it does, it
 becomes a package with this available shape; optional slots such as
 `models.py`, `prompts/`, `tools/`, and `subcommissions/` are omitted until
 earned:
@@ -41,14 +41,14 @@ src/vibrantine/commissions/deep_research/
 ```
 
 The recursion is the whole standard. Every entry in `subcommissions/` is
-itself a commission, and follows the same module-or-package rule with the
+itself a Commission, and follows the same module-or-package rule with the
 same escalation criteria. `tools/` is the companion slot for deterministic
 private capabilities: no LLM anywhere in their subtree, still wired through
 the parent's `toolbox` when the parent's LLM may call them.
 
 ## Design Regime: Built For Massive Recursion
 
-The standard assumes commissions will be fleshed out slowly, over years,
+The standard assumes Commissions will be fleshed out slowly, over years,
 largely by agentic AI adding options and capabilities. Under that regime a
 deep tree of subcommissions is not a failure to be prevented; it is the
 expected result of sustained growth. The layout is designed so that a tree
@@ -81,44 +81,44 @@ package, because the recursion reuses one class.
 
 ## The Slots
 
-Every folder-sized commission has the same slots. The less the layout
+Every folder-sized Commission has the same slots. The less the layout
 varies, the less a human or an AI assistant has to guess.
 
-- **`__init__.py`** re-exports the public commission class and its public
-  input/output types. No behavior, no cleverness. One public commission
+- **`__init__.py`** re-exports the public Commission class and its public
+  input/output types. No behavior, no cleverness. One public Commission
   class per package.
 - **`commission.py`** holds the `Commission[...]` subclass: identity
   ClassVars, toolbox construction, and either the `build_user_message` hook
-  (basic commission) or the custom `invoke` (custom commission). Ordinary
+  (basic Commission) or the custom `invoke` (custom Commission). Ordinary
   helper functions live here or beside their single consumer. Helpers are
   not subcommissions.
 - **`types.py`** holds the Pydantic models: the public input/output pair
   and intermediate payload models that cross internal boundaries.
-- **`models.py`** (optional, provisional) holds the commission's model
+- **`models.py`** (optional, provisional) holds the Commission's model
   menu: a frozen dataclass declaring the tree's LLM seats (the
-  commission's own loop plus one seat per LLM-bearing subcommission). A
+  Commission's own loop plus one seat per LLM-bearing subcommission). A
   seat accepts a single model (paints that whole subtree) or the child's
   own menu type (fine-grained, recursively). The parent's `__init__`
   resolves each seat with one fallback chain: named seat, then menu
   `default`, then the system default. Dumb data, no behavior. The
-  commission declares its seats (identity); the caller fills them
-  (capacity); nothing in a commission body names a literal model. Earned
-  when a tree grows a second seat worth naming; a single-seat commission
+  Commission declares its seats (identity); the caller fills them
+  (capacity); nothing in a Commission body names a literal model. Earned
+  when a tree grows a second seat worth naming; a single-seat Commission
   keeps the plain `model=` kwarg.
 - **`prompts/`** holds prompt text as markdown, one file per stable
   prompt-bearing step, `system.md` by convention for the main prompt. Long
   prompts diff better as markdown and stay out of Python noise. A
-  module-sized commission keeps its prompt as an inline constant instead.
-- **`tools/`** holds private deterministic tools this commission owns:
+  module-sized Commission keeps its prompt as an inline constant instead.
+- **`tools/`** holds private deterministic tools this Commission owns:
   substantial capabilities that are too large to be helpers, but do not
   contain an LLM anywhere in their subtree. A small tool is a single module;
   a larger private tool may earn its own module cluster only when the
-  commission has truly outgrown a file. The `__init__.py` is empty and
+  Commission has truly outgrown a file. The `__init__.py` is empty and
   exists for importability; it must never become a registry. Reusable tools
   promote out to the shared tools layer; LLM-bearing children belong in
   `subcommissions/` instead.
-- **`subcommissions/`** holds the children this commission owns: full
-  commissions, and only commissions. A small child is a single module; a
+- **`subcommissions/`** holds the children this Commission owns: full
+  Commissions, and only Commissions. A small child is a single module; a
   folder-sized child is this same package shape, recursively. The
   `__init__.py` is empty and exists for importability; it must never grow
   into a second public surface.
@@ -129,7 +129,7 @@ varies, the less a human or an AI assistant has to guess.
 
 ## BRIEF.md
 
-Every folder-sized commission carries a `BRIEF.md`. The name is deliberate:
+Every folder-sized Commission carries a `BRIEF.md`. The name is deliberate:
 
 - In real-world commissioning (art, design, architecture), the brief is the
   plain-language statement of what was commissioned, for whom, and within
@@ -141,15 +141,15 @@ Every folder-sized commission carries a `BRIEF.md`. The name is deliberate:
 A BRIEF covers, in plain language: purpose, maturity and release status,
 the input and output in one breath, what each subcommission is for (one
 level only, never the whole tree), known limitations and failures, and
-anything a maintainer must not break. For LLM-driven commissions it also
+anything a maintainer must not break. For LLM-driven Commissions it also
 names the success criteria, failure criteria, and evaluation cases that define
-whether the commission is effective. Claims that matter should be enforced by
+whether the Commission is effective. Claims that matter should be enforced by
 tests or active heuristic evaluation, because prose drifts under years of
 agentic edits.
 
 ## Tests Are Colocated
 
-Tests live inside the commission package, not in the repository's flat
+Tests live inside the Commission package, not in the repository's flat
 `tests/` directory. Two reasons:
 
 - **Self-containment.** An agent editing a package finds the tests beside
@@ -157,12 +157,12 @@ Tests live inside the commission package, not in the repository's flat
 - **Promotion stays one move.** Because a package carries its code, types,
   prompts, brief, and tests, lifting it out is a single `git mv` plus an
   import fix, not a coordinated multi-directory refactor.
-- **Evaluation travels with behavior.** LLM-driven commissions can keep small
+- **Evaluation travels with behavior.** LLM-driven Commissions can keep small
   heuristic eval cases beside the prompt and code they protect.
 
 Follow-up: the packaging configuration must exclude in-package `tests/`
 directories from the built distribution. The repository's existing flat
-`tests/` continues to hold tests for module-sized commissions and the
+`tests/` continues to hold tests for module-sized Commissions and the
 framework itself.
 
 ## Promotion: Reuse Is The Trigger, Not Depth
@@ -176,7 +176,7 @@ The same reuse trigger applies to private tools. A deterministic tool that
 has a second consumer promotes to the shared tools layer (or, in an
 external repo, that repo's shared tools package). If the tool grows an LLM
 anywhere in its subtree, it is promoted conceptually first: it becomes a
-commission, then follows the subcommission promotion rule.
+Commission, then follows the subcommission promotion rule.
 
 Depth alone is not a smell. A deep chain of genuinely single-consumer
 subcommissions is legitimate and stays put. Reuse is the only flattening
@@ -204,12 +204,12 @@ step-centered, component-centered, and README-first. The recursive standard
 absorbs them: the minimal package is the base shape, `prompts/` is a fixed
 slot rather than an escalation, the component-centered layout became the
 `subcommissions/` rule once it was recognized that LLM-bearing components
-are commissions in themselves, and the README-first audit requirement
+are Commissions in themselves, and the README-first audit requirement
 became BRIEF.md. A private `tools/` slot was later added for deterministic
-capabilities that are larger than helpers but still not commissions. A
+capabilities that are larger than helpers but still not Commissions. A
 `steps/` directory was dropped: a step with real independent logic is
 either a helper (stays in `commission.py`), a deterministic tool (belongs
-in `tools/`), or a commission (belongs in `subcommissions/`). A local
+in `tools/`), or a Commission (belongs in `subcommissions/`). A local
 `contract.py` was rejected for colliding with `src/vibrantine/contract.py`;
 `types.py` stands.
 
@@ -220,14 +220,14 @@ in `tools/`), or a commission (belongs in `subcommissions/`). A local
   to deserve its own file). Does it need a sharper rule?
 - Where private raw LLM response models live: `types.py` by default, or
   beside the code that consumes them?
-- Whether `BRIEF.md` is required for every folder-sized commission or only
+- Whether `BRIEF.md` is required for every folder-sized Commission or only
   for provisional and near-public ones. Current lean: required; the slot
   being always present is worth more than the writing cost.
 - The model menu (`models.py`) is provisional until proven by a real
   consumer. The first wiring landed in `deep_research/models.py`
   (`DeepResearchModelMenu`), which proved the plumbing but is a
   single-class tree. Open within it: the seat-name vocabulary (per child
-  class vs per subtree role, which needs a true multi-seat commission to
+  class vs per subtree role, which needs a true multi-seat Commission to
   answer), whether a menu ever needs per-seat client injection alongside
   the model, and how the menu relates to the planned catalog/grant
   model-ownership design.
@@ -237,7 +237,7 @@ in `tools/`), or a commission (belongs in `subcommissions/`). A local
 The open threads in the order they will actually block work:
 
 1. **Model-menu seat vocabulary** waits on a genuine multi-seat
-   commission; there is no honest test case yet.
+   Commission; there is no honest test case yet.
 2. **Shared-type promotion friction** (EmailHandler's `IncomingEmail`)
    only matters when a subcommission carrying a shared type is actually
    promoted; recorded in the sketch findings.
@@ -248,7 +248,7 @@ including `prompts/*.md`.
 
 ## The Sketches
 
-Each existing commission, sketched into the standard without moving code.
+Each existing Commission, sketched into the standard without moving code.
 The audit questions asked of every sketch:
 
 - What file would a human open first?
@@ -256,11 +256,11 @@ The audit questions asked of every sketch:
 - Where would a new input field go?
 - Where would a new subcommission or private tool be declared?
 - Where would a known prompt failure be recorded?
-- Does the folder make the commission easier to understand, or just wider?
+- Does the folder make the Commission easier to understand, or just wider?
 
 ### MorningBriefing (custom coordinator)
 
-Today: one module with two payload types, the commission class, and a
+Today: one module with two payload types, the Commission class, and a
 private `_render_markdown` helper. Its children (`FetchTool`,
 `SynthesizeCommission`) are public siblings, injected at construction.
 
@@ -279,7 +279,7 @@ src/vibrantine/commissions/morning_briefing/
   private tools owned by this package.
 - No `subcommissions/`: the LLM-bearing child is a public sibling; nothing
   here is privately owned.
-- `_render_markdown` stays in `commission.py`: a helper, not a commission.
+- `_render_markdown` stays in `commission.py`: a helper, not a Commission.
 
 Audit: a human opens BRIEF.md. A prompt change points *outside* the
 package: the only prompt in this tree belongs to `synthesize`, which owns
@@ -294,7 +294,7 @@ being scannable.
 
 ### DeepResearch (recursive LLM loop)
 
-Today: a folder-sized commission package with the long prompt externalized
+Today: a folder-sized Commission package with the long prompt externalized
 to markdown, two payload types, a provisional model menu, and recursive
 construction (each instance builds a shallower child of the same class).
 
@@ -328,7 +328,7 @@ Verdict: the strongest fit; earns every slot except the private-owned
 
 ### EmailHandler (parent plus stub children)
 
-Today: one module holding three commission classes and five payload
+Today: one module holding three Commission classes and five payload
 types; its most important fact (provisional, handlers are stubs) lives in
 the module docstring.
 
