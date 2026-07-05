@@ -107,7 +107,7 @@ owns the traffic pattern.
 ### AI-loop Commission: the model decides
 
 An AI-loop Commission gives the model a toolbox. On each turn, the model chooses
-which tool or sub-commission to call, with what input, and when it has enough to
+which tool or sub-Commission to call, with what input, and when it has enough to
 finish. It finishes by calling the framework-supplied `conclude` tool, whose
 schema is the Commission's `output_type`.
 
@@ -231,7 +231,7 @@ return CommissionResult(
 ```
 
 For an AI-loop Commission, the framework does the child-cost rollup for calls
-made through the loop. A sub-commission used as a tool spends money; the parent
+made through the loop. A sub-Commission used as a tool spends money; the parent
 result includes it.
 
 That is the difference between a call tree and a pile of API calls. The tree

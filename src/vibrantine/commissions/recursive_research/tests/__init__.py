@@ -1,1 +1,1 @@
-"""Colocated tests for the RecursiveResearch commission package."""
+"""Colocated tests for the RecursiveResearch Commission package."""

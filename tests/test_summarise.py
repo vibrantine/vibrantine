@@ -1,6 +1,6 @@
 """Tests for SummariseCommission.
 
-A basic LLM-loop commission with an *empty* toolbox: the only tool the loop
+A basic LLM-loop Commission with an *empty* toolbox: the only tool the loop
 offers is the framework-injected `conclude`, so the happy path is a single
 LLM turn that calls conclude with the typed summary. Tests inject a fake
 AsyncOpenAI-shaped client that returns scripted responses.
@@ -99,7 +99,7 @@ def _tool_names(call_kwargs: dict[str, Any]) -> set[str]:
 
 
 async def test_summarise_empty_toolbox_offers_only_conclude() -> None:
-    # Pure-judgment commission: nothing to fetch, so the only tool on the
+    # Pure-judgment Commission: nothing to fetch, so the only tool on the
     # menu is the framework-injected conclude.
     commission, fake = _commission(
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]

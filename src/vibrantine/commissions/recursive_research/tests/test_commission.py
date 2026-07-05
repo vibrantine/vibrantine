@@ -36,7 +36,7 @@ def llm_response(
     in_tokens: int = 100,
     out_tokens: int = 50,
 ) -> SimpleNamespace:
-    """Fake chat.completions response for this commission's LLM loop."""
+    """Fake chat.completions response for this Commission's LLM loop."""
 
     tcs = None
     if tool_calls is not None:

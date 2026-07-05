@@ -94,7 +94,7 @@ class _AnswerOutput(BaseModel):
 
 class _BasicCommission(Commission[_AnswerInput, _AnswerOutput]):
     name: ClassVar[str] = "basic_probe"
-    description: ClassVar[str] = "A basic commission used to probe the default LLM loop."
+    description: ClassVar[str] = "A basic Commission used to probe the default LLM loop."
     input_type: ClassVar[type] = _AnswerInput
     output_type: ClassVar[type] = _AnswerOutput
     system_prompt: ClassVar[str | None] = "Answer, then call conclude."
@@ -176,7 +176,7 @@ def test_exception_in_invoke_becomes_a_failure_value() -> None:
     assert res.error is not None and res.error.kind == "internal"
 
 
-# --- §12: the custom-commission SUCCESS path (hand-built Provenance/cost) ---
+# --- §12: the custom-Commission SUCCESS path (hand-built Provenance/cost) ---
 class _CustomSuccess(Commission[_AnswerInput, _AnswerOutput]):
     name: ClassVar[str] = "custom_success"
     description: ClassVar[str] = "d"

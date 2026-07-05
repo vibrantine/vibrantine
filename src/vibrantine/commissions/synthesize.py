@@ -1,4 +1,4 @@
-"""Synthesize commission: aggregate source payloads into a typed summary with claims.
+"""Synthesize Commission: aggregate source payloads into a typed summary with claims.
 
 Two-step LLM flow: a free-form synthesis pass produces neutral prose; a
 structured-output pass converts that prose into typed claims. The LLM emits

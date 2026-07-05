@@ -1,11 +1,11 @@
 """SummariseCommission: shorten one piece of content to a target length.
 
-A basic LLM-loop commission: it declares its identity, I/O types, a
+A basic LLM-loop Commission: it declares its identity, I/O types, a
 `system_prompt`, and a `build_user_message` hook, then rides the base's
 default `invoke`. The toolbox is empty: summarisation is pure judgment over
 content already in hand, so there is nothing to fetch. The LLM reads the
 message and signals completion through the framework-injected `conclude`
-tool, whose schema is this commission's `output_type`.
+tool, whose schema is this Commission's `output_type`.
 
 This is the Transform primitive in its single-source form: long in, short
 out, one source, no citations. It is the deliberate counterpart to

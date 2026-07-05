@@ -1,4 +1,4 @@
-"""Tests for the Synthesize commission.
+"""Tests for the Synthesize Commission.
 
 Tests inject a fake AsyncOpenAI-shaped client via the constructor. The fake
 records every call so we can assert that the size gate skips the LLM and that
@@ -253,7 +253,7 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
 
 
 def test_synthesize_has_empty_toolbox() -> None:
-    # A Python coordinator with no sub-commissions: empty toolbox by default.
+    # A Python coordinator with no sub-Commissions: empty toolbox by default.
     synth = SynthesizeCommission(client=cast(AsyncOpenAI, FakeClient([])))
     assert synth.toolbox == ()
 

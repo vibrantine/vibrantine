@@ -1,7 +1,7 @@
 """Tests for FilesystemBackend.
 
 Backend is tested in isolation against the PersistenceBackend Protocol;
-no dispatch helper or commission machinery involved. Each test builds
+no dispatch helper or Commission machinery involved. Each test builds
 its records by hand, drives the backend directly, and asserts on the
 on-disk state.
 """

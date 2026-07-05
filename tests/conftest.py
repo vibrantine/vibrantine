@@ -1,4 +1,4 @@
-"""Shared test doubles for the LLM-using commissions.
+"""Shared test doubles for the LLM-using Commissions.
 
 A fake AsyncOpenAI-shaped client plus a response builder and an
 always-cancelled token, hoisted here so the ask / synthesize / email_handler /
@@ -31,7 +31,7 @@ def llm_response(
     """Fake chat.completions response. `tool_calls` is a list of (id, name, args).
 
     The message carries both `content` and `tool_calls` (None when unset), so
-    one builder serves loop commissions (which read tool_calls) and direct-call
+    one builder serves loop Commissions (which read tool_calls) and direct-call
     ones like Synthesize (which read only content).
     """
     tcs = None

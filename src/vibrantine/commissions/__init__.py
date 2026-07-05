@@ -1,1 +1,1 @@
-"""Standard-library commissions ship alongside the core contract."""
+"""Standard-library Commissions ship alongside the core contract."""

@@ -124,7 +124,7 @@ src/doctag/
 
 ```python
 # src/doctag/types.py
-"""DocTag's boundary types stay beside the commission that owns them."""
+"""DocTag's boundary types stay beside the Commission that owns them."""
 
 from pathlib import Path
 
@@ -186,7 +186,7 @@ Now the class skeleton that carries the identity:
 
 ```python
 # src/doctag/commission.py
-"""DocTag commission: read one document, return a summary and topic tags."""
+"""DocTag Commission: read one document, return a summary and topic tags."""
 
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -552,7 +552,7 @@ pytestmark = [
     ),
 ]
 
-# Pinned: a failing case means the commission changed, not the default model.
+# Pinned: a failing case means the Commission changed, not the default model.
 EVAL_MODEL = "google/gemini-3-flash-preview"
 
 FIXTURE_MEMO = """\
@@ -1137,7 +1137,7 @@ Before you ship a Commission, confirm:
 - [ ] **Custom `invoke`**: check `ctx.cancel.is_cancelled` at breakpoints;
   call children via `dispatch(child, input, ctx)`, never `.invoke`; sum
   children's `cost.estimated_usd`.
-- [ ] **Compose through constructors**: inject sub-commissions and the model
+- [ ] **Compose through constructors**: inject sub-Commissions and the model
   at construction; never reach into another Commission's internals.
 - [ ] **State stays outside**: no memory held inside the Commission between
   calls; accumulation belongs to the caller or the coordinator's local

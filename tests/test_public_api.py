@@ -1,7 +1,7 @@
 """The package's public boundary.
 
 `vibrantine.__all__` is the SemVer-protected surface: the frozen contract
-bones plus the entry points. Std-lib commissions and tools stay importable
+bones plus the entry points. Std-lib Commissions and tools stay importable
 from their submodules but are deliberately *not* part of the frozen surface.
 """
 

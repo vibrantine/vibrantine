@@ -1,4 +1,4 @@
-"""Default filesystem persistence backend for commission runs.
+"""Default filesystem persistence backend for Commission runs.
 
 Stores each PersistedRecord as a JSON file under a configurable root
 directory. Pruning happens on every store, per the record's mode (dev →

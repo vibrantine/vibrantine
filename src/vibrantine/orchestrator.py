@@ -1,6 +1,6 @@
-"""Top-level entry points for invoking a commission from outside.
+"""Top-level entry points for invoking a Commission from outside.
 
-A commission requires a typed input and a CallContext. Callers who only
+A Commission requires a typed input and a CallContext. Callers who only
 care about the budget (and optionally the persistence backend) should
 not have to construct a CallContext by hand. Routes through `dispatch`
 so run_id stamping, parent_run_id threading, overflow enforcement, and
@@ -25,11 +25,11 @@ async def run_one[InputT, OutputT](
     budget_usd: float | None = None,
     backend: PersistenceBackend | None = None,
 ) -> CommissionResult[OutputT]:
-    """Run one commission with a default CallContext.
+    """Run one Commission with a default CallContext.
 
     Capabilities, cancellation, progress, and concurrency take dataclass
     defaults. `backend` (if given) is stuffed into the context so children
-    inherit it automatically. Returns the commission's CommissionResult
+    inherit it automatically. Returns the Commission's CommissionResult
     unchanged: errors surface as ErrorState in the result, not as raised
     exceptions.
     """
