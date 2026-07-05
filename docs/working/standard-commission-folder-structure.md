@@ -260,25 +260,35 @@ The audit questions asked of every sketch:
 
 ### MorningBriefing (custom coordinator)
 
-Today: one module with two payload types, the Commission class, and a
-private `_render_markdown` helper. Its children (`FetchTool`,
-`SynthesizeCommission`) are public siblings, injected at construction.
+Originally one module with two payload types, the Commission class, and a
+private `_render_markdown` helper, with public siblings injected at
+construction. Reinterpreted 2026-07-06 as the substantive heterogeneous-tree
+example; it now owns private children and became the first user of
+`subcommissions/`:
 
 ```text
 src/vibrantine/examples/morning_briefing/
-  __init__.py          # exports MorningBriefingCommission + I/O types
+  __init__.py          # exports MorningBriefingCommission, children, I/O types
   commission.py        # MorningBriefingCommission + _render_markdown
-  types.py             # MorningBriefingInput, MorningBriefingOutput
+  types.py             # MorningBriefingInput, MorningBriefingOutput, SectionReport
+  subcommissions/
+    weather.py         # WeatherCommission (basic LLM loop + its own I/O types)
+    news_digest.py     # NewsDigestCommission (one class, N configured instances)
   tests/
-    test_commission.py # today's tests/test_morning_briefing.py
+    fakes.py           # self-contained doubles (top-level conftest is out of scope)
+    test_commission.py
+    test_news_digest.py
+    test_weather.py
   BRIEF.md
 ```
 
-- No `prompts/`: a Python coordinator with no LLM of its own.
-- No `tools/`: `FetchTool` and `WriteTool` are public shared tools, not
-  private tools owned by this package.
-- No `subcommissions/`: the LLM-bearing child is a public sibling; nothing
-  here is privately owned.
+- No `prompts/`: the coordinator has no LLM of its own; Weather's prompt is
+  a small inline constant, below the threshold for the prompt slot.
+- No `tools/`: `FetchTool` is a public shared tool, not a private tool
+  owned by this package.
+- `subcommissions/` holds only the privately owned children (Weather,
+  NewsDigest); `SummarizeCommission` stays a public sibling injected at
+  construction.
 - `_render_markdown` stays in `commission.py`: a helper, not a Commission.
 
 Audit: a human opens BRIEF.md. A prompt change points *outside* the
@@ -372,8 +382,10 @@ masquerading as one flat file of six equal classes.
 ### Findings
 
 - **The escalation threshold sharpened.** Having children does not earn a
-  package (MorningBriefing); an owned prompt, private children, or an
-  unscannable module do.
+  package (MorningBriefing in its original shape); an owned prompt, private
+  children, or an unscannable module do. MorningBriefing later crossed the
+  threshold exactly this way: the 2026-07-06 reinterpretation gave it private
+  children (Weather, NewsDigest), which is what earned the package.
 - **Module-sized subcommissions keep their boundary types beside their
   class**, not hoisted into the parent's `types.py`. The same logic
   applies to private tools and partially settles the raw-LLM-models open

@@ -58,7 +58,7 @@ The full surface is on `CallContext`, but not every field changes behavior today
 
 - **`budget_usd`**: enforced by the default LLM loop (`run_llm_loop` halts after a turn with `kind="budget_exceeded"`) and by Synthesize's custom two-pass invoke (pre-flight estimate + post-call actuals). Information-only for tools like Fetch (HTTP costs $0). Coordinators allocate slices through it. Enforcement needs a priced model: if a budget is set but the model isn't in `KNOWN_MODELS` (so cost can't be computed), the default loop and Synthesize fail fast with `kind="validation"` rather than running with a silently unenforced budget; register the model or invoke without a budget.
 - **`cancel`**: enforced everywhere. Commissions check `ctx.cancel.is_cancelled` at natural breakpoints and return `kind="cancelled"`.
-- **`on_progress`**: emitted by Synthesize (`synthesis_pass`, `structured_pass`) and MorningBriefing (`fetching`, `synthesizing`, `written`). Coordinators forward `on_progress` to their children, so worker events bubble up under the original callback.
+- **`on_progress`**: emitted by Synthesize (`synthesis_pass`, `structured_pass`), NewsDigest (`fetching`, `synthesizing`), and MorningBriefing (`sections`, `executive_summary`, `written`). Coordinators forward `on_progress` to their children, so worker events bubble up under the original callback.
 - **`capabilities`**: allow-list of tool names, enforced by `run_llm_loop` (not by Commission bodies): the LLM's tool menu is the intersection of the Commission's toolbox and this set. `None` = unrestricted (root default); a set permits exactly those names, empty set permitting nothing. Python coordinators' hardcoded `dispatch` calls are ungated by design.
 - **`concurrency`**: `int`, per-coordinator hint. No v0 coordinator honors it (`MorningBriefingCommission` uses unbounded `asyncio.gather`); a tree-wide resource-management refactor is planned but consciously deferred.
 
@@ -142,7 +142,7 @@ src/
     llm_tools.py                      # LLM-tool wrapper + LLM dispatch loop
     examples/                         # worked example Commissions (was commissions/)
       synthesize.py                   # Phase 3
-      morning_briefing.py             # post-Phase 4 coordinator Commission
+      morning_briefing/               # heterogeneous coordinator tree (folder standard)
       ask.py                          # Phase 13: first LLM-loop Commission
       recursive_research/                  # recursive LLM-loop worked example
       email_handler.py                # provisional validator (unexported)
