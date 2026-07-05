@@ -10,7 +10,7 @@ This exists to stress the LLM-loop-routing surface of the contract before the
 contract is frozen. The handlers are stubs: DraftReply returns canned text but
 reports a deliberately non-zero cost (so the loop's cost-rollup behavior is
 observable without spending), and NotifyUser records instead of notifying. It
-is not part of the supported std-lib surface; it is a consumer that exercises:
+is not part of any supported surface; it is a consumer that exercises:
 
   1. a Commission used as an LLM tool (DraftReply), dispatched mid-loop;
   2. heterogeneous route outputs flattened into one typed `OutputT`;
