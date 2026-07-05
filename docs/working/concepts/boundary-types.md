@@ -46,7 +46,7 @@ follows.
 > to. That is the job of `build_user_message`, and it is where the typed input
 > becomes the concrete request the model sees.
 
-This guide builds both types for a real Commission, `Summarise` (shorten one
+This guide builds both types for a real Commission, `Summarize` (shorten one
 piece of content), and shows where `Synthesize` (merge several sources) needs
 more.
 
@@ -55,11 +55,11 @@ more.
 ## Part 1: The input type, the parameters
 
 The input type is the structured form a caller fills in when issuing the order.
-Here is the whole thing for Summarise, which we will build up to:
+Here is the whole thing for Summarize, which we will build up to:
 
 ```python
-class SummariseInput(BaseModel):
-    content: str = Field(min_length=1, description="The content to summarise; must be non-empty.")
+class SummarizeInput(BaseModel):
+    content: str = Field(min_length=1, description="The content to summarize; must be non-empty.")
     length: SummaryLength = Field(default="short", description="Target length of the summary.")
     focus: str | None = Field(default=None, description="Optional aspect to steer toward.")
 ```
@@ -72,7 +72,7 @@ Three moves get you from "what does this work need?" to a good input type.
 
 Split the request into two kinds of field:
 
-- **The substance** is the thing the run exists to process. For Summarise that
+- **The substance** is the thing the run exists to process. For Summarize that
   is `content`. There is usually exactly one.
 - **The steering** is everything that shapes *how* the work happens without
   being the work itself: `length`, `focus`. These are optional knobs, and they
@@ -90,7 +90,7 @@ A work order has preconditions. An input type carries them, using Pydantic
 content: str = Field(min_length=1, ...)
 ```
 
-If the caller constructs the input model, `SummariseInput(content="")` raises a
+If the caller constructs the input model, `SummarizeInput(content="")` raises a
 `ValidationError` in the caller's code before the Commission ever runs. The work
 never starts on that bad request, and the interior does not have to defend
 against it. Use `min_length`, numeric bounds, and a `Literal` for closed choices
@@ -101,16 +101,16 @@ tool.
 ### Move 3: Write the prompt once, in `build_user_message`
 
 This is the move that makes the metaphor real. The model cannot read
-`SummariseInput`; it only reads words. So you write one method that turns the
+`SummarizeInput`; it only reads words. So you write one method that turns the
 typed parameters into the words the model sees:
 
 ```python
-def build_user_message(self, input: SummariseInput, ctx: CallContext) -> str:
+def build_user_message(self, input: SummarizeInput, ctx: CallContext) -> str:
     parts = [f"Target length: {input.length}"]
     if input.focus:
         parts.append(f"Focus: {input.focus}")
     parts.append("")
-    parts.append("Content to summarise:")
+    parts.append("Content to summarize:")
     parts.append(input.content)
     return "\n".join(parts)
 ```
@@ -129,16 +129,16 @@ prompt the author happens to build from it:
 
 ```python
 # Too prompt-shaped: every caller has to know how to ask.
-class SummariseInput(BaseModel):
+class SummarizeInput(BaseModel):
     prompt: str = Field(description="The prompt to send to the model.")
     instructions: str = Field(description="Extra instructions for the prompt.")
 
 
 # Better: the caller fills the work order; the Commission owns the wording.
-class SummariseInput(BaseModel):
+class SummarizeInput(BaseModel):
     content: str = Field(
         min_length=1,
-        description="The content to summarise; must be non-empty.",
+        description="The content to summarize; must be non-empty.",
     )
     length: SummaryLength = Field(
         default="short",
@@ -169,11 +169,11 @@ you have to parse and hope about. Two moves design a good one.
 
 ### Move 1: Return the smallest shape the caller needs
 
-Return exactly what the caller will consume, nothing more. For Summarise that is
+Return exactly what the caller will consume, nothing more. For Summarize that is
 one field:
 
 ```python
-class SummariseOutput(BaseModel):
+class SummarizeOutput(BaseModel):
     summary: str = Field(description="The summary, written to the target length.")
 ```
 
@@ -191,7 +191,7 @@ for this:
   `speculative`.
 - **`Claim[T]`**: an asserted value carried with the provenances that back it.
 
-This is the one upgrade from Summarise to Synthesize, which merges many sources,
+This is the one upgrade from Summarize to Synthesize, which merges many sources,
 so the trail has to survive the merge:
 
 ```python
@@ -238,7 +238,7 @@ and immutable, so the promised deliverable is fixed for every call. That is
 right almost always, but it bites classification: a `Classify` whose caller
 passes the labels at call time would want its return constrained to *those*
 labels, which differ every call, and that collides with a fixed `output_type`.
-Summarise dodges the same pressure by putting its closed vocabulary
+Summarize dodges the same pressure by putting its closed vocabulary
 (`SummaryLength`) on the *input*, where per-call values are expected. How to
 handle a return shape that genuinely wants to vary is an open question, recorded
 here so it is not a surprise.

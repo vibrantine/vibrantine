@@ -92,7 +92,7 @@ class ReadTool(Commission[ReadInput, ReadOutput]):
             )
 
         # Windows raises PermissionError on read_text(directory); POSIX
-        # raises IsADirectoryError. Check ahead so behaviour is deterministic.
+        # raises IsADirectoryError. Check ahead so behavior is deterministic.
         if input.path.is_dir():
             return failure(
                 "validation",

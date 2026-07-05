@@ -206,7 +206,7 @@ people, meaning different things.
 | Run grant | "this invocation may spend $0.20" | Permission (call-time) | Caller |
 
 They are not redundant. The static cap is a property of the *worker*: a cheap
-local summariser should never run up a large bill even if some caller carelessly
+local summarizer should never run up a large bill even if some caller carelessly
 grants it one. The run grant is a property of the *call*: this particular task
 is worth up to twenty cents. The run can spend up to the **smaller of the two**.
 
@@ -269,16 +269,16 @@ exact API.)
 
 ```python
 # 1. IDENTITY: what it IS (author writes once, into the class)
-class Summarise(Commission[Document, Summary]):
-    name = "summarise"
+class Summarize(Commission[Document, Summary]):
+    name = "summarize"
     description = "Reduce one document to a short summary."
     input_type = Document          # promised input boundary
     output_type = Summary          # promised output boundary
-    system_prompt = "You summarise one document faithfully and briefly."
+    system_prompt = "You summarize one document faithfully and briefly."
     # interior: overrides build_user_message -> an AI-loop commission
 
 # 2. CAPACITY: what it CAN DO (builder wires it, immutable)
-summarise = Summarise(
+summarize = Summarize(
     model=PROFILES["A"],           # its default model, a structured object
     toolbox=(),                    # the tools it can reach
     persistence_mode="dev",
@@ -287,7 +287,7 @@ summarise = Summarise(
 
 # 3 + 4. PERMISSION and TASK (caller supplies, fresh each run)
 result = run_one(
-    summarise,
+    summarize,
     Document(text="..."),                  # 4. TASK: what to solve
     ctx=CallContext(budget_usd=0.10),      # 3. PERMISSION: what it may do
 )

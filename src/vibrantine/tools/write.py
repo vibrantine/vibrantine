@@ -3,7 +3,7 @@
 Completes the `C` in text CRUD. Prefer `edit` when only a small portion
 of an existing file needs to change; `write` is the right tool when the
 new content bears no resemblance to the old. Parent directories are
-created automatically (matches Claude Code's Write behaviour).
+created automatically (matches Claude Code's Write behavior).
 """
 
 from pathlib import Path

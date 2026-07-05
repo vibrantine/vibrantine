@@ -258,7 +258,7 @@ What the invoker holds.
   the contract because the victim is upstream of the offender.
 - **Rules out.**
   - Silent truncation.
-  - LLM-summarised fallbacks, which put non-determinism in the failure
+  - LLM-summarized fallbacks, which put non-determinism in the failure
     path.
   - Unrecorded overflow by default: the default policy marks the
     envelope, and the progress-only `flag` policy must be chosen
@@ -346,7 +346,7 @@ what you give, what you get, and when the giving hurts.
   stacks latency, multiplies error rates, and loses signal in
   translation, so the instinct to solve a big job with many nested LLM
   levels runs into physics the contract does not soften.
-- **You get.** Predictable cost and error behaviour at scale, because
+- **You get.** Predictable cost and error behavior at scale, because
   breadth is cheap: siblings do not compound each other's errors, drift
   each other's goals, or stack each other's latency.
 - **When it bites.** When an LLM mid-tree delegates deeper than the
