@@ -109,7 +109,7 @@ Known limitations:
 Release decision:
 ```
 
-### SummariseCommission
+### SummarizeCommission
 
 - [ ] Check that the prompt faithfully describes the target lengths.
 - [ ] Check the output schema is intentionally simple and uncited.
@@ -118,8 +118,11 @@ Release decision:
 - [ ] Check malformed provider response behavior through the default loop.
 - [ ] Check tests cover success, validation/size limits, budget behavior where
   relevant, and injected-client execution.
-- [ ] Decide whether British `Summarise` spelling is intentional for the public
-  surface or should be revisited before broader release.
+- [x] Decide whether British `Summarise` spelling is intentional for the public
+  surface or should be revisited before broader release. Decision (2026-07-05):
+  American spelling everywhere, consistent with typical coding conventions.
+  Renamed to `SummarizeCommission` and swept remaining British spellings
+  (behaviour, honour) across prose.
 
 ### SynthesizeCommission
 
@@ -322,7 +325,7 @@ Suggested first examples:
 ```text
 examples/
   ask_file.py
-  summarise_text.py
+  summarize_text.py
   synthesize_sources.py
   tools_read_write.py
 ```

@@ -8,7 +8,7 @@ its toolbox holding a *sub-Commission* and a *tool* rather than leaf tools only.
 
 This exists to stress the LLM-loop-routing surface of the contract before the
 contract is frozen. The handlers are stubs: DraftReply returns canned text but
-reports a deliberately non-zero cost (so the loop's cost-rollup behaviour is
+reports a deliberately non-zero cost (so the loop's cost-rollup behavior is
 observable without spending), and NotifyUser records instead of notifying. It
 is not part of the supported std-lib surface; it is a consumer that exercises:
 
@@ -148,7 +148,7 @@ class DraftReplyCommission(Commission[DraftReplyInput, DraftReplyOutput]):
                 ),
             ),
             provenance=provenance,
-            # Deliberately non-zero so the loop's cost-rollup behaviour is
+            # Deliberately non-zero so the loop's cost-rollup behavior is
             # observable: run_llm_loop folds this into children_cost on dispatch.
             cost=CostMetrics(estimated_usd=0.0023),
         )

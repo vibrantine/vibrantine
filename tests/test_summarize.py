@@ -1,4 +1,4 @@
-"""Tests for SummariseCommission.
+"""Tests for SummarizeCommission.
 
 A basic LLM-loop Commission with an *empty* toolbox: the only tool the loop
 offers is the framework-injected `conclude`, so the happy path is a single
@@ -14,9 +14,9 @@ from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from vibrantine.commissions.summarise import (
-    SummariseCommission,
-    SummariseInput,
+from vibrantine.commissions.summarize import (
+    SummarizeCommission,
+    SummarizeInput,
 )
 from vibrantine.contract import CallContext, ProgressEvent
 
@@ -31,9 +31,9 @@ def _commission(
     *,
     max_iterations: int = 10,
     model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
-) -> tuple[SummariseCommission, FakeClient]:
+) -> tuple[SummarizeCommission, FakeClient]:
     fake = FakeClient(responses)
-    commission = SummariseCommission(
+    commission = SummarizeCommission(
         client=cast(AsyncOpenAI, fake),
         max_iterations=max_iterations,
         model=model,
@@ -41,13 +41,13 @@ def _commission(
     return commission, fake
 
 
-async def test_summarise_happy_path_concludes_in_one_turn() -> None:
+async def test_summarize_happy_path_concludes_in_one_turn() -> None:
     commission, fake = _commission(
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "A content cat."})])]
     )
 
     result = await commission.invoke(
-        SummariseInput(content=_SOURCE, length="one_sentence"),
+        SummarizeInput(content=_SOURCE, length="one_sentence"),
         CallContext(),
     )
 
@@ -57,24 +57,24 @@ async def test_summarise_happy_path_concludes_in_one_turn() -> None:
     assert len(fake.completions.calls) == 1
 
 
-def test_summarise_default_length_is_short() -> None:
+def test_summarize_default_length_is_short() -> None:
     # The contract default: a caller may pass only `content`.
-    input = SummariseInput(content=_SOURCE)
+    input = SummarizeInput(content=_SOURCE)
     assert input.length == "short"
     assert input.focus is None
 
 
-def test_summarise_rejects_empty_content() -> None:
-    # Summarising nothing is a caller bug: guarded at construction, like
+def test_summarize_rejects_empty_content() -> None:
+    # Summarizing nothing is a caller bug: guarded at construction, like
     # Synthesize's empty `sources` and Classify's `min_length` on labels.
     with pytest.raises(ValidationError):
-        SummariseInput(content="")
+        SummarizeInput(content="")
 
 
-def test_summarise_user_message_carries_length_and_content() -> None:
+def test_summarize_user_message_carries_length_and_content() -> None:
     commission, _fake = _commission([])
     message = commission.build_user_message(
-        SummariseInput(content=_SOURCE, length="medium"),
+        SummarizeInput(content=_SOURCE, length="medium"),
         CallContext(),
     )
 
@@ -83,10 +83,10 @@ def test_summarise_user_message_carries_length_and_content() -> None:
     assert "Focus:" not in message  # no focus given → no focus line
 
 
-def test_summarise_user_message_includes_focus_when_given() -> None:
+def test_summarize_user_message_includes_focus_when_given() -> None:
     commission, _fake = _commission([])
     message = commission.build_user_message(
-        SummariseInput(content=_SOURCE, focus="the birds"),
+        SummarizeInput(content=_SOURCE, focus="the birds"),
         CallContext(),
     )
 
@@ -98,19 +98,19 @@ def _tool_names(call_kwargs: dict[str, Any]) -> set[str]:
     return {t["function"]["name"] for t in call_kwargs["tools"]}
 
 
-async def test_summarise_empty_toolbox_offers_only_conclude() -> None:
+async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
     # Pure-judgment Commission: nothing to fetch, so the only tool on the
     # menu is the framework-injected conclude.
     commission, fake = _commission(
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await commission.invoke(SummariseInput(content=_SOURCE), CallContext())
+    await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
 
     assert _tool_names(fake.completions.calls[0]) == {"conclude"}
 
 
-async def test_summarise_budget_exceeded_after_first_llm_call() -> None:
+async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
     # First call uses 10000 in + 1000 out tokens.
     # Cost = (10000*0.50 + 1000*3.00) / 1M = $0.008. Budget $0.001 → exceeded
     # at the post-turn check, before the conclude output is packaged.
@@ -125,7 +125,7 @@ async def test_summarise_budget_exceeded_after_first_llm_call() -> None:
     )
 
     result = await commission.invoke(
-        SummariseInput(content=_SOURCE),
+        SummarizeInput(content=_SOURCE),
         CallContext(budget_usd=0.001),
     )
 
@@ -136,11 +136,11 @@ async def test_summarise_budget_exceeded_after_first_llm_call() -> None:
     assert result.cost.estimated_usd > 0.001
 
 
-async def test_summarise_cancellation_at_entry_makes_no_llm_call() -> None:
+async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
     result = await commission.invoke(
-        SummariseInput(content=_SOURCE),
+        SummarizeInput(content=_SOURCE),
         CallContext(cancel=AlwaysCancelled()),
     )
 
@@ -150,7 +150,7 @@ async def test_summarise_cancellation_at_entry_makes_no_llm_call() -> None:
     assert len(fake.completions.calls) == 0
 
 
-async def test_summarise_free_text_is_nudged_then_fails_on_second_slip() -> None:
+async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None:
     # The loop disallows free-form completion: a first prose reply earns a
     # corrective nudge, a second one fails the run.
     commission, fake = _commission(
@@ -160,7 +160,7 @@ async def test_summarise_free_text_is_nudged_then_fails_on_second_slip() -> None
         ]
     )
 
-    result = await commission.invoke(SummariseInput(content=_SOURCE), CallContext())
+    result = await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -169,21 +169,21 @@ async def test_summarise_free_text_is_nudged_then_fails_on_second_slip() -> None
     assert len(fake.completions.calls) == 2
 
 
-async def test_summarise_emits_loop_start_progress_event() -> None:
+async def test_summarize_emits_loop_start_progress_event() -> None:
     events: list[ProgressEvent] = []
     commission, _fake = _commission(
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
     await commission.invoke(
-        SummariseInput(content=_SOURCE),
+        SummarizeInput(content=_SOURCE),
         CallContext(on_progress=events.append),
     )
 
-    assert any(e.phase == "loop_start" and e.commission_name == "summarise" for e in events)
+    assert any(e.phase == "loop_start" and e.commission_name == "summarize" for e in events)
 
 
-async def test_summarise_invalid_conclude_args_are_fed_back_then_recover() -> None:
+async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> None:
     # First conclude omits the required `summary` field; the loop feeds the
     # validation error back and the LLM concludes correctly on retry.
     commission, fake = _commission(
@@ -193,7 +193,7 @@ async def test_summarise_invalid_conclude_args_are_fed_back_then_recover() -> No
         ]
     )
 
-    result = await commission.invoke(SummariseInput(content=_SOURCE), CallContext())
+    result = await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
 
     assert result.status == "success", result.error
     assert result.output is not None

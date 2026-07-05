@@ -153,7 +153,7 @@ its `toolbox`. The builder wires it at construction:
 class ResearchCommission(Commission[ResearchInput, ResearchOutput]):
     def __init__(self) -> None:
         super().__init__(
-            toolbox=(FetchTool(), SummariseCommission()),
+            toolbox=(FetchTool(), SummarizeCommission()),
         )
 ```
 

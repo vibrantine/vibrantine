@@ -6,7 +6,7 @@ most side-effectful tool in the std lib; placed last in the build
 order so the protocol's failure surface was well-exercised on simpler
 tools first.
 
-Captures stdout, stderr, exit code, and wall-clock runtime. Honours a
+Captures stdout, stderr, exit code, and wall-clock runtime. Honors a
 timeout; exceeding it terminates the process and returns
 ErrorState(kind="timeout", retryable=True). The kill targets the shell
 process itself; on Windows especially, grandchildren the shell spawned

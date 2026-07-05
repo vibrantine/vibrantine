@@ -295,7 +295,7 @@ Available on `main`:
 - Deterministic tools for file, shell, fetch, search, and filesystem work.
 - Cost and provenance on results, with child cost rollup.
 - Optional filesystem persistence.
-- Worked Commissions including `Ask`, `Summarise`, `Synthesize`,
+- Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
   `MorningBriefing`, `RecursiveResearch`, and provisional validation examples.
 
 Still settling:

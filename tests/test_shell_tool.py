@@ -90,7 +90,7 @@ async def test_shell_cancelled_before_launch_returns_cancelled(tmp_path: Path) -
     assert result.error.kind == "cancelled"
 
 
-async def test_shell_cwd_honoured(tmp_path: Path) -> None:
+async def test_shell_cwd_honored(tmp_path: Path) -> None:
     # Write a marker file in tmp_path; cwd into tmp_path; have the command
     # confirm the marker is present.
     (tmp_path / "marker.txt").write_text("here", encoding="utf-8")
