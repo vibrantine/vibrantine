@@ -898,7 +898,7 @@ framework's internals, never parsed model output by hand, never raised an
 exception across a boundary, and never stored state inside a Commission.
 
 For the design rationale behind all of this, read
-[`composition.md`](composition.md); for the shipped LLM-decides
+[`design.md`](design.md); for the shipped LLM-decides
 counterpart, read `src/vibrantine/commissions/deep_research/` end to end
 (it is one page of code).
 
@@ -987,7 +987,7 @@ Constructor kwargs (all keyword-only):
 | `persistence_mode` / `max_output_tokens` / `overflow_policy` | class default | Per-instance policy override (sentinel-based, so omission is not `None`) |
 
 Protected helpers available to a custom `invoke` (underscore means
-caller-facing leave-alone, not unstable; see `composition.md`):
+caller-facing leave-alone, not unstable; see `design.md`):
 
 | Helper | Use |
 |---|---|

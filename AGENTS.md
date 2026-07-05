@@ -6,11 +6,11 @@ A component model for AI agents. Each commission is a typed, contracted, isolate
 
 The bet: the right primitive for AI work is a bounded, contracted, isolated unit, and everything else — persistence, autonomy, conversation, scheduling, cost ledgers, user surfaces — composes above that primitive without leaking back in.
 
-Read `docs/vision.md` for what Vibrantine is and why; `docs/composition.md` for how the pieces fit together. `docs/README.md` indexes the rest of the docs directory.
+Read `docs/design.md` for what Vibrantine is, why, and how the pieces fit together. `docs/README.md` indexes the rest of the docs directory.
 
 ## Library scope
 
-A publishable library, not an application layer. The layer inventory and the full out-of-scope list live in [`docs/vision.md § Library scope`](docs/vision.md). The operational rule for contributors: orchestration beyond the hub-and-spoke reference, user-facing surfaces (conversation, notifications), cross-invocation state, scheduling/initiative, tier-routing policy, cost-ledger UI, and curator distribution are **application concerns — keep them out of the library.**
+A publishable library, not an application layer. The boundary and its rationale live in [`docs/design.md § What the library refuses to do`](docs/design.md). The operational rule for contributors: orchestration beyond the hub-and-spoke reference, user-facing surfaces (conversation, notifications), cross-invocation state, scheduling/initiative, tier-routing policy, cost-ledger UI, and curator distribution are **application concerns — keep them out of the library.**
 
 ## The contract is sacred
 
@@ -19,7 +19,7 @@ Structural invariants. Breaking one is an architectural decision, not a quick fi
 - **One public method**: `async invoke(input, ctx) -> CommissionResult`. Extend `CallContext` for new orchestration concerns, never the invoke signature.
 - **Errors are values.** No exception crosses the invoke boundary. Failures return `CommissionResult(status="failure"|"partial", error=ErrorState(...))`.
 - **Tree-structured invocations.** A commission only waits on its own children. No peer messaging, shared state, or back-channels.
-- **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `composition.md § Cost rollup`).
+- **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `design.md § Cost and provenance are structural`).
 - **Stateless across invocations.** No cross-invocation memory. Persistence is an application concern this library doesn't know about.
 - **Prompts are internal.** Each commission owns its system prompt; callers choose *which* commission to invoke.
 
@@ -38,7 +38,7 @@ owned by a folder-sized commission may live under that commission's
 `tools/` slot. Both subclass `Commission[InputT, OutputT]` under Shape A
 (`max_input_tokens=None`, no model arg): identical contract, no LLM
 anywhere in the subtree. See
-[`docs/composition.md § Three types, not four`](docs/composition.md) for
+[`docs/design.md § Three types, not four`](docs/design.md) for
 the rationale and the commission / tool / application-code relationship.
 
 ## Description prose: write for the LLM by default
@@ -205,9 +205,8 @@ Refs: Vision §3.1
 
 ## Further reading
 
-The SSOT is split across two files:
+The SSOT is one file:
 
-- `docs/vision.md` — what Vibrantine is and why: motivating use cases, library scope, distribution layering, bounded agency, the bet, the pattern portfolio.
-- `docs/composition.md` — how the pieces fit: contract jacket, three-type model, Python-coordinator / LLM-loop interiors, information flow, output discipline, persistence, coordinator templates, failure-mode protection.
+- `docs/design.md` — the design record: the goal and the two-sentence core, every settled decision with its reason and what it rules out, what the library refuses to do, the trades, what is not built yet, and the thesis.
 
 [`docs/README.md`](docs/README.md) indexes everything else — the authoring guides and the `working/concepts/` drafts. Process records and retired drafts live outside the repo.

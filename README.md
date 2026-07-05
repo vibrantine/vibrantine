@@ -326,9 +326,9 @@ compositional discipline.
 
 Start here:
 
-- [docs/vision.md](docs/vision.md): what Vibrantine is and why it exists.
-- [docs/composition.md](docs/composition.md): how Commissions, tools, and
-  application code fit together.
+- [docs/design.md](docs/design.md): the design record: what Vibrantine is,
+  why it exists, and how Commissions, tools, and application code fit
+  together.
 - [docs/authoring.md](docs/authoring.md): the one document about building
   Commissions: a verified step-by-step tutorial, the composition patterns,
   and the full contract reference.

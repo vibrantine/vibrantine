@@ -129,7 +129,7 @@ async def run_llm_loop[OutputT: BaseModel](
     # commission's toolbox and ctx.capabilities. None = unrestricted. A
     # forbidden tool is simply absent from the menu, so any call to it falls
     # through the unknown-tool branch below — no separate gate. `conclude` is
-    # framework-injected and never gated. See docs/composition.md.
+    # framework-injected and never gated. See docs/design.md.
     allowed = ctx.capabilities.tools
     permitted = [c for c in toolbox if allowed is None or c.name in allowed]
     tools: list[ChatCompletionToolParam] = [

@@ -2,7 +2,7 @@
 
 Tools are the deterministic peer to Commissions: typed input, typed
 output, errors-as-state, no LLM. Under Shape A (per
-`docs/composition.md § Three types, not four`), tools subclass
+`docs/design.md § Three types, not four`), tools subclass
 `Commission[InputT, OutputT]` with `max_input_tokens=None`
 and no constructor model argument. The "is this a commission or a
 tool" distinction is enforced by authoring discipline, not by the type

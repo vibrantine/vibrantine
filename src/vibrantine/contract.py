@@ -458,8 +458,8 @@ class Commission[InputT, OutputT](ABC):
         """The default pipeline: the full LLM loop over `toolbox`.
 
         A custom commission overrides this entirely. The contract invariants
-        upheld here are documented in docs/composition.md (§ The Commission
-        base class).
+        upheld here are documented in docs/design.md (§ One base class, one
+        escape hatch).
         """
         # Lazy import: `run_llm_loop` lives in llm_tools, which imports this
         # module — importing it at call time breaks the contract<->llm_tools

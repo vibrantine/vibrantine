@@ -7,7 +7,8 @@ discovery; pair with Read or Sample once an interesting match is found.
 The first tool whose result size can grow alarmingly — `max_matches`
 bounds it, with `truncated=True` signalling more remains. This is the
 tool that surfaces the tool-result-budgeting design question
-concretely (see `docs/composition.md § Output discipline`).
+concretely (see `docs/design.md § Oversized output is a policy the
+caller picks`).
 
 Binary files (any read that raises UnicodeDecodeError) are skipped
 silently during directory walks; on a direct file path, the same error
