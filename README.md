@@ -329,10 +329,9 @@ Start here:
 - [docs/vision.md](docs/vision.md): what Vibrantine is and why it exists.
 - [docs/composition.md](docs/composition.md): how Commissions, tools, and
   application code fit together.
-- [docs/building-a-commission.md](docs/building-a-commission.md): current
-  authoring guide.
-- [docs/authoring-from-an-external-repo.md](docs/authoring-from-an-external-repo.md):
-  what a separate repo can depend on today.
+- [docs/authoring.md](docs/authoring.md): the one document about building
+  Commissions: a verified step-by-step tutorial, the composition patterns,
+  and the full contract reference.
 
 Working concept drafts that may feed future tutorial/reference docs live in
 [docs/working/concepts/](docs/working/concepts/).
