@@ -922,7 +922,7 @@ from vibrantine import (
     Provenance, ConfidenceLevel, Claim, CostMetrics,       # provenance / claims / cost
     ErrorState, ErrorKind,                                 # failure model
     OverflowPolicy, PersistenceMode,                       # policy vocabularies
-    PersistedRecord, PersistenceBackend, FilesystemBackend,# persistence
+    PersistedRecord, PersistenceBackend, FilesystemBackend, SqliteBackend,  # persistence
     Model, KNOWN_MODELS, DEFAULT_MODEL, openai_compatible, ollama,  # models
     run_one, invoke_sync, dispatch,                        # entry points
 )
@@ -1103,6 +1103,12 @@ written as a selection prompt.
   implementation.
 - `FilesystemBackend(root)` is the shipped default: one JSON file per run,
   mode-aware pruning.
+- `SqliteBackend(path)` is the shipped queryable option: one row per run in
+  a single SQLite file, the same mode-aware pruning. Plain columns
+  (run_id, parent_run_id, commission_name, mode, status, cost_usd,
+  created_at) are query handles; the `record` column holds the full
+  `PersistedRecord` JSON. There is no query API on top: open the file with
+  any SQL tool and ask directly.
 - `PersistedRecord` carries input, full result, a ctx snapshot, and an
   optional LLM trace.
 - Modes: `off` / `on_failure` / `dev` / `always`. Wire a backend via
