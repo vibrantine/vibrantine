@@ -22,6 +22,7 @@ do the model-specific pricing lookup.
 """
 
 import json
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, cast
@@ -47,6 +48,11 @@ from vibrantine.contract import (
     TextPart,
 )
 from vibrantine.dispatch import deposit_llm_trace, dispatch
+
+# One line per LLM round-trip at INFO (the httpx convention for "a network
+# call happened"); loop pathologies worth a human's attention at WARNING;
+# self-correcting chatter at DEBUG. Emit only; the application sets the volume.
+logger = logging.getLogger(__name__)
 
 CONCLUDE_TOOL_NAME = "conclude"
 
@@ -209,6 +215,12 @@ async def run_llm_loop[OutputT: BaseModel](
             if usage is not None:
                 in_tokens += usage.prompt_tokens
                 out_tokens += usage.completion_tokens
+                logger.info(
+                    "LLM turn model=%s in=%d out=%d",
+                    model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                )
 
             # Own token cost plus everything dispatched children spent, so a
             # recursive or sub-Commission-bearing loop enforces the budget against
@@ -255,6 +267,7 @@ async def run_llm_loop[OutputT: BaseModel](
                         children_cost=children_cost,
                     )
                 nudged_for_missing_tool_call = True
+                logger.debug("LLM replied free-text with no tool call; nudging once")
                 messages.append({"role": "assistant", "content": msg.content})
                 messages.append(
                     {
@@ -295,6 +308,12 @@ async def run_llm_loop[OutputT: BaseModel](
                     except (json.JSONDecodeError, ValidationError) as exc:
                         conclude_failures += 1
                         last_conclude_error = str(exc)
+                        logger.warning(
+                            "conclude args failed to validate as %s (attempt %d): %s",
+                            output_type.__name__,
+                            conclude_failures,
+                            exc,
+                        )
                         messages.append(
                             {
                                 "role": "tool",

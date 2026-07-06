@@ -26,6 +26,7 @@ Calling `commission.invoke` directly bypasses all of this; don't.
 """
 
 import contextvars
+import logging
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -46,6 +47,12 @@ from vibrantine.contract import (
     Provenance,
     estimate_tokens,
 )
+
+# Standard library logging: the framework emits, the application decides the
+# volume (e.g. `logging.basicConfig(level=logging.INFO)` for a console view).
+# One line per completed call at INFO; call starts at DEBUG; contract breaches
+# and persistence trouble at WARNING. No handlers are installed here, ever.
+logger = logging.getLogger(__name__)
 
 _current_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "_vibrantine_current_run_id",
@@ -95,6 +102,7 @@ async def dispatch[InputT, OutputT](
     box: list[list[dict[str, Any]]] = []
     trace_token = _trace_box.set(box)
     token = _current_run_id.set(my_run_id)
+    logger.debug("%s started run_id=%s parent=%s", commission.name, my_run_id, parent)
     try:
         result = await commission.invoke(input, ctx_for_invoke)
     except Exception as exc:
@@ -104,6 +112,12 @@ async def dispatch[InputT, OutputT](
         # so the failure still flows through stamping + persistence below.
         # CancelledError is a BaseException, not an Exception; task
         # cancellation deliberately propagates rather than being swallowed.
+        logger.warning(
+            "%s raised %s (converted to a failure result): %s",
+            commission.name,
+            type(exc).__name__,
+            exc,
+        )
         result = _exception_to_failure(commission, exc)
     finally:
         _current_run_id.reset(token)
@@ -115,6 +129,13 @@ async def dispatch[InputT, OutputT](
 
     result = _apply_overflow_policy(result, commission, ctx_for_invoke)
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
+    logger.info(
+        "%s finished status=%s cost=$%.6f run_id=%s",
+        commission.name,
+        result.status,
+        result.cost.estimated_usd,
+        my_run_id,
+    )
 
     if ctx.backend is not None and _should_persist(commission.persistence_mode, result.status):
         record = _build_record(
@@ -133,8 +154,15 @@ async def dispatch[InputT, OutputT](
             # Persistence is observability, not the work itself: a failing
             # backend (disk full, a third-party implementation bug) must not
             # destroy the result it was recording or let an exception cross
-            # the run_one boundary. Surface it through on_progress and return
-            # the result anyway.
+            # the run_one boundary. Surface it through on_progress and the
+            # log, and return the result anyway.
+            logger.warning(
+                "persistence backend failed for %s run_id=%s: %s: %s",
+                commission.name,
+                my_run_id,
+                type(exc).__name__,
+                exc,
+            )
             if ctx.on_progress is not None:
                 ctx.on_progress(
                     ProgressEvent(
