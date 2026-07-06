@@ -152,7 +152,7 @@ class ListDirTool(Commission[ListDirInput, ListDirOutput]):
 
 
 def _classify(p: Path) -> DirEntryKind:
-    """Categorise a path. is_symlink first because symlinks satisfy is_file/is_dir."""
+    """Categorize a path. is_symlink first because symlinks satisfy is_file/is_dir."""
     if p.is_symlink():
         return "symlink"
     if p.is_file():

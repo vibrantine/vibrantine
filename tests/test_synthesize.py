@@ -250,7 +250,33 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "internal"
-    assert "out of range" in result.error.detail
+    assert "outside 0..1" in result.error.detail
+
+
+async def test_synthesize_claim_with_no_source_indices_is_rejected() -> None:
+    # The structured prompt demands a non-empty index array per claim; an
+    # empty one is an LLM mis-emission and must fail loudly (retryable), not
+    # silently drop the claim.
+    structured = json.dumps(
+        {
+            "summary_text": "One claim.",
+            "claims": [{"value": "A", "source_indices": [], "confidence": "grounded"}],
+        }
+    )
+    commission, _fake = _commission(
+        [llm_response(content="free"), llm_response(content=structured)]
+    )
+
+    result = await dispatch(commission,
+        SynthesizeInput(sources=[_src(0), _src(1)]),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert result.error.retryable is True
+    assert "cited no source indices" in result.error.detail
 
 
 def test_synthesize_has_empty_toolbox() -> None:

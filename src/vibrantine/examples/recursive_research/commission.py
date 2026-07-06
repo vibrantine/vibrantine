@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibrantine._prompts import load_prompt
 from vibrantine.contract import (
+    DEFAULT_MAX_ITERATIONS,
     CallContext,
     Commission,
     OverflowPolicy,
@@ -40,8 +41,7 @@ _PACKAGE = "vibrantine.examples.recursive_research"
 # (`budget_exceeded` failure); the settled principle is a graceful wind-down:
 # reserve a wrap-up slice of the grant, stop delegating as spend approaches
 # it, and conclude with a partial result plus receipts. Needs mid-run cost
-# visibility for the LLM. See notes/future-concerns.md, "Budget exhaustion
-# should become a review handoff, not just a stop".
+# visibility for the LLM.
 class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     """Answer a research question recursively, grounding leaf answers in fetches."""
 
@@ -78,7 +78,7 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
         model: str | Model | None = None,
         models: RecursiveResearchModelMenu | None = None,
         client: "AsyncOpenAI | None" = None,
-        max_iterations: int = 10,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> None:
         if model is not None and models is not None:
             raise ValueError(

@@ -5,9 +5,9 @@ structured-output pass converts that prose into typed claims. The LLM emits
 source indices, not full provenances; provenances are re-attached on the way
 out so the call's output stays grounded in its inputs.
 
-The default model is `google/gemini-3-flash-preview` via OpenRouter, accessed
-through the `openai` SDK with `base_url` swapped. Tests inject a fake client
-through the constructor's `client` parameter.
+The model resolves through `models.resolve` (None means the system default),
+accessed through the `openai` SDK with `base_url` swapped. Tests inject a
+scripted client through the constructor's `client` parameter.
 """
 
 import json
@@ -251,7 +251,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         except IndexError as exc:
             return self._fail(
                 "internal",
-                f"Claim referenced source index out of range: {exc}",
+                f"Claim failed to ground in its sources: {exc}",
                 retryable=True,
                 provenance=provenance,
                 cost=self._cost(in_tokens, out_tokens),
@@ -361,8 +361,11 @@ def _resolve_claims(
 ) -> list[Claim[str]]:
     resolved: list[Claim[str]] = []
     for rc in raw_claims:
+        # The structured prompt demands a non-empty index array; an empty one
+        # means the structured pass mis-emitted. Failing (retryable, same as
+        # out-of-range below) beats silently dropping the claim.
         if not rc.source_indices:
-            continue
+            raise IndexError(f"claim {rc.value!r} cited no source indices")
         # Explicit bounds check: Python accepts negative indices, so a
         # model-emitted -1 would otherwise silently attach the *last*
         # source's provenance to the claim: a misattribution, not an error.

@@ -37,6 +37,7 @@ from vibrantine.contract import (
     PersistenceMode,
     ProgressEvent,
     Provenance,
+    estimate_tokens,
 )
 
 _current_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -273,7 +274,7 @@ def _apply_overflow_policy[InputT, OutputT](
 
 
 def _estimate_output_tokens(output: Any) -> int:
-    """Char-per-token heuristic. Same rough estimate Synthesize uses."""
+    """Size a typed output with the contract's char-per-token heuristic."""
     if isinstance(output, BaseModel):
-        return len(output.model_dump_json()) // 4
-    return len(str(output)) // 4
+        return estimate_tokens(output.model_dump_json())
+    return estimate_tokens(str(output))
