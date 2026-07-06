@@ -543,13 +543,30 @@ class Commission[InputT, OutputT](ABC):
 
         The endpoint (base URL + API-key env var) travels with the resolved
         `Model`, so this transparently targets OpenRouter or a local provider.
+        A keyed endpoint whose key is absent fails here, before any network
+        call or spend, with the env var named; letting it through would
+        surface as a raw provider 401 mid-run, pointing at nothing. A keyless
+        endpoint (`api_key_env=None`, e.g. local Ollama) never blocks. The
+        raise crosses invoke, so dispatch's backstop returns it as a failure
+        value like any other Commission error.
         """
         if self._client is None:
+            key_env = self._model_spec.api_key_env
+            # A keyless endpoint ignores the key, but the OpenAI client
+            # refuses a falsy one, so send a non-empty placeholder.
+            api_key = "unused" if key_env is None else os.environ.get(key_env, "")
+            if not api_key:
+                raise RuntimeError(
+                    f"No API key: environment variable {key_env!r} is not set "
+                    f"(model {self._model!r} at {self._model_spec.base_url}). "
+                    f"Set it, pass client= at construction, or use a keyless "
+                    f"Model (api_key_env=None)."
+                )
             from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI(
                 base_url=self._model_spec.base_url,
-                api_key=os.environ.get(self._model_spec.api_key_env, ""),
+                api_key=api_key,
             )
         return self._client
 

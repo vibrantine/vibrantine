@@ -169,9 +169,9 @@ def session_model(args: argparse.Namespace) -> Model:
 def key_missing_message(model: Model) -> str | None:
     """Friendly setup text when the model's API key is absent; None when ready.
 
-    Ollama ignores its key, so a local session never blocks on this.
+    A keyless model (api_key_env=None, e.g. local Ollama) never blocks.
     """
-    if model.api_key_env == "OLLAMA_API_KEY" or os.environ.get(model.api_key_env):
+    if model.api_key_env is None or os.environ.get(model.api_key_env):
         return None
     return (
         f"No {model.api_key_env} found in the environment.\n"
