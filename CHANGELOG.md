@@ -14,6 +14,10 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   a single SQLite file with plain columns as query handles and the full
   record as JSON. No query API on top; the database file is the query
   surface.
+- `CostMetrics` gains optional `in_tokens` / `out_tokens`: raw token counts
+  for the call's own LLM turns. Counts never roll up (dollars remain the
+  rollup currency) and stay `None` when no LLM turn ran. Additive; existing
+  consumers are unaffected.
 
 ## [0.1.0] - 2026-07-07
 

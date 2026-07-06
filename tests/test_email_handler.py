@@ -93,6 +93,10 @@ async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
     # DraftReply's stub reports $0.0023; run_llm_loop folds it into the parent's
     # cost. With own cost zeroed by the unpriced model, the total IS the child's.
     assert abs(result.cost.estimated_usd - 0.0023) < 1e-9
+    # Dollars roll up; token counts do not. Two parent turns at the
+    # llm_response defaults (100 in / 50 out each), child tokens excluded.
+    assert result.cost.in_tokens == 200
+    assert result.cost.out_tokens == 100
 
 
 async def test_email_handler_notify_route_dispatches_tool() -> None:

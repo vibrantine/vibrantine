@@ -55,6 +55,9 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
     assert result.output is not None
     assert result.output.answer == "Paris."
     assert len(fake.calls) == 2
+    # Two LLM turns at the llm_response defaults (100 in / 50 out each).
+    assert result.cost.in_tokens == 200
+    assert result.cost.out_tokens == 100
 
 
 async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> None:
