@@ -16,7 +16,6 @@ from vibrantine.examples.demo.agent import (
 from vibrantine.examples.demo.runner import main
 from vibrantine.examples.demo.trace import (
     RecordingBackend,
-    persist_tree,
     render_trace,
     render_transcript,
     trace_order,
@@ -30,7 +29,6 @@ __all__ = [
     "RecordingBackend",
     "demo_agent",
     "main",
-    "persist_tree",
     "render_trace",
     "render_transcript",
     "trace_order",

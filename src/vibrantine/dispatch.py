@@ -9,8 +9,10 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
   - `parent_run_id` is threaded automatically via `ContextVar` (so
     `asyncio.gather` over child dispatches keeps the chain correct)
   - `overflow_policy` is enforced on the returned result
-  - `persistence_mode` is honored: the record is written through
-    `CallContext.backend` if one is wired
+  - recording is decided and honored: the node's explicit
+    `persistence_mode` wins, a node with no opinion (None) follows the
+    caller's `CallContext.record` default, and the record is written
+    through `CallContext.backend` if one is wired
   - the LLM loop's transcript is collected: dispatch hangs a context-local
     trace mailbox before calling `invoke`, `run_llm_loop` deposits its
     message history into it on the way out, and whatever landed is written
@@ -137,12 +139,19 @@ async def dispatch[InputT, OutputT](
         my_run_id,
     )
 
-    if ctx.backend is not None and _should_persist(commission.persistence_mode, result.status):
+    # Effective recording mode: the node's explicit persistence_mode wins;
+    # a node with no opinion (None) follows the caller's ctx.record default;
+    # silence on both sides means off.
+    mode = commission.persistence_mode
+    if mode is None:
+        mode = ctx.record if ctx.record is not None else "off"
+
+    if ctx.backend is not None and _should_persist(mode, result.status):
         record = _build_record(
             run_id=my_run_id,
             parent_run_id=parent,
             commission=commission,
-            mode=commission.persistence_mode,
+            mode=mode,
             input=input,
             result=result,
             ctx=ctx_for_invoke,

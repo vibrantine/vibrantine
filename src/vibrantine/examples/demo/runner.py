@@ -34,7 +34,6 @@ from vibrantine.examples.demo.catalog import (
 )
 from vibrantine.examples.demo.trace import (
     RecordingBackend,
-    persist_tree,
     record_cost,
     record_status,
     render_trace,
@@ -287,7 +286,6 @@ def main(argv: list[str] | None = None) -> int:
 
     backend = RecordingBackend(on_store=_print_store)
     agent = demo_agent(model)
-    persist_tree(agent)
     entries = {entry.key: entry for entry in MENU}
     transcript: list[ChatTurn] = []
     # The last run's records in [n]-label order, so `t <n>` resolves against
@@ -324,12 +322,18 @@ def main(argv: list[str] | None = None) -> int:
         if line in entries:
             entry = entries[line]
             commission, demo_input = entry.build(model)
-            persist_tree(commission)
             budget = budget_for(entry.budget_usd)
             cap = f"budget ${budget:.2f}" if budget is not None else "no budget cap"
             print(f"Running {entry.title} ({cap}) with its canned input:")
             print(describe_input(demo_input))
-            ctx = CallContext(budget_usd=budget, on_progress=_print_progress, backend=backend)
+            # record="always" is the whole persistence switch: it rides the
+            # context to every node in the tree, including any spawned mid-run.
+            ctx = CallContext(
+                budget_usd=budget,
+                on_progress=_print_progress,
+                backend=backend,
+                record="always",
+            )
             result = asyncio.run(dispatch(commission, demo_input, ctx))
             _print_result(result, entry.present)
         else:
@@ -337,6 +341,7 @@ def main(argv: list[str] | None = None) -> int:
                 budget_usd=budget_for(AGENT_BUDGET_USD),
                 on_progress=_print_progress,
                 backend=backend,
+                record="always",
             )
             chat_input = ChatInput(message=line, transcript=list(transcript))
             result = asyncio.run(dispatch(agent, chat_input, ctx))

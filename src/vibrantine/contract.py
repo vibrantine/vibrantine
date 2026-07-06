@@ -256,6 +256,11 @@ class CallContext:
     # PersistenceBackend the dispatch helper writes through. Wired by the
     # caller (typically run_one); inherited by children automatically.
     backend: PersistenceBackend | None = None
+    # Caller's recording default for every node in the call tree, including
+    # children spawned mid-run. Applies only to nodes whose own
+    # `persistence_mode` is None (no opinion); a node's explicit mode,
+    # including "off", wins. None here too means recording stays off.
+    record: PersistenceMode | None = None
 
 
 # Message content parts ---------------------------------------------------
@@ -343,7 +348,11 @@ class Commission[InputT, OutputT](ABC):
 
     # Policy: class default; override per-instance via __init__ kwargs.
     # Not ClassVar; instance assignment is a supported override path.
-    persistence_mode: PersistenceMode = "off"
+    # `persistence_mode` None means "no opinion": the node follows the
+    # caller's `CallContext.record` default (off when that is unset too).
+    # An explicit mode, including "off", is the node's own word and beats
+    # the caller: silence follows the room, a spoken choice is kept.
+    persistence_mode: PersistenceMode | None = None
     max_output_tokens: int | None = None
     overflow_policy: OverflowPolicy = "partial"
 
@@ -397,7 +406,7 @@ class Commission[InputT, OutputT](ABC):
         toolbox: "tuple[Commission[Any, Any], ...] | _Unset" = _UNSET,
         max_input_tokens: int | None | _Unset = _UNSET,
         target_input_fraction: float = 0.75,
-        persistence_mode: PersistenceMode | _Unset = _UNSET,
+        persistence_mode: PersistenceMode | None | _Unset = _UNSET,
         max_output_tokens: int | None | _Unset = _UNSET,
         overflow_policy: OverflowPolicy | _Unset = _UNSET,
     ) -> None:

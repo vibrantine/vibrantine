@@ -14,6 +14,7 @@ from vibrantine.contract import (
     Commission,
     CommissionResult,
     PersistenceBackend,
+    PersistenceMode,
 )
 from vibrantine.dispatch import dispatch
 
@@ -24,16 +25,18 @@ async def run_one[InputT, OutputT](
     *,
     budget_usd: float | None = None,
     backend: PersistenceBackend | None = None,
+    record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
     """Run one Commission with a default CallContext.
 
     Capabilities, cancellation, progress, and concurrency take dataclass
     defaults. `backend` (if given) is stuffed into the context so children
-    inherit it automatically. Returns the Commission's CommissionResult
-    unchanged: errors surface as ErrorState in the result, not as raised
-    exceptions.
+    inherit it automatically; `record` (if given) is the recording default
+    for every node in the call tree whose own `persistence_mode` is None.
+    Returns the Commission's CommissionResult unchanged: errors surface as
+    ErrorState in the result, not as raised exceptions.
     """
-    ctx = CallContext(budget_usd=budget_usd, backend=backend)
+    ctx = CallContext(budget_usd=budget_usd, backend=backend, record=record)
     return await dispatch(commission, input, ctx)
 
 
@@ -43,6 +46,9 @@ def invoke_sync[InputT, OutputT](
     *,
     budget_usd: float | None = None,
     backend: PersistenceBackend | None = None,
+    record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
     """Sync wrapper over `run_one`. For scripts, REPL, smoke tests."""
-    return asyncio.run(run_one(commission, input, budget_usd=budget_usd, backend=backend))
+    return asyncio.run(
+        run_one(commission, input, budget_usd=budget_usd, backend=backend, record=record)
+    )

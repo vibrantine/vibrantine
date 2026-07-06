@@ -14,7 +14,7 @@ from vibrantine.examples.demo.agent import (
     DemoAgentCommission,
     demo_agent,
 )
-from vibrantine.examples.demo.trace import RecordingBackend, persist_tree, render_trace
+from vibrantine.examples.demo.trace import RecordingBackend, render_trace
 from vibrantine.testing import ScriptedLLM, llm_response
 
 # Stable fixture for pricing math: $0.50/M input, $3.00/M output.
@@ -75,11 +75,12 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
         model=FIXTURE_MODEL,
         client=cast(AsyncOpenAI, agent_fake),
     )
-    persist_tree(agent)
     backend = RecordingBackend()
 
     result = await dispatch(
-        agent, ChatInput(message="check the file"), CallContext(backend=backend)
+        agent,
+        ChatInput(message="check the file"),
+        CallContext(backend=backend, record="always"),
     )
 
     assert result.status == "success"
