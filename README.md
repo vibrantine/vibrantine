@@ -263,10 +263,11 @@ on the same input and output boundary.
 
 Vibrantine is not published to PyPI yet.
 
-Use it from a git dependency:
+Releases are git tags (`vX.Y.Z`; see `CHANGELOG.md`). Pin a tag rather than
+`main`, so your dependency stays fixed while `main` moves:
 
 ```bash
-uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git"
+uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.1.0"
 ```
 
 Or from a local checkout:
@@ -282,10 +283,11 @@ the environment before running them. Deterministic tools do not need a key.
 
 ## Current Status
 
-Vibrantine is early-stage software. The project is pre-v0.1 and not yet on
+Vibrantine is early-stage software. The current release is v0.1.0, tagged in
+this repository and recorded in `CHANGELOG.md`; the project is not yet on
 PyPI.
 
-Available on `main`:
+Available in v0.1.0:
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
@@ -294,16 +296,17 @@ Available on `main`:
 - LLM-loop support with a synthetic `conclude` tool.
 - Deterministic tools for file, shell, fetch, search, and filesystem work.
 - Cost and provenance on results, with child cost rollup.
-- Optional filesystem persistence.
+- Optional persistence with full LLM transcripts in the records.
+- Observability in three tiers: stdlib logging to watch, progress events to
+  react, persisted records to query.
+- A public testing seam: `client=` injection plus `vibrantine.testing`.
 - Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
-  `MorningBriefing`, `RecursiveResearch`, and provisional validation examples.
+  `MorningBriefing`, `RecursiveResearch`, and an interactive demo runner
+  (`python -m vibrantine.examples`).
 
 Still settling:
 
 - Authoring surface ergonomics.
-- Public testing seam for LLM-loop Commissions.
-- Logging and structured run tracing.
-- Proof-of-life examples and release packaging.
 - Budget handoff and richer resource accounting for broad/deep workloads.
 
 The SemVer promise is deliberately tight: the public contract exported from

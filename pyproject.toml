@@ -1,6 +1,6 @@
 [project]
 name = "vibrantine"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "A component model for AI agents: typed, contracted, isolated units of LLM-driven work."
 readme = "README.md"
 license = "MIT"
