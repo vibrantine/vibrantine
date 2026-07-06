@@ -43,6 +43,9 @@ async def test_read_success_returns_content_and_metadata(tmp_path: Path) -> None
     after = datetime.now(UTC)
     assert before - skew <= result.provenance.fetched_at <= after + skew
     assert result.cost.estimated_usd == 0.0
+    # None, not 0: no LLM was involved in a deterministic tool run.
+    assert result.cost.in_tokens is None
+    assert result.cost.out_tokens is None
 
 
 async def test_read_empty_file_returns_zero_lines(tmp_path: Path) -> None:

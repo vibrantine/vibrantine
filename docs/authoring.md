@@ -1016,7 +1016,7 @@ are values, never exceptions.
 | `output` | `OutputT \| None` | Populated on success and partial |
 | `error` | `ErrorState \| None` | Populated on failure and partial |
 | `provenance` | `Provenance` | Origin and trust of this run; on the custom path, required on every return, success included |
-| `cost` | `CostMetrics` | This call's cost; children roll up structurally |
+| `cost` | `CostMetrics` | This call's cost; children's dollars roll up structurally. `in_tokens` / `out_tokens` are the call's own LLM turns only (`None` when no LLM turn ran) |
 | `run_id` / `parent_run_id` | `str \| None` | Stamped by `dispatch`; leave unset |
 
 Supporting types, constructed directly:
@@ -1095,6 +1095,11 @@ written as a selection prompt.
   fast: the framework refuses to run a budget it cannot enforce.
 - The default endpoint is OpenRouter, via the `openai` SDK with `base_url`
   swapped, keyed by `OPENROUTER_API_KEY`.
+- `CostMetrics` carries raw token counts alongside the dollars:
+  `in_tokens` / `out_tokens` cover the call's own LLM turns only. They never
+  roll up (a token sum across mixed models misleads; USD is the rollup
+  currency) and are `None` when no LLM turn ran, so tools and Python
+  coordinators read as "no LLM involved" rather than "consumed nothing".
 
 ## Persistence
 

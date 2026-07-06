@@ -339,7 +339,9 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         if not response.choices:
             cost = CostMetrics(
                 estimated_usd=cost_so_far.estimated_usd
-                + self._cost(in_tokens, out_tokens).estimated_usd
+                + self._cost(in_tokens, out_tokens).estimated_usd,
+                in_tokens=(cost_so_far.in_tokens or 0) + in_tokens,
+                out_tokens=(cost_so_far.out_tokens or 0) + out_tokens,
             )
             return (
                 "",

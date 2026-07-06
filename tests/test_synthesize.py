@@ -172,6 +172,9 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
     expected = (1500 * 0.50 + 300 * 3.00) / 1_000_000
     assert result.cost.estimated_usd > 0
     assert abs(result.cost.estimated_usd - expected) < 1e-9
+    # Raw counts survive pricing: both passes summed.
+    assert result.cost.in_tokens == 1500
+    assert result.cost.out_tokens == 300
 
 
 async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:

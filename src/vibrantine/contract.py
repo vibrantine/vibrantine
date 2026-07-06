@@ -80,9 +80,24 @@ class Provenance(BaseModel):
 
 
 class CostMetrics(BaseModel):
-    """Dollars consumed by one call. Children's costs roll up structurally."""
+    """Dollars consumed by one call. Children's costs roll up structurally.
+
+    Token counts do NOT roll up: they cover this call's own LLM turns only,
+    because a token sum across a tree that mixes models looks meaningful and
+    isn't. USD is the rollup currency. None means no LLM turn ran here (a
+    deterministic tool, a Python coordinator, or a failure before the first
+    call); 0 means an LLM run counted nothing.
+    """
 
     estimated_usd: float = Field(description="Estimated cost of this call, in USD.")
+    in_tokens: int | None = Field(
+        default=None,
+        description="Input tokens across this call's own LLM turns. None if no LLM turn ran.",
+    )
+    out_tokens: int | None = Field(
+        default=None,
+        description="Output tokens across this call's own LLM turns. None if no LLM turn ran.",
+    )
 
 
 class ErrorState(BaseModel):
@@ -528,8 +543,13 @@ class Commission[InputT, OutputT](ABC):
         own_cost = self._cost(outcome.in_tokens, outcome.out_tokens)
         # Roll dispatched children's cost into this call's cost, so the
         # "costs roll up structurally" invariant holds on the LLM-loop path
-        # (not just for hand-summing Python coordinators).
-        cost = CostMetrics(estimated_usd=own_cost.estimated_usd + outcome.children_cost)
+        # (not just for hand-summing Python coordinators). Token counts stay
+        # own-turns only: USD is the rollup currency.
+        cost = CostMetrics(
+            estimated_usd=own_cost.estimated_usd + outcome.children_cost,
+            in_tokens=outcome.in_tokens,
+            out_tokens=outcome.out_tokens,
+        )
         if outcome.error is not None:
             return self._fail(
                 outcome.error.kind,
@@ -597,7 +617,7 @@ class Commission[InputT, OutputT](ABC):
     def _cost(self, in_tokens: int, out_tokens: int) -> CostMetrics:
         in_price, out_price = self._prices()
         usd = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
-        return CostMetrics(estimated_usd=usd)
+        return CostMetrics(estimated_usd=usd, in_tokens=in_tokens, out_tokens=out_tokens)
 
     def _fail(
         self,
