@@ -140,6 +140,14 @@ exit ramp you take the day you need a custom interior, and knowing what the
 factory manufactures is what makes it trustworthy. Nothing the factory
 taught you changes when you subclass.
 
+To see this example grow one idea at a time (tools, then a nested child,
+then budgets and recorded runs), run the four rungs of
+`vibrantine.examples.learning_ladder`:
+
+```bash
+uv run --env-file .env python -m vibrantine.examples.learning_ladder.rung_1
+```
+
 ## Step 1: The Promise
 
 A Commission starts with its contract, not its prompt. Write the input and
