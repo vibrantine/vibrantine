@@ -7,9 +7,12 @@ are the SemVer-protected surface a third party may import and depend on:
 
 The frozen surface is the *bones*: the contract envelope, the closed
 `Literal` vocabularies, and the `run_one` / `invoke_sync` / `dispatch`
-entry points. Everything not in `__all__` (including the example
-Commissions in `vibrantine.examples`, the tools in `vibrantine.tools`,
-and any underscore-prefixed name) is internal and provisional: importable,
+entry points. The `vibrantine.testing` module is also supported surface:
+the test doubles for the `client=` injection seam, kept at its own import
+path so test tooling never ships into production namespaces. Everything
+else not in `__all__` (including the example Commissions in
+`vibrantine.examples`, the tools in `vibrantine.tools`, and any
+underscore-prefixed name) is internal and provisional: importable,
 but not covered by the stability promise. `commission.invoke` is the
 override hook authors implement, not the call API; invoke a Commission
 through `run_one` / `invoke_sync` / `dispatch` so run_id stamping, overflow

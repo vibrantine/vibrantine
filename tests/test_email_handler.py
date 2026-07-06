@@ -10,7 +10,6 @@ exercised end-to-end.
 from types import SimpleNamespace
 from typing import cast
 
-from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext
@@ -19,6 +18,7 @@ from vibrantine.examples.email_handler import (
     EmailHandlerInput,
     IncomingEmail,
 )
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 
 _EMAIL_ARGS = {"sender": "a@b.test", "subject": "Quick question", "body": "Body text."}
 
@@ -31,8 +31,8 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
-) -> tuple[EmailHandlerCommission, FakeClient]:
-    fake = FakeClient(responses)
+) -> tuple[EmailHandlerCommission, ScriptedLLM]:
+    fake = ScriptedLLM(responses)
     commission = EmailHandlerCommission(client=cast(AsyncOpenAI, fake), model=model)
     return commission, fake
 
@@ -56,7 +56,7 @@ async def test_email_handler_non_urgent_concludes_directly() -> None:
     # Flattening: the route-specific fields stay at their defaults off-route.
     assert result.output.draft_text is None
     assert result.output.notification_sent is False
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1
 
 
 async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
@@ -88,7 +88,7 @@ async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
     assert result.output is not None
     assert result.output.route == "draft"
     assert result.output.draft_text == "Hi, thanks for reaching out."
-    assert len(fake.completions.calls) == 2
+    assert len(fake.calls) == 2
     # DraftReply's stub reports $0.0023; run_llm_loop folds it into the parent's
     # cost. With own cost zeroed by the unpriced model, the total IS the child's.
     assert abs(result.cost.estimated_usd - 0.0023) < 1e-9
@@ -121,7 +121,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
     assert result.output.route == "notify"
     assert result.output.notification_sent is True
     assert result.output.draft_text is None
-    assert len(fake.completions.calls) == 2
+    assert len(fake.calls) == 2
 
 
 async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
@@ -132,4 +132,4 @@ async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0

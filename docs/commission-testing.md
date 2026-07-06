@@ -35,8 +35,9 @@ fifth is about your time. Everything below is an application of them.
 
 Every shipped or worked-example Commission needs two kinds of confidence:
 
-1. **Contract tests** prove the component boundary works. They use fake clients,
-   scripted model responses, deterministic tools, and no API key.
+1. **Contract tests** prove the component boundary works. They use scripted
+   model responses (`vibrantine.testing.ScriptedLLM`), deterministic tools,
+   and no API key.
 2. **Heuristic evaluation tests** prove the Commission is actually good enough
    at its stated LLM task. They run representative cases with explicit success
    and failure criteria.
@@ -46,10 +47,11 @@ Evaluation tests answer "does this Commission do useful work?"
 
 ## Contract Tests
 
-Unit tests must require no credentials. LLM-backed Commissions inject a fake
-`AsyncOpenAI`-shaped client through `client=` and script provider responses.
-The model's intelligence is not under test; the Commission's behavior around
-the scripted response is.
+Unit tests must require no credentials. LLM-backed Commissions inject a
+scripted client through `client=`; the supported double is
+`vibrantine.testing.ScriptedLLM`, with `llm_response` building each scripted
+reply. The model's intelligence is not under test; the Commission's behavior
+around the scripted response is.
 
 Cover the contract surface the Commission exercises:
 

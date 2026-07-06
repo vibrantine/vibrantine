@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
@@ -19,6 +18,7 @@ from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
 )
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 
 _SOURCE = (
     "The cat sat on the mat. It was a warm afternoon and the cat was content. "
@@ -31,8 +31,8 @@ def _commission(
     *,
     max_iterations: int = 10,
     model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
-) -> tuple[SummarizeCommission, FakeClient]:
-    fake = FakeClient(responses)
+) -> tuple[SummarizeCommission, ScriptedLLM]:
+    fake = ScriptedLLM(responses)
     commission = SummarizeCommission(
         client=cast(AsyncOpenAI, fake),
         max_iterations=max_iterations,
@@ -54,7 +54,7 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
     assert result.status == "success", result.error
     assert result.output is not None
     assert result.output.summary == "A content cat."
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1
 
 
 def test_summarize_default_length_is_short() -> None:
@@ -107,7 +107,7 @@ async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
 
     await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
 
-    assert _tool_names(fake.completions.calls[0]) == {"conclude"}
+    assert _tool_names(fake.calls[0]) == {"conclude"}
 
 
 async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
@@ -132,7 +132,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "budget_exceeded"
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1
     assert result.cost.estimated_usd > 0.001
 
 
@@ -147,7 +147,7 @@ async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
 
 
 async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None:
@@ -166,7 +166,7 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
     assert result.error is not None
     assert result.error.kind == "internal"
     assert "no tool call" in result.error.detail.lower()
-    assert len(fake.completions.calls) == 2
+    assert len(fake.calls) == 2
 
 
 async def test_summarize_emits_loop_start_progress_event() -> None:
@@ -199,6 +199,6 @@ async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> No
     assert result.output is not None
     assert result.output.summary == "A content cat."
     # The second call must have carried the validation error as a tool message.
-    second_messages = fake.completions.calls[1]["messages"]
+    second_messages = fake.calls[1]["messages"]
     tool_msg = next(m for m in second_messages if m["role"] == "tool")
     assert "validate" in tool_msg["content"]

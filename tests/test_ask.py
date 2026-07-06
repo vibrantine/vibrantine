@@ -9,11 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext, CapabilitySet, ProgressEvent
 from vibrantine.examples.ask import AskCommission, AskInput
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 from vibrantine.tools.read import ReadTool
 
 
@@ -22,8 +22,8 @@ def _commission(
     *,
     max_iterations: int = 10,
     model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
-) -> tuple[AskCommission, FakeClient]:
-    fake = FakeClient(responses)
+) -> tuple[AskCommission, ScriptedLLM]:
+    fake = ScriptedLLM(responses)
     commission = AskCommission(
         client=cast(AsyncOpenAI, fake),
         max_iterations=max_iterations,
@@ -53,7 +53,7 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
     assert result.status == "success", result.error
     assert result.output is not None
     assert result.output.answer == "Paris."
-    assert len(fake.completions.calls) == 2
+    assert len(fake.calls) == 2
 
 
 async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> None:
@@ -78,7 +78,7 @@ async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> Non
     assert result.status == "success", result.error
     assert result.output is not None
     assert result.output.answer == "Found 10 lines."
-    assert len(fake.completions.calls) == 3
+    assert len(fake.calls) == 3
 
 
 async def test_ask_exceeds_iteration_cap_returns_internal_failure(tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "budget_exceeded"
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1
     assert result.cost.estimated_usd > 0.001
 
 
@@ -170,7 +170,7 @@ async def test_ask_cancellation_at_entry_makes_no_llm_call(tmp_path: Path) -> No
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
 
 
 async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) -> None:
@@ -196,7 +196,7 @@ async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) ->
     assert result.output is not None
     assert "couldn't" in result.output.answer.lower()
     # The second LLM call must have included the read error as a tool message.
-    second_messages = fake.completions.calls[1]["messages"]
+    second_messages = fake.calls[1]["messages"]
     tool_msg = next(m for m in second_messages if m["role"] == "tool")
     assert "error" in tool_msg["content"]
 
@@ -220,7 +220,7 @@ def test_ask_toolbox_holds_injected_read() -> None:
     # Single source of truth: the same ReadTool the loop sees lives in toolbox.
     # The toolbox= kwarg overrides the class-attribute default for DI/tests.
     read = ReadTool()
-    ask = AskCommission(toolbox=(read,), client=cast(AsyncOpenAI, FakeClient([])))
+    ask = AskCommission(toolbox=(read,), client=cast(AsyncOpenAI, ScriptedLLM([])))
 
     assert ask.toolbox == (read,)
 
@@ -239,7 +239,7 @@ async def test_ask_unrestricted_capabilities_offer_read(tmp_path: Path) -> None:
         CallContext(),
     )
 
-    assert _tool_names(fake.completions.calls[0]) == {"read", "conclude"}
+    assert _tool_names(fake.calls[0]) == {"read", "conclude"}
 
 
 async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
@@ -253,7 +253,7 @@ async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
         CallContext(capabilities=CapabilitySet(tools=frozenset())),
     )
 
-    names = _tool_names(fake.completions.calls[0])
+    names = _tool_names(fake.calls[0])
     assert "read" not in names
     assert "conclude" in names  # framework tool is never gated
 
@@ -274,7 +274,7 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
     )
 
     assert result.status == "success"
-    second_call_messages = fake.completions.calls[1]["messages"]
+    second_call_messages = fake.calls[1]["messages"]
     tool_results = [m for m in second_call_messages if m.get("role") == "tool"]
     assert any("Unknown tool" in m["content"] for m in tool_results)
 
@@ -303,7 +303,7 @@ async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
     assert result.error is not None
     assert result.error.kind == "validation"
     assert "KNOWN_MODELS" in result.error.detail
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
@@ -324,4 +324,4 @@ async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> N
 
     assert result.status == "success", result.error
     assert result.output is not None and result.output.answer == "ok"
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1

@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 
-from conftest import AlwaysCancelled, FakeClient, llm_response
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext, ProgressEvent, Provenance
@@ -19,6 +18,7 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 
 
 def _src(idx: int, content: str = "fact") -> SynthesisSource:
@@ -37,8 +37,8 @@ def _commission(
     *,
     max_input_tokens: int | None = None,
     model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
-) -> tuple[SynthesizeCommission, FakeClient]:
-    fake = FakeClient(responses)
+) -> tuple[SynthesizeCommission, ScriptedLLM]:
+    fake = ScriptedLLM(responses)
     commission = SynthesizeCommission(
         client=cast(AsyncOpenAI, fake),
         max_input_tokens=max_input_tokens,
@@ -133,7 +133,7 @@ async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:
     assert result.error is not None
     assert result.error.kind == "cancelled"
     assert result.error.retryable is False
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
 
 
 async def test_synthesize_emits_progress_events_for_each_phase() -> None:
@@ -167,7 +167,7 @@ async def test_synthesize_budget_too_small_blocks_before_any_llm_call() -> None:
     assert result.error is not None
     assert result.error.kind == "budget_exceeded"
     assert result.error.retryable is False
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
@@ -189,7 +189,7 @@ async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> No
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "budget_exceeded"
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1
     # Cost still reflects what we actually spent on the first call.
     assert result.cost.estimated_usd > 0
 
@@ -212,7 +212,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
     assert result.error is not None
     assert result.error.kind == "validation"
     assert result.error.retryable is False
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
@@ -225,7 +225,7 @@ async def test_synthesize_empty_sources_fails_validation_before_llm() -> None:
     assert result.error is not None
     assert result.error.kind == "validation"
     assert result.error.retryable is False
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
 
 
 async def test_synthesize_negative_source_index_is_rejected() -> None:
@@ -254,7 +254,7 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
 
 def test_synthesize_has_empty_toolbox() -> None:
     # A Python coordinator with no sub-Commissions: empty toolbox by default.
-    synth = SynthesizeCommission(client=cast(AsyncOpenAI, FakeClient([])))
+    synth = SynthesizeCommission(client=cast(AsyncOpenAI, ScriptedLLM([])))
     assert synth.toolbox == ()
 
 
@@ -275,7 +275,7 @@ async def test_synthesize_budget_with_unpriced_model_refuses_before_any_call() -
     assert result.error is not None
     assert result.error.kind == "validation"
     assert "KNOWN_MODELS" in result.error.detail
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
@@ -292,7 +292,7 @@ async def test_synthesize_unpriced_model_without_budget_still_runs() -> None:
     )
 
     assert result.status == "success", result.error
-    assert len(fake.completions.calls) == 2
+    assert len(fake.calls) == 2
 
 
 async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
@@ -315,4 +315,4 @@ async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
     assert result.error.kind == "internal"
     assert "no choices" in result.error.detail
     assert result.cost.estimated_usd > 0
-    assert len(fake.completions.calls) == 1
+    assert len(fake.calls) == 1

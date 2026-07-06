@@ -14,8 +14,11 @@ from vibrantine.examples.demo.agent import (
     DemoAgentCommission,
     demo_agent,
 )
-from vibrantine.examples.demo.tests.fakes import FIXTURE_MODEL, FakeClient, llm_response
 from vibrantine.examples.demo.trace import RecordingBackend, persist_tree, render_trace
+from vibrantine.testing import ScriptedLLM, llm_response
+
+# Stable fixture for pricing math: $0.50/M input, $3.00/M output.
+FIXTURE_MODEL = "google/gemini-3-flash-preview"
 
 
 def test_demo_agent_toolbox_holds_the_four_examples() -> None:
@@ -38,7 +41,7 @@ def test_build_user_message_renders_transcript_then_message() -> None:
 
 
 async def test_chat_turn_concludes_with_reply() -> None:
-    fake = FakeClient([llm_response(tool_calls=[("c1", "conclude", {"reply": "hello there"})])])
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"reply": "hello there"})])])
     agent = DemoAgentCommission(toolbox=(), model=FIXTURE_MODEL, client=cast(AsyncOpenAI, fake))
 
     result = await dispatch(agent, ChatInput(message="hi"), CallContext())
@@ -51,11 +54,11 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
     target = tmp_path / "note.txt"
     target.write_text("the demo works", encoding="utf-8")
 
-    ask_fake = FakeClient(
+    ask_fake = ScriptedLLM(
         [llm_response(tool_calls=[("a1", "conclude", {"answer": "It says the demo works."})])]
     )
     ask = AskCommission(model=FIXTURE_MODEL, client=cast(AsyncOpenAI, ask_fake))
-    agent_fake = FakeClient(
+    agent_fake = ScriptedLLM(
         [
             llm_response(
                 tool_calls=[
