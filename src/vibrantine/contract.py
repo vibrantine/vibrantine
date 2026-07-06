@@ -260,8 +260,6 @@ class CallContext:
 
 # Message content parts ---------------------------------------------------
 
-_DEFAULT_MAX_ITERATIONS = 10
-
 
 class TextPart(BaseModel):
     """A text span in a Commission's opening user message."""
@@ -306,6 +304,11 @@ def _message_text(message: "str | list[ContentPart]") -> str:
 
 
 # Commission contract -----------------------------------------------------
+
+# The default LLM-loop iteration cap. Public so a Commission that exposes
+# `max_iterations` in its own constructor can restate the framework default
+# instead of forking a literal 10 that silently drifts if this changes.
+DEFAULT_MAX_ITERATIONS: Final = 10
 
 
 class Commission[InputT, OutputT](ABC):
@@ -390,7 +393,7 @@ class Commission[InputT, OutputT](ABC):
         *,
         model: str | Model | None = None,
         client: "AsyncOpenAI | None" = None,
-        max_iterations: int = _DEFAULT_MAX_ITERATIONS,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
         toolbox: "tuple[Commission[Any, Any], ...] | _Unset" = _UNSET,
         max_input_tokens: int | None | _Unset = _UNSET,
         target_input_fraction: float = 0.75,

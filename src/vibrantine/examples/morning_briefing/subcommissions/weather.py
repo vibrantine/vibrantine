@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission
+from vibrantine.contract import DEFAULT_MAX_ITERATIONS, CallContext, Commission
 from vibrantine.models import Model
 from vibrantine.tools.fetch import FetchTool
 
@@ -74,7 +74,7 @@ class WeatherCommission(Commission[WeatherInput, WeatherOutput]):
         fetch: FetchTool | None = None,
         model: str | Model | None = None,
         client: "AsyncOpenAI | None" = None,
-        max_iterations: int = 10,
+        max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> None:
         if not source_url.strip():
             raise ValueError("weather requires a source_url at construction.")
