@@ -85,5 +85,5 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
     assert result.status == "success"
     assert result.output is not None and "demo works" in result.output.reply
     lines = render_trace(backend.records()).splitlines()
-    assert lines[0].startswith("demo_agent  success")
-    assert any(line.startswith("  ask  success") for line in lines)
+    assert lines[0].startswith("[1] demo_agent  success")
+    assert any(line.startswith("  [2] ask  success") for line in lines)

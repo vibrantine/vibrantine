@@ -14,7 +14,13 @@ from vibrantine.examples.demo.agent import (
     demo_agent,
 )
 from vibrantine.examples.demo.runner import main
-from vibrantine.examples.demo.trace import RecordingBackend, persist_tree, render_trace
+from vibrantine.examples.demo.trace import (
+    RecordingBackend,
+    persist_tree,
+    render_trace,
+    render_transcript,
+    trace_order,
+)
 
 __all__ = [
     "ChatInput",
@@ -26,4 +32,6 @@ __all__ = [
     "main",
     "persist_tree",
     "render_trace",
+    "render_transcript",
+    "trace_order",
 ]

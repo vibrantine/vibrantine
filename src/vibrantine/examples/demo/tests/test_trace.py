@@ -11,6 +11,8 @@ from vibrantine.examples.demo.trace import (
     record_cost,
     record_status,
     render_trace,
+    render_transcript,
+    trace_order,
 )
 
 
@@ -23,6 +25,7 @@ def make_record(
     cost: float = 0.01,
     error: dict[str, Any] | None = None,
     created_at: datetime | None = None,
+    llm_trace: list[dict[str, Any]] | None = None,
 ) -> PersistedRecord:
     return PersistedRecord(
         run_id=run_id,
@@ -33,6 +36,7 @@ def make_record(
         input={},
         result={"status": status, "cost": {"estimated_usd": cost}, "error": error},
         ctx_snapshot={},
+        llm_trace=llm_trace,
     )
 
 
@@ -81,22 +85,79 @@ def test_render_trace_nests_children_and_totals_roots_only() -> None:
     rendered = render_trace(records)
     lines = rendered.splitlines()
 
-    assert lines[0].startswith("briefing  partial  $0.0413")
-    assert lines[1].startswith("  digest  failure  $0.0020")
+    assert lines[0].startswith("[1] briefing  partial  $0.0413")
+    assert lines[1].startswith("  [2] digest  failure  $0.0020")
     assert "internal: all sources failed" in lines[1]
-    assert lines[2].startswith("    fetch  success  $0.0000")
+    assert lines[2].startswith("    [3] fetch  success  $0.0000")
     # Cost rolls up structurally, so the total is the root's cost alone.
     assert lines[-1] == "total  $0.0413"
+    # The [n] labels resolve back to records through the same walk.
+    assert [r.run_id for r in trace_order(records)] == ["root", "mid", "leaf"]
 
 
 def test_render_trace_handles_slice_of_larger_session() -> None:
     # A record whose parent is outside the batch renders as a root.
     rendered = render_trace([make_record("orphan", parent="elsewhere", name="ask")])
-    assert rendered.splitlines()[0].startswith("ask  success")
+    assert rendered.splitlines()[0].startswith("[1] ask  success")
 
 
 def test_render_trace_empty() -> None:
     assert "no records" in render_trace([])
+
+
+def test_render_transcript_labels_roles_calls_and_clips() -> None:
+    record = make_record(
+        "r",
+        name="ask",
+        llm_trace=[
+            {"role": "system", "content": "You answer questions about a file."},
+            {"role": "user", "content": "What does it say?\nBe brief."},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "t1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": '{"path": "x.py"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "t1", "content": "x" * 500},
+            {"role": "assistant", "content": "It says hello."},
+        ],
+    )
+
+    lines = render_transcript(record).splitlines()
+
+    assert lines[0] == "--- ask transcript (5 messages) ---"
+    assert lines[1].startswith("system") and "answer questions" in lines[1]
+    # Newlines inside a message collapse to keep one line per message.
+    assert "What does it say? Be brief." in lines[2]
+    assert '-> read_file({"path": "x.py"})' in lines[3]
+    assert lines[4].endswith("...") and len(lines[4]) < 200
+    assert "It says hello." in lines[5]
+
+
+def test_render_transcript_multimodal_and_missing() -> None:
+    with_parts = make_record(
+        "r",
+        name="vision",
+        llm_trace=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe this"},
+                    {"type": "image_url", "image_url": {"url": "data:..."}},
+                ],
+            }
+        ],
+    )
+    rendered = render_transcript(with_parts)
+    assert "describe this [image_url]" in rendered
+
+    bare = make_record("r2", name="synthesize")
+    assert "no LLM transcript recorded for synthesize" in render_transcript(bare)
 
 
 def test_record_accessors_default_safely() -> None:
