@@ -48,7 +48,7 @@ from vibrantine.models import (
     openai_compatible,
 )
 from vibrantine.orchestrator import invoke_sync, run_one
-from vibrantine.persistence import FilesystemBackend
+from vibrantine.persistence import FilesystemBackend, SqliteBackend
 
 __all__ = [
     # Contract: the Commission and its result envelope
@@ -76,6 +76,7 @@ __all__ = [
     "PersistedRecord",
     "PersistenceBackend",
     "FilesystemBackend",
+    "SqliteBackend",
     # Models: the vocabulary callers use to pick or build a model target
     "Model",
     "KNOWN_MODELS",

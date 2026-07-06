@@ -8,6 +8,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Added
+
+- `SqliteBackend`: a second shipped `PersistenceBackend`, one row per run in
+  a single SQLite file with plain columns as query handles and the full
+  record as JSON. No query API on top; the database file is the query
+  surface.
+
 ## [0.1.0] - 2026-07-07
 
 First tagged release: the first fixed point a consumer can pin.
