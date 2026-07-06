@@ -18,6 +18,7 @@ import pytest
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
     RecursiveResearchModelMenu,
@@ -89,7 +90,7 @@ async def test_rolls_up_child_cost_across_depth() -> None:
         max_depth=2,
     )
 
-    result = await agent.invoke(ResearchInput(question="q1"), CallContext())
+    result = await dispatch(agent, ResearchInput(question="q1"), CallContext())
 
     assert result.status == "success", result.error
     assert len(fake.calls) == 5
@@ -112,7 +113,7 @@ async def test_model_menu_seats_reach_their_levels() -> None:
     menu = RecursiveResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
     agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
 
-    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+    result = await dispatch(agent, ResearchInput(question="q"), CallContext())
 
     assert result.status == "success", result.error
     assert [c["model"] for c in fake.calls] == [
@@ -135,7 +136,7 @@ async def test_model_menu_default_fills_unnamed_seats() -> None:
     menu = RecursiveResearchModelMenu(default="menu-default", researcher="root-model")
     agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
 
-    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+    result = await dispatch(agent, ResearchInput(question="q"), CallContext())
 
     assert result.status == "success", result.error
     assert [c["model"] for c in fake.calls] == [
@@ -168,7 +169,7 @@ async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
         max_depth=1,
     )
 
-    result = await agent.invoke(ResearchInput(question="q"), CallContext())
+    result = await dispatch(agent, ResearchInput(question="q"), CallContext())
 
     assert result.status == "success", result.error
     # Depth-first turn order: root delegates (0), child concludes (1), root
@@ -193,7 +194,7 @@ async def test_budget_ceiling_counts_children() -> None:
         max_depth=1,
     )
 
-    result = await agent.invoke(ResearchInput(question="q"), CallContext(budget_usd=0.0005))
+    result = await dispatch(agent, ResearchInput(question="q"), CallContext(budget_usd=0.0005))
 
     assert result.status == "failure"
     assert result.error is not None

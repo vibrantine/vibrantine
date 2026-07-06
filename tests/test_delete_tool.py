@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.tools.delete import DeleteInput, DeleteTool
 
 
@@ -16,7 +17,7 @@ async def test_delete_removes_existing_file(tmp_path: Path) -> None:
     target = tmp_path / "to-delete.txt"
     target.write_text("doomed", encoding="utf-8")
 
-    result = await DeleteTool().invoke(DeleteInput(path=target), CallContext())
+    result = await dispatch(DeleteTool(), DeleteInput(path=target), CallContext())
 
     assert result.status == "success"
     assert result.error is None
@@ -28,7 +29,7 @@ async def test_delete_removes_existing_file(tmp_path: Path) -> None:
 async def test_delete_nonexistent_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such.txt"
 
-    result = await DeleteTool().invoke(DeleteInput(path=missing), CallContext())
+    result = await dispatch(DeleteTool(), DeleteInput(path=missing), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -40,7 +41,7 @@ async def test_delete_directory_returns_validation(tmp_path: Path) -> None:
     d = tmp_path / "actually-a-dir"
     d.mkdir()
 
-    result = await DeleteTool().invoke(DeleteInput(path=d), CallContext())
+    result = await dispatch(DeleteTool(), DeleteInput(path=d), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -51,7 +52,7 @@ async def test_delete_directory_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_delete_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await DeleteTool().invoke(
+    result = await dispatch(DeleteTool(), 
         DeleteInput(path=Path("relative.txt")),
         CallContext(),
     )
@@ -65,7 +66,7 @@ async def test_delete_cancelled_returns_cancelled(tmp_path: Path) -> None:
     target = tmp_path / "still-here.txt"
     target.write_text("preserved", encoding="utf-8")
 
-    result = await DeleteTool().invoke(
+    result = await dispatch(DeleteTool(), 
         DeleteInput(path=target),
         CallContext(cancel=_AlwaysCancelled()),
     )

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.tools.grep import GrepInput, GrepTool
 
 
@@ -22,7 +23,7 @@ def _make(tmp_path: Path, name: str, content: str) -> Path:
 async def test_grep_single_file_returns_matching_lines(tmp_path: Path) -> None:
     path = _make(tmp_path, "doc.txt", "alpha\nbeta\nALPHA\ngamma\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"alpha", path=path),
         CallContext(),
     )
@@ -42,7 +43,7 @@ async def test_grep_directory_walk_finds_matches_recursively(tmp_path: Path) -> 
     _make(tmp_path, "sub/nested.txt", "no\nhit again\n")
     _make(tmp_path, "sub/other.txt", "nothing here\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"hit", path=tmp_path),
         CallContext(),
     )
@@ -58,7 +59,7 @@ async def test_grep_max_matches_truncates_with_flag(tmp_path: Path) -> None:
     content = "".join(f"hit-{i}\n" for i in range(20))
     path = _make(tmp_path, "many.txt", content)
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"hit", path=path, max_matches=5),
         CallContext(),
     )
@@ -72,7 +73,7 @@ async def test_grep_max_matches_truncates_with_flag(tmp_path: Path) -> None:
 async def test_grep_ignore_case(tmp_path: Path) -> None:
     path = _make(tmp_path, "case.txt", "FOO\nfoo\nFoo\nbar\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"foo", path=path, ignore_case=True),
         CallContext(),
     )
@@ -85,7 +86,7 @@ async def test_grep_ignore_case(tmp_path: Path) -> None:
 async def test_grep_invalid_regex_returns_validation(tmp_path: Path) -> None:
     path = _make(tmp_path, "any.txt", "content\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"unclosed[group", path=path),
         CallContext(),
     )
@@ -97,7 +98,7 @@ async def test_grep_invalid_regex_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_grep_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"x", path=Path("relative")),
         CallContext(),
     )
@@ -110,7 +111,7 @@ async def test_grep_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_grep_nonexistent_path_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-place"
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"x", path=missing),
         CallContext(),
     )
@@ -124,7 +125,7 @@ async def test_grep_binary_file_in_directory_walk_is_skipped(tmp_path: Path) -> 
     _make(tmp_path, "text.txt", "match me\nnope\n")
     (tmp_path / "binary.bin").write_bytes(b"\xff\xfe\x00\x01\xff")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"match", path=tmp_path),
         CallContext(),
     )
@@ -140,7 +141,7 @@ async def test_grep_binary_file_as_direct_path_returns_internal(tmp_path: Path) 
     binary = tmp_path / "direct-binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01\xff")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"anything", path=binary),
         CallContext(),
     )
@@ -155,7 +156,7 @@ async def test_grep_binary_file_as_direct_path_returns_internal(tmp_path: Path) 
 async def test_grep_empty_match_returns_empty_list(tmp_path: Path) -> None:
     path = _make(tmp_path, "doc.txt", "alpha\nbeta\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"missing", path=path),
         CallContext(),
     )
@@ -169,7 +170,7 @@ async def test_grep_empty_match_returns_empty_list(tmp_path: Path) -> None:
 async def test_grep_cancelled_returns_cancelled(tmp_path: Path) -> None:
     _make(tmp_path, "any.txt", "stuff\n")
 
-    result = await GrepTool().invoke(
+    result = await dispatch(GrepTool(), 
         GrepInput(pattern=r"x", path=tmp_path),
         CallContext(cancel=_AlwaysCancelled()),
     )
