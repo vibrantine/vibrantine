@@ -8,6 +8,14 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Added
+
+- `create_commission`: a deterministic authoring factory. Builds a basic
+  LLM-loop Commission from the crafted decisions (name, description, typed
+  input/output, tools); the system prompt, opening message, and all
+  plumbing are manufactured. No LLM is involved in construction. Exported
+  from the top-level `vibrantine` namespace.
+
 ## [0.2.0] - 2026-07-07
 
 ### Added

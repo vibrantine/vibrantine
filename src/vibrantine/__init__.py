@@ -40,6 +40,7 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.dispatch import dispatch
+from vibrantine.factory import create_commission
 from vibrantine.models import (
     DEFAULT_MODEL,
     KNOWN_MODELS,
@@ -87,4 +88,6 @@ __all__ = [
     "run_one",
     "invoke_sync",
     "dispatch",
+    # Authoring
+    "create_commission",
 ]
