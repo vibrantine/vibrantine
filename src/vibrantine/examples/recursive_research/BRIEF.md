@@ -8,8 +8,11 @@ root researcher delegate narrower sub-questions to shallower copies of itself,
 while leaves ground claims through `FetchTool`.
 
 Input: `ResearchInput(question, seed_urls)`. Output:
-`ResearchOutput(answer, claims)`, where each claim carries supporting
-provenance.
+`ResearchOutput(answer, claims)`, where each claim cites the fetched source
+URLs that support it. The claim shape is deliberately LLM-emittable: the
+conclude tool's schema is the output type, so it must contain only what the
+researching LLM actually knows (URLs, not full `Provenance` with fetch
+timestamps; demanding Provenance made conclude unpassable in live runs).
 
 This is the first real folder-sized Commission package. It proves the standard
 layout's prompt slot, colocated tests, and provisional model-menu slot without

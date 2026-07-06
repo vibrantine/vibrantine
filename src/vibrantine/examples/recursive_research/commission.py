@@ -36,6 +36,12 @@ if TYPE_CHECKING:
 _PACKAGE = "vibrantine.examples.recursive_research"
 
 
+# TODO: Recursion Redesign. Budget exhaustion here is an emergency stop
+# (`budget_exceeded` failure); the settled principle is a graceful wind-down:
+# reserve a wrap-up slice of the grant, stop delegating as spend approaches
+# it, and conclude with a partial result plus receipts. Needs mid-run cost
+# visibility for the LLM. See notes/future-concerns.md, "Budget exhaustion
+# should become a review handoff, not just a stop".
 class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     """Answer a research question recursively, grounding leaf answers in fetches."""
 
