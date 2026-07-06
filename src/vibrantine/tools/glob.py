@@ -25,12 +25,10 @@ class GlobInput(BaseModel):
             "Python `pathlib` glob syntax."
         ),
     )
-    base: Path | None = Field(
-        default=None,
-        description=(
-            "Absolute base directory to glob from. If omitted, uses the current working directory."
-        ),
-    )
+    # Required and absolute, like every path in the tools layer: the current
+    # working directory is situational context an LLM caller can't infer, so
+    # it is never an implicit default.
+    base: Path = Field(description="Absolute base directory to glob from.")
     max_matches: int = Field(
         default=1000,
         description=(
@@ -66,8 +64,7 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
         "Usage:\n"
         "- Pattern syntax: `*` matches one path segment, `**` matches any\n"
         "  number of segments, `?` matches one character, `[abc]` a set.\n"
-        "- `base` should be an absolute directory; defaults to the current\n"
-        "  working directory.\n"
+        "- `base` must be an absolute directory path.\n"
         "- Returns files only; directories are filtered out. Use the\n"
         "  `list_dir` tool to list directory contents.\n"
         "- `max_matches` (default 1000) bounds output size. If `truncated`\n"
@@ -90,7 +87,7 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
         input: GlobInput,
         ctx: CallContext,
     ) -> CommissionResult[GlobOutput]:
-        base = input.base if input.base is not None else Path.cwd()
+        base = input.base
         prov = provenance(f"glob:{input.pattern}@{base}")
 
         if ctx.cancel.is_cancelled:
@@ -101,10 +98,10 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
                 provenance=prov,
             )
 
-        if input.base is not None and not input.base.is_absolute():
+        if not base.is_absolute():
             return failure(
                 "validation",
-                f"`base` must be absolute; got {input.base!s}.",
+                f"`base` must be absolute; got {base!s}.",
                 retryable=False,
                 provenance=prov,
             )
