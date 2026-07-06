@@ -77,7 +77,7 @@ def _agent() -> RecursiveResearchCommission:
 
 def _cited_sources(result: CommissionResult[ResearchOutput]) -> set[str]:
     assert result.output is not None
-    return {p.source for claim in result.output.claims for p in claim.sources}
+    return {url for claim in result.output.claims for url in claim.source_urls}
 
 
 def _transcript(case: str, question: str, result: CommissionResult[ResearchOutput]) -> None:
@@ -90,7 +90,7 @@ def _transcript(case: str, question: str, result: CommissionResult[ResearchOutpu
         return
     print(f"A: {result.output.answer}")
     for claim in result.output.claims:
-        sources = ", ".join(p.source for p in claim.sources)
+        sources = ", ".join(claim.source_urls)
         print(f"  claim [{claim.confidence}]: {claim.value}  <- {sources}")
     print(f"cost: ${result.cost.estimated_usd:.4f}")
 
