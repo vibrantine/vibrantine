@@ -33,6 +33,8 @@ def test_core_contract_and_entry_points_are_exported() -> None:
         "DEFAULT_MODEL",
         "openai_compatible",
         "ollama",
+        # Authoring factory: the supported fast path to a basic Commission.
+        "create_commission",
     }
     assert expected <= set(vibrantine.__all__)
 

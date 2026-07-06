@@ -99,6 +99,47 @@ and run those steps with `uv run --env-file .env ...`.
 > calling `.invoke()` directly. The entry points are where the framework
 > stamps run ids and enforces output policy uniformly.
 
+## The Shortcut: create_commission
+
+Before the long way, know the short way. `create_commission` builds a
+working LLM-loop Commission from the decisions no one can make for you:
+what goes in, what comes out, what it is called, and what tools it may
+touch. Everything else (client setup, model resolution, the system prompt,
+cost and provenance plumbing) is manufactured for you.
+
+```python
+# recipe.py
+from pydantic import BaseModel, Field
+from vibrantine import create_commission, invoke_sync
+
+class RecipeInput(BaseModel):
+    dish: str = Field(description="The dish to write a recipe for.")
+
+class RecipeOutput(BaseModel):
+    recipe: str = Field(description="A complete recipe, ingredients then steps.")
+
+commission = create_commission(
+    name="recipe_writer",
+    description="Writes a recipe for a named dish.",
+    input=RecipeInput,
+    output=RecipeOutput,
+)
+
+result = invoke_sync(commission, RecipeInput(dish="shakshuka"))
+print(result.output.recipe)
+```
+
+Run it with `uv run --env-file .env python recipe.py`. That is a complete,
+typed, budgetable, recordable Commission; it nests in another Commission's
+toolbox like anything hand-written.
+
+The factory is deterministic: nothing is fetched and nothing is spent at
+construction time, so what you get is exactly what you asked for. The rest
+of Part I builds a Commission by hand instead, because the subclass is the
+exit ramp you take the day you need a custom interior, and knowing what the
+factory manufactures is what makes it trustworthy. Nothing the factory
+taught you changes when you subclass.
+
 ## Step 1: The Promise
 
 A Commission starts with its contract, not its prompt. Write the input and
@@ -925,6 +966,7 @@ from vibrantine import (
     PersistedRecord, PersistenceBackend, FilesystemBackend, SqliteBackend,  # persistence
     Model, KNOWN_MODELS, DEFAULT_MODEL, openai_compatible, ollama,  # models
     run_one, invoke_sync, dispatch,                        # entry points
+    create_commission,                                     # authoring factory
 )
 ```
 
@@ -1063,6 +1105,26 @@ directly; the entry points stamp `run_id`, thread `parent_run_id`, enforce
 | `run_one` | `async run_one(commission, input, *, budget_usd=None, backend=None, record=None)` | The normal async path; builds a default `CallContext` |
 | `invoke_sync` | sync wrapper over `run_one` | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | Inside a custom `invoke`, or when you build the `CallContext` yourself (capabilities, cancellation, progress) |
+
+## The authoring factory
+
+`create_commission(*, name, description, input, output, tools=(),
+system_prompt=None, model=None, client=None, max_iterations=10)` returns an
+ordinary basic Commission riding the default loop; run it through the entry
+points like any other.
+
+- Required arguments are the crafted parts: identity (`name`,
+  `description`) and the typed contract (`input`, `output`, both Pydantic
+  models).
+- The default system prompt is the description plus the input schema's
+  field descriptions and the `conclude` instruction; pass `system_prompt=`
+  to replace it. The opening user message is the input serialized as JSON.
+- `model` resolves through the standard catalog (None is the system
+  default); `client=` is the usual testing seam.
+- Construction is deterministic: no network, no spend, no LLM involved in
+  building the Commission itself.
+- The exit ramp is subclassing `Commission` (Part I); the factory covers
+  the basic path only, never custom `invoke` interiors.
 
 ## The default LLM loop
 
