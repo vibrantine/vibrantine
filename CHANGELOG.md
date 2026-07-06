@@ -15,6 +15,10 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   input/output, tools); the system prompt, opening message, and all
   plumbing are manufactured. No LLM is involved in construction. Exported
   from the top-level `vibrantine` namespace.
+- The learning ladder (`vibrantine.examples.learning_ladder`): four
+  runnable rungs, each the previous plus one idea. One Commission, then a
+  tool grant, then a nested child Commission, then budgets and recorded
+  runs queried in plain SQL.
 
 ## [0.2.0] - 2026-07-07
 
