@@ -922,9 +922,9 @@ the model fills them from the generated schema):
 | `EditTool` | `EditInput` | `path`, `old_string`, `new_string` | `replace_all` |
 | `DeleteTool` | `DeleteInput` | `path` | (none) |
 | `MoveTool` | `MoveInput` | `source`, `target` | `overwrite` |
-| `GlobTool` | `GlobInput` | `pattern` | `base` |
+| `GlobTool` | `GlobInput` | `pattern`, `base` | `max_matches` |
 | `GrepTool` | `GrepInput` | `pattern`, `path` | `max_matches`, `ignore_case` |
-| `ListDirTool` | `ListDirInput` | `path` | (none) |
+| `ListDirTool` | `ListDirInput` | `path` | `max_entries` |
 | `SampleTool` | `SampleInput` | `path` | `head_lines`, `tail_lines` |
 | `ShellTool` | `ShellInput` | `command` | `cwd`, `timeout_seconds`, `max_output_chars` |
 | `FetchTool` | `FetchInput` | `url` | `headers`, `timeout_seconds`, `offset`, `max_chars` |

@@ -69,7 +69,7 @@ def test_tool_input_fields_match_the_doc_table() -> None:
         EditInput: {"path", "old_string", "new_string"},
         DeleteInput: {"path"},
         MoveInput: {"source", "target"},
-        GlobInput: {"pattern"},
+        GlobInput: {"pattern", "base"},
         GrepInput: {"pattern", "path"},
         ListDirInput: {"path"},
         SampleInput: {"path"},
