@@ -1,4 +1,4 @@
-"""Demo observability: an in-memory narrating backend and a cost-trace renderer.
+"""Demo observability: a narrating in-memory backend, cost-tree and transcript renderers.
 
 A worked example of the application layer consuming the public persistence
 contract: `dispatch` writes one `PersistedRecord` per completed sub-call
@@ -10,7 +10,8 @@ from `PersistedRecord`s alone, the record shape is what should improve.
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from itertools import count
+from typing import Any, cast
 
 from vibrantine.contract import Commission, PersistedRecord
 
@@ -87,16 +88,14 @@ def _record_line(record: PersistedRecord) -> str:
     return line
 
 
-def render_trace(records: list[PersistedRecord]) -> str:
-    """Render records as an indented tree with per-node cost and a rolled-up total.
+def _tree(
+    records: list[PersistedRecord],
+) -> tuple[list[PersistedRecord], dict[str | None, list[PersistedRecord]]]:
+    """Group records into (roots, children-by-parent) for a depth-first walk.
 
     Roots are records whose parent is absent from the batch, so a slice of a
-    larger session renders as its own subtree. Because cost rolls up
-    structurally, the total is the sum of root costs, not of every node.
+    larger session renders as its own subtree.
     """
-    if not records:
-        return "(no records persisted for this run)"
-
     known_ids = {record.run_id for record in records}
     children: dict[str | None, list[PersistedRecord]] = {}
     roots: list[PersistedRecord] = []
@@ -105,11 +104,45 @@ def render_trace(records: list[PersistedRecord]) -> str:
             children.setdefault(record.parent_run_id, []).append(record)
         else:
             roots.append(record)
+    return roots, children
 
+
+def trace_order(records: list[PersistedRecord]) -> list[PersistedRecord]:
+    """Records in the depth-first order `render_trace` prints them.
+
+    Maps the `[n]` labels in a rendered trace back to records (1-based), so a
+    caller can offer "show me node n's transcript" against the same numbering
+    the user just read.
+    """
+    roots, children = _tree(records)
+    ordered: list[PersistedRecord] = []
+
+    def walk(record: PersistedRecord) -> None:
+        ordered.append(record)
+        for child in children.get(record.run_id, []):
+            walk(child)
+
+    for root in roots:
+        walk(root)
+    return ordered
+
+
+def render_trace(records: list[PersistedRecord]) -> str:
+    """Render records as an indented tree with per-node cost and a rolled-up total.
+
+    Each node is numbered `[n]` in print order; `trace_order` yields the same
+    order, so n resolves back to a record. Because cost rolls up structurally,
+    the total is the sum of root costs, not of every node.
+    """
+    if not records:
+        return "(no records persisted for this run)"
+
+    roots, children = _tree(records)
     lines: list[str] = []
+    number = count(1)
 
     def walk(record: PersistedRecord, depth: int) -> None:
-        lines.append("  " * depth + _record_line(record))
+        lines.append("  " * depth + f"[{next(number)}] " + _record_line(record))
         for child in children.get(record.run_id, []):
             walk(child, depth + 1)
 
@@ -118,4 +151,53 @@ def render_trace(records: list[PersistedRecord]) -> str:
 
     total = sum(record_cost(root) for root in roots)
     lines.append(f"total  ${total:.4f}")
+    return "\n".join(lines)
+
+
+def _clip(text: str, limit: int = 160) -> str:
+    flat = " ".join(text.split())
+    return flat if len(flat) <= limit else flat[: limit - 3] + "..."
+
+
+def _content_text(content: Any) -> str:
+    """Flatten a message's content (a string, or multimodal parts) to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        pieces: list[str] = []
+        for part in cast("list[Any]", content):
+            if not isinstance(part, dict):
+                pieces.append("[part]")
+                continue
+            typed = cast("dict[str, Any]", part)
+            if typed.get("type") == "text":
+                pieces.append(str(typed.get("text", "")))
+            else:
+                pieces.append(f"[{typed.get('type', 'part')}]")
+        return " ".join(pieces)
+    return ""
+
+
+def render_transcript(record: PersistedRecord) -> str:
+    """Render a record's LLM transcript, one clipped role-labelled line per message.
+
+    First consumer of the raw `llm_trace` JSON: whatever structure this
+    renderer needs and can't reach is what the trace shape should grow next.
+    A record with no trace (a Commission whose invoke never deposited one)
+    says so rather than rendering empty.
+    """
+    if record.llm_trace is None:
+        return f"(no LLM transcript recorded for {record.commission_name})"
+    lines = [f"--- {record.commission_name} transcript ({len(record.llm_trace)} messages) ---"]
+    for message in record.llm_trace:
+        role = str(message.get("role", "?"))
+        tool_calls = cast("list[dict[str, Any]]", message.get("tool_calls") or [])
+        for call in tool_calls:
+            function = cast("dict[str, Any]", call.get("function") or {})
+            name = str(function.get("name", "?"))
+            arguments = _clip(str(function.get("arguments", "")))
+            lines.append(f"{role:<9} -> {name}({arguments})")
+        text = _content_text(message.get("content"))
+        if text:
+            lines.append(f"{role:<9} {_clip(text)}")
     return "\n".join(lines)

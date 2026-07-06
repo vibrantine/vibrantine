@@ -38,6 +38,8 @@ from vibrantine.examples.demo.trace import (
     record_cost,
     record_status,
     render_trace,
+    render_transcript,
+    trace_order,
 )
 from vibrantine.examples.morning_briefing import MorningBriefingOutput
 from vibrantine.examples.recursive_research import ResearchOutput
@@ -243,10 +245,27 @@ def _print_banner(model: Model, budgets_enforceable: bool) -> None:
     print()
     print("Type a number to run an example with fixed, canned inputs (shown at")
     print("run start). Anything else is a chat message to the demo agent, which")
-    print("can trigger the examples with inputs you describe. q to quit.")
+    print("can trigger the examples with inputs you describe. After a run,")
+    print("t <n> shows the LLM transcript behind trace node [n]. q to quit.")
     print()
     for entry in MENU:
         print(f"  {entry.key}. {entry.title}: {entry.blurb}")
+
+
+def _transcript_for(line: str, last_trace: list[PersistedRecord]) -> str:
+    """Resolve a `t <n>` command against the last run's numbered trace nodes."""
+    if not last_trace:
+        return "No run to inspect yet; run an example or chat first."
+    parts = line.split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        return (
+            f"Usage: t <n>, where n is a node number "
+            f"from the last run trace (1..{len(last_trace)})."
+        )
+    index = int(parts[1])
+    if not 1 <= index <= len(last_trace):
+        return f"Node {index} is out of range; the last run trace has nodes 1..{len(last_trace)}."
+    return render_transcript(last_trace[index - 1])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -271,6 +290,9 @@ def main(argv: list[str] | None = None) -> int:
     persist_tree(agent)
     entries = {entry.key: entry for entry in MENU}
     transcript: list[ChatTurn] = []
+    # The last run's records in [n]-label order, so `t <n>` resolves against
+    # the numbering the user just read in the rendered trace.
+    last_trace: list[PersistedRecord] = []
 
     _print_banner(model, budgets_enforceable)
 
@@ -286,6 +308,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         first_token = line.split()[0]
+        if first_token.lower() == "t":
+            print(_transcript_for(line, last_trace))
+            continue
         if first_token in entries and line != first_token:
             print(
                 f"Menu numbers run fixed canned demos, so the text after '{first_token}' "
@@ -324,5 +349,7 @@ def main(argv: list[str] | None = None) -> int:
             elif result.error is not None:
                 print(f"\nAgent turn failed ({result.error.kind}): {result.error.detail}")
 
+        new_records = backend.records()[first_new_record:]
+        last_trace = trace_order(new_records)
         print("\nrun trace:")
-        print(render_trace(backend.records()[first_new_record:]))
+        print(render_trace(new_records))
