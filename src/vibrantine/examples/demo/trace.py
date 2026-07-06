@@ -13,20 +13,7 @@ from datetime import datetime
 from itertools import count
 from typing import Any, cast
 
-from vibrantine.contract import Commission, PersistedRecord
-
-
-def persist_tree(commission: Commission[Any, Any]) -> None:
-    """Switch persistence on for a Commission and everything in its toolbox.
-
-    `persistence_mode` defaults to "off"; instance assignment is the
-    documented override path, and the toolbox is the public composition
-    surface, so a consumer opts a whole tree into record-keeping without
-    framework help.
-    """
-    commission.persistence_mode = "always"
-    for child in commission.toolbox:
-        persist_tree(child)
+from vibrantine.contract import PersistedRecord
 
 
 class RecordingBackend:

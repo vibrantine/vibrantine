@@ -4,10 +4,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from vibrantine.contract import PersistedRecord
-from vibrantine.examples.ask import AskCommission
 from vibrantine.examples.demo.trace import (
     RecordingBackend,
-    persist_tree,
     record_cost,
     record_status,
     render_trace,
@@ -166,13 +164,3 @@ def test_record_accessors_default_safely() -> None:
     bare.result.pop("status")
     assert record_cost(bare) == 0.0
     assert record_status(bare) == "unknown"
-
-
-def test_persist_tree_switches_on_whole_toolbox() -> None:
-    commission = AskCommission()
-    assert commission.persistence_mode == "off"
-
-    persist_tree(commission)
-
-    assert commission.persistence_mode == "always"
-    assert all(child.persistence_mode == "always" for child in commission.toolbox)

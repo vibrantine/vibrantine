@@ -666,8 +666,11 @@ never installs handlers or writes files on its own.
 Beyond watching: `on_progress` on the `CallContext` streams typed
 `ProgressEvent`s to a callback for building live UIs, and the persistence
 layer stores full structured records (input, result, cost, the LLM
-transcript) for programmatic autopsy. Three tiers, all optional: log lines
-to watch, events to react, records to query.
+transcript) for programmatic autopsy. Switching records on is also one
+line: `run_one(..., backend=FilesystemBackend(root), record="always")`
+reaches every node in the call tree, including children spawned mid-run.
+Three tiers, all optional: log lines to watch, events to react, records
+to query.
 
 ## Worked build: a corpus-research coordinator
 
@@ -971,7 +974,7 @@ Behavior slots (class attributes, instance-overridable via constructor):
 |---|---|---|
 | `system_prompt` | `None` | The Commission's own prompt; `None` is fine for tools and coordinators |
 | `toolbox` | `()` | What the LLM loop may dispatch; instance override via `toolbox=` kwarg |
-| `persistence_mode` | `"off"` | `PersistenceMode` |
+| `persistence_mode` | `None` | `PersistenceMode`; `None` = no opinion, follow the caller's `record=` default. An explicit mode, `"off"` included, beats the caller |
 | `max_output_tokens` | `None` | Output cap; `None` = no enforcement |
 | `overflow_policy` | `"partial"` | `OverflowPolicy`; enforced by `dispatch` |
 
@@ -1047,6 +1050,7 @@ with `dataclasses.replace` to hand a child a modified one.
 | `concurrency` | `4` | Per-coordinator hint; not tree-wide yet |
 | `parent_run_id` | `None` | Threaded by `dispatch`; read-only to bodies |
 | `backend` | `None` | `PersistenceBackend` to write through |
+| `record` | `None` | Recording default for every node whose `persistence_mode` is `None`; a node's explicit mode wins |
 
 ## Entry points
 
@@ -1056,7 +1060,7 @@ directly; the entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_one` | `async run_one(commission, input, *, budget_usd=None, backend=None)` | The normal async path; builds a default `CallContext` |
+| `run_one` | `async run_one(commission, input, *, budget_usd=None, backend=None, record=None)` | The normal async path; builds a default `CallContext` |
 | `invoke_sync` | sync wrapper over `run_one` | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | Inside a custom `invoke`, or when you build the `CallContext` yourself (capabilities, cancellation, progress) |
 
@@ -1103,6 +1107,10 @@ written as a selection prompt.
   optional LLM trace.
 - Modes: `off` / `on_failure` / `dev` / `always`. Wire a backend via
   `run_one(..., backend=...)`; children inherit it automatically.
+- Switch recording on with `run_one(..., record="always")`: the caller's
+  default for every node whose own `persistence_mode` is `None` (the class
+  default). A node's explicit mode, `"off"` included, beats the caller's
+  default; silence follows the room, a spoken choice is kept.
 
 ## Authoring discipline
 

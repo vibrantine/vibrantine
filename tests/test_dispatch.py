@@ -78,7 +78,7 @@ class _Stub(Commission[_Input, _Output]):
         self,
         *,
         result: CommissionResult[_Output] | None = None,
-        persistence_mode: PersistenceMode = "off",
+        persistence_mode: PersistenceMode | None = None,
         max_output_tokens: int | None = None,
         overflow_policy: OverflowPolicy = "flag",
     ) -> None:
@@ -107,7 +107,7 @@ class _Raiser(Commission[_Input, _Output]):
         self,
         exc: BaseException,
         *,
-        persistence_mode: PersistenceMode = "off",
+        persistence_mode: PersistenceMode | None = None,
     ) -> None:
         super().__init__(persistence_mode=persistence_mode)
         self._exc = exc
@@ -237,6 +237,52 @@ async def test_dispatch_on_failure_skips_successes(tmp_path: Path) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="on_failure")
     await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+
+    assert await backend.list_references() == []
+
+
+async def test_dispatch_no_opinion_and_no_ctx_record_stays_off(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path)
+    stub = _Stub()  # persistence_mode None (no opinion), no ctx.record either
+    await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+
+    assert await backend.list_references() == []
+
+
+async def test_ctx_record_switches_on_the_whole_tree(tmp_path: Path) -> None:
+    # The caller's record= default reaches every no-opinion node, parent and
+    # child alike, with no per-node flipping; the record stores the effective
+    # mode the node ran under.
+    backend = FilesystemBackend(tmp_path)
+    child = _Stub()
+    parent = _Parent(child)
+
+    parent_result = await dispatch(
+        parent, _Input(q="?"), CallContext(backend=backend, record="always")
+    )
+
+    assert await backend.list_references() == [parent_result.run_id]
+    child_refs = await backend.list_references(parent_run_id=parent_result.run_id)
+    assert len(child_refs) == 1
+    loaded = await backend.load(child_refs[0])
+    assert loaded is not None
+    assert loaded.mode == "always"
+
+
+async def test_explicit_off_vetoes_ctx_record(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path)
+    stub = _Stub(persistence_mode="off")
+    await dispatch(stub, _Input(q="?"), CallContext(backend=backend, record="always"))
+
+    assert await backend.list_references() == []
+
+
+async def test_explicit_mode_beats_ctx_record(tmp_path: Path) -> None:
+    # Node says on_failure, caller says always: the node's word is kept, so
+    # this success is not recorded.
+    backend = FilesystemBackend(tmp_path)
+    stub = _Stub(persistence_mode="on_failure")
+    await dispatch(stub, _Input(q="?"), CallContext(backend=backend, record="always"))
 
     assert await backend.list_references() == []
 

@@ -119,6 +119,21 @@ async def test_run_one_threads_backend_so_dispatch_persists(
     assert refs == [result.run_id]
 
 
+async def test_run_one_record_switches_recording_on(tmp_path: Path) -> None:
+    # The one-line on-switch: no per-node persistence_mode flipping needed.
+    backend = FilesystemBackend(tmp_path)
+
+    result = await run_one(
+        _BudgetProbeCommission(),
+        _BudgetProbeInput(),
+        backend=backend,
+        record="always",
+    )
+
+    assert result.run_id is not None
+    assert await backend.list_references() == [result.run_id]
+
+
 async def test_run_one_no_backend_skips_persistence(tmp_path: Path) -> None:
     # Same Commission, but with no backend wired; nothing should be stored.
     backend = FilesystemBackend(tmp_path)

@@ -121,7 +121,8 @@ class _CappedProbe(_PolicyProbe):
 def test_omitting_policy_kwargs_falls_back_to_class_defaults() -> None:
     probe = _PolicyProbe()
 
-    assert probe.persistence_mode == "off"
+    # None = no recording opinion: the node follows the caller's ctx.record.
+    assert probe.persistence_mode is None
     assert probe.max_output_tokens is None
     assert probe.overflow_policy == "partial"
 
@@ -139,7 +140,7 @@ def test_overflow_policy_kwarg_overrides_class_default() -> None:
     probe = _PolicyProbe(overflow_policy="reject")
 
     assert probe.overflow_policy == "reject"
-    assert probe.persistence_mode == "off"
+    assert probe.persistence_mode is None
 
 
 def test_max_output_tokens_kwarg_overrides_class_default() -> None:
