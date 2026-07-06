@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import ClassVar, cast
 
 import pytest
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
@@ -28,6 +29,7 @@ from vibrantine.contract import (
 )
 from vibrantine.dispatch import dispatch
 from vibrantine.persistence import FilesystemBackend
+from vibrantine.testing import ScriptedLLM, llm_response
 
 
 class _Input(BaseModel):
@@ -419,3 +421,100 @@ async def test_dispatch_does_not_swallow_cancellation() -> None:
     # propagate, never be converted to an `internal` failure value.
     with pytest.raises(asyncio.CancelledError):
         await dispatch(_Raiser(asyncio.CancelledError()), _Input(q="?"), CallContext())
+
+
+# --- llm_trace mailbox tests ------------------------------------------------
+
+
+class _LoopProbe(Commission[_Input, _Output]):
+    """A basic LLM-loop Commission for trace tests; toolbox set per instance."""
+
+    name: ClassVar[str] = "loop_probe"
+    description: ClassVar[str] = "Test probe riding the default LLM loop."
+    input_type: ClassVar[type[BaseModel]] = _Input
+    output_type: ClassVar[type[BaseModel]] = _Output
+    system_prompt: ClassVar[str | None] = "Conclude."
+
+    def build_user_message(self, input: _Input, ctx: CallContext) -> str:
+        return input.q
+
+
+async def test_loop_trace_lands_in_the_record(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path)
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"a": "done"})])])
+    probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="always")
+
+    result = await dispatch(probe, _Input(q="hello"), CallContext(backend=backend))
+
+    assert result.run_id is not None
+    loaded = await backend.load(result.run_id)
+    assert loaded is not None
+    assert loaded.llm_trace is not None
+    assert [m["role"] for m in loaded.llm_trace[:2]] == ["system", "user"]
+    assert loaded.llm_trace[1]["content"] == "hello"
+    # The concluding assistant turn is part of the transcript.
+    assert any(m.get("tool_calls") for m in loaded.llm_trace)
+
+
+async def test_loop_trace_survives_a_failed_run(tmp_path: Path) -> None:
+    # Failure traces are the ones worth autopsying: two free-text replies end
+    # the run as an internal failure, and the transcript (including the
+    # corrective nudge) must still reach the record.
+    backend = FilesystemBackend(tmp_path)
+    fake = ScriptedLLM([llm_response(content="prose"), llm_response(content="more prose")])
+    probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="on_failure")
+
+    result = await dispatch(probe, _Input(q="hi"), CallContext(backend=backend))
+
+    assert result.status == "failure"
+    assert result.run_id is not None
+    loaded = await backend.load(result.run_id)
+    assert loaded is not None
+    assert loaded.llm_trace is not None
+    nudges = [
+        m for m in loaded.llm_trace if m["role"] == "user" and "conclude" in str(m["content"])
+    ]
+    assert nudges, "the corrective nudge should appear in the recorded transcript"
+
+
+async def test_nested_traces_stay_with_their_own_records(tmp_path: Path) -> None:
+    # A parent loop dispatches a child loop mid-run. Each record must carry
+    # exactly its own transcript: the mailbox re-hangs the parent's box after
+    # the child call, so nothing merges or crosses.
+    backend = FilesystemBackend(tmp_path)
+    child_fake = ScriptedLLM([llm_response(tool_calls=[("cc", "conclude", {"a": "child-done"})])])
+    child = _LoopProbe(client=cast(AsyncOpenAI, child_fake), persistence_mode="always")
+    parent_fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("p1", "loop_probe", {"q": "child-q"})]),
+            llm_response(tool_calls=[("p2", "conclude", {"a": "parent-done"})]),
+        ]
+    )
+    parent = _LoopProbe(
+        client=cast(AsyncOpenAI, parent_fake),
+        toolbox=(child,),
+        persistence_mode="always",
+    )
+
+    result = await dispatch(parent, _Input(q="parent-q"), CallContext(backend=backend))
+
+    assert result.status == "success", result.error
+    parent_record = await backend.load(result.run_id or "")
+    assert parent_record is not None and parent_record.llm_trace is not None
+    child_ids = await backend.list_references(parent_run_id=result.run_id)
+    assert len(child_ids) == 1
+    child_record = await backend.load(child_ids[0])
+    assert child_record is not None and child_record.llm_trace is not None
+
+    # Child transcript: system, user, concluding assistant. Its user turn is
+    # the tool-call args the parent sent, never the parent's own message.
+    assert len(child_record.llm_trace) == 3
+    assert child_record.llm_trace[1]["content"] == "child-q"
+    assert "parent-q" not in str(child_record.llm_trace)
+
+    # Parent transcript: system, user, delegating assistant, tool result,
+    # concluding assistant. The child's *result* appears (that's the envelope
+    # crossing the boundary); the child's interior turns do not.
+    assert len(parent_record.llm_trace) == 5
+    assert parent_record.llm_trace[1]["content"] == "parent-q"
+    assert parent_record.llm_trace[3]["role"] == "tool"

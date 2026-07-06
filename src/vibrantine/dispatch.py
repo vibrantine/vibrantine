@@ -11,6 +11,13 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
   - `overflow_policy` is enforced on the returned result
   - `persistence_mode` is honored: the record is written through
     `CallContext.backend` if one is wired
+  - the LLM loop's transcript is collected: dispatch hangs a context-local
+    trace mailbox before calling `invoke`, `run_llm_loop` deposits its
+    message history into it on the way out, and whatever landed is written
+    to `PersistedRecord.llm_trace`. Same ContextVar mechanism as the run_id
+    chain, so nesting and `asyncio.gather` keep every trace with its own
+    run. The trace serves the recorder, never the caller: it lands only in
+    the record, and a parent Commission sees nothing but the child's result.
   - a raised exception from a misbehaving `invoke` is converted to an
     `internal` failure result, so errors-as-values holds at the boundary
     even when a Commission breaks the contract
@@ -45,13 +52,33 @@ _current_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     default=None,
 )
 
+# The trace mailbox: one fresh box per dispatched call, context-local so
+# nested and gathered runs each see only their own. `None` outside any
+# dispatch, so a deposit from an unwrapped run goes nowhere, harmlessly.
+_trace_box: contextvars.ContextVar[list[list[dict[str, Any]]] | None] = contextvars.ContextVar(
+    "_vibrantine_trace_box",
+    default=None,
+)
+
+
+def deposit_llm_trace(messages: list[dict[str, Any]]) -> None:
+    """Drop an LLM message history into the current call's trace mailbox.
+
+    `run_llm_loop` calls this on its way out (success or failure); a custom
+    Commission that runs its own LLM calls may do the same to have its
+    transcript recorded. The trace serves the recorder, never the caller: a
+    deposit lands only in this call's own `PersistedRecord.llm_trace`, and
+    outside any dispatch it goes nowhere, harmlessly.
+    """
+    box = _trace_box.get()
+    if box is not None:
+        box.append(messages)
+
 
 async def dispatch[InputT, OutputT](
     commission: Commission[InputT, OutputT],
     input: InputT,
     ctx: CallContext,
-    *,
-    llm_trace: list[dict[str, Any]] | None = None,
 ) -> CommissionResult[OutputT]:
     """Invoke `commission` with framework wrapping."""
     parent = _current_run_id.get()
@@ -61,6 +88,12 @@ async def dispatch[InputT, OutputT](
     # its own (dispatch stamps that onto the result after invoke returns).
     ctx_for_invoke = replace(ctx, parent_run_id=parent)
 
+    # A fresh mailbox for this call; whatever the interior deposits (the LLM
+    # loop's transcript, on success or failure) is collected after invoke and
+    # written to the record. The finally re-hangs the caller's box, so a
+    # deposit from a parent's own loop still lands with the parent.
+    box: list[list[dict[str, Any]]] = []
+    trace_token = _trace_box.set(box)
     token = _current_run_id.set(my_run_id)
     try:
         result = await commission.invoke(input, ctx_for_invoke)
@@ -74,6 +107,11 @@ async def dispatch[InputT, OutputT](
         result = _exception_to_failure(commission, exc)
     finally:
         _current_run_id.reset(token)
+        _trace_box.reset(trace_token)
+
+    # A custom invoke may run several LLM loops in sequence; the raw-JSON v1
+    # trace is their message histories concatenated in run order.
+    llm_trace = [message for deposit in box for message in deposit] or None
 
     result = _apply_overflow_policy(result, commission, ctx_for_invoke)
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})

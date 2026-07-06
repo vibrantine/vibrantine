@@ -46,7 +46,7 @@ from vibrantine.contract import (
     ErrorState,
     TextPart,
 )
-from vibrantine.dispatch import dispatch
+from vibrantine.dispatch import deposit_llm_trace, dispatch
 
 CONCLUDE_TOOL_NAME = "conclude"
 
@@ -143,234 +143,241 @@ async def run_llm_loop[OutputT: BaseModel](
         {"role": "user", "content": _to_provider_content(user_message)},
     ]
 
-    in_tokens = 0
-    out_tokens = 0
-    # Summed cost of every sub-Commission dispatched below. Folded into the
-    # budget check and returned so the caller's CommissionResult.cost includes
-    # the subtree: the structural cost rollup the contract promises.
-    children_cost = 0.0
-    # One free-text reply (no tool call) gets a corrective nudge instead of
-    # failing the whole run; smaller models drift into prose often enough
-    # that forfeiting the entire spend on the first slip is a bad trade. The
-    # second slip fails as before.
-    nudged_for_missing_tool_call = False
-    # Failed conclude attempts change what the iteration-cap error must say:
-    # "never called conclude" points at prompting, "called it N times but the
-    # args never validated" points at the output type's shape. Conflating the
-    # two sent a live debugging session in the wrong direction.
-    conclude_failures = 0
-    last_conclude_error = ""
+    # The transcript escapes via the trace mailbox on every exit path
+    # (conclude, budget stop, iteration cap, cancellation, a raise), so
+    # failure runs, the ones worth autopsying, are recorded too.
+    try:
+        in_tokens = 0
+        out_tokens = 0
+        # Summed cost of every sub-Commission dispatched below. Folded into the
+        # budget check and returned so the caller's CommissionResult.cost includes
+        # the subtree: the structural cost rollup the contract promises.
+        children_cost = 0.0
+        # One free-text reply (no tool call) gets a corrective nudge instead of
+        # failing the whole run; smaller models drift into prose often enough
+        # that forfeiting the entire spend on the first slip is a bad trade. The
+        # second slip fails as before.
+        nudged_for_missing_tool_call = False
+        # Failed conclude attempts change what the iteration-cap error must say:
+        # "never called conclude" points at prompting, "called it N times but the
+        # args never validated" points at the output type's shape. Conflating the
+        # two sent a live debugging session in the wrong direction.
+        conclude_failures = 0
+        last_conclude_error = ""
 
-    for _ in range(max_iterations):
-        if ctx.cancel.is_cancelled:
-            return LoopOutcome(
-                output=None,
-                error=ErrorState(
-                    kind="cancelled",
-                    detail="Cancelled between loop iterations.",
-                    retryable=False,
-                ),
-                in_tokens=in_tokens,
-                out_tokens=out_tokens,
-                children_cost=children_cost,
-            )
+        for _ in range(max_iterations):
+            if ctx.cancel.is_cancelled:
+                return LoopOutcome(
+                    output=None,
+                    error=ErrorState(
+                        kind="cancelled",
+                        detail="Cancelled between loop iterations.",
+                        retryable=False,
+                    ),
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
 
-        try:
-            response: ChatCompletion = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-            )
-        except openai.RateLimitError as exc:
-            return _loop_error(
-                "rate_limit",
-                f"Rate limit from LLM provider: {exc}",
-                retryable=True,
-                in_tokens=in_tokens,
-                out_tokens=out_tokens,
-                children_cost=children_cost,
-            )
-        except openai.APIError as exc:
-            return _loop_error(
-                "internal",
-                f"LLM provider error: {exc}",
-                retryable=True,
-                in_tokens=in_tokens,
-                out_tokens=out_tokens,
-                children_cost=children_cost,
-            )
-
-        usage = response.usage
-        if usage is not None:
-            in_tokens += usage.prompt_tokens
-            out_tokens += usage.completion_tokens
-
-        # Own token cost plus everything dispatched children spent, so a
-        # recursive or sub-Commission-bearing loop enforces the budget against
-        # its whole subtree, not just its own turns (may overshoot by one turn).
-        own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
-        cost_so_far = own_cost + children_cost
-        if ctx.budget_usd is not None and cost_so_far > ctx.budget_usd:
-            return _loop_error(
-                "budget_exceeded",
-                f"Cost ${cost_so_far:.6f} exceeded budget ${ctx.budget_usd:.6f} after LLM turn.",
-                retryable=False,
-                in_tokens=in_tokens,
-                out_tokens=out_tokens,
-                children_cost=children_cost,
-            )
-
-        if not response.choices:
-            return _loop_error(
-                "internal",
-                "LLM provider returned no choices.",
-                retryable=True,
-                in_tokens=in_tokens,
-                out_tokens=out_tokens,
-                children_cost=children_cost,
-            )
-
-        msg = response.choices[0].message
-        # We only send function-type tools, so all returned calls must be
-        # function calls. Cast the union from the SDK at this boundary so
-        # the rest of the loop can access `tc.function.{name,arguments}` cleanly.
-        tool_calls = cast(
-            list[ChatCompletionMessageFunctionToolCall],
-            msg.tool_calls or [],
-        )
-        if not tool_calls:
-            if nudged_for_missing_tool_call:
+            try:
+                response: ChatCompletion = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                )
+            except openai.RateLimitError as exc:
                 return _loop_error(
-                    "internal",
-                    "LLM returned no tool call twice; the loop requires conclude.",
+                    "rate_limit",
+                    f"Rate limit from LLM provider: {exc}",
                     retryable=True,
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
                     children_cost=children_cost,
                 )
-            nudged_for_missing_tool_call = True
-            messages.append({"role": "assistant", "content": msg.content})
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "Respond only with tool calls. To finish, call the "
-                        f"`{CONCLUDE_TOOL_NAME}` tool with your typed result."
-                    ),
-                }
-            )
-            continue
-
-        messages.append(
-            {
-                "role": "assistant",
-                "content": msg.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in tool_calls
-                ],
-            }
-        )
-
-        for tc in tool_calls:
-            name = tc.function.name
-            raw_args = tc.function.arguments
-
-            if name == CONCLUDE_TOOL_NAME:
-                try:
-                    output = output_type.model_validate_json(raw_args)
-                except (json.JSONDecodeError, ValidationError) as exc:
-                    conclude_failures += 1
-                    last_conclude_error = str(exc)
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": json.dumps(
-                                {
-                                    "error": {
-                                        "kind": "validation",
-                                        "detail": (
-                                            f"conclude arguments failed to "
-                                            f"validate as {output_type.__name__}: "
-                                            f"{exc}"
-                                        ),
-                                    }
-                                }
-                            ),
-                        }
-                    )
-                    continue
-                return LoopOutcome(
-                    output=output,
-                    error=None,
+            except openai.APIError as exc:
+                return _loop_error(
+                    "internal",
+                    f"LLM provider error: {exc}",
+                    retryable=True,
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
                     children_cost=children_cost,
                 )
 
-            tool = by_name.get(name)
-            if tool is None:
+            usage = response.usage
+            if usage is not None:
+                in_tokens += usage.prompt_tokens
+                out_tokens += usage.completion_tokens
+
+            # Own token cost plus everything dispatched children spent, so a
+            # recursive or sub-Commission-bearing loop enforces the budget against
+            # its whole subtree, not just its own turns (may overshoot by one turn).
+            own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
+            cost_so_far = own_cost + children_cost
+            if ctx.budget_usd is not None and cost_so_far > ctx.budget_usd:
+                return _loop_error(
+                    "budget_exceeded",
+                    f"Cost ${cost_so_far:.6f} exceeded budget "
+                    f"${ctx.budget_usd:.6f} after LLM turn.",
+                    retryable=False,
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
+
+            if not response.choices:
+                return _loop_error(
+                    "internal",
+                    "LLM provider returned no choices.",
+                    retryable=True,
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
+
+            msg = response.choices[0].message
+            # We only send function-type tools, so all returned calls must be
+            # function calls. Cast the union from the SDK at this boundary so
+            # the rest of the loop can access `tc.function.{name,arguments}` cleanly.
+            tool_calls = cast(
+                list[ChatCompletionMessageFunctionToolCall],
+                msg.tool_calls or [],
+            )
+            if not tool_calls:
+                if nudged_for_missing_tool_call:
+                    return _loop_error(
+                        "internal",
+                        "LLM returned no tool call twice; the loop requires conclude.",
+                        retryable=True,
+                        in_tokens=in_tokens,
+                        out_tokens=out_tokens,
+                        children_cost=children_cost,
+                    )
+                nudged_for_missing_tool_call = True
+                messages.append({"role": "assistant", "content": msg.content})
                 messages.append(
                     {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": json.dumps(
-                            {"error": {"kind": "validation", "detail": f"Unknown tool: {name}"}}
+                        "role": "user",
+                        "content": (
+                            "Respond only with tool calls. To finish, call the "
+                            f"`{CONCLUDE_TOOL_NAME}` tool with your typed result."
                         ),
                     }
                 )
                 continue
 
-            try:
-                tool_input = tool.input_type.model_validate_json(raw_args)
-            except (json.JSONDecodeError, ValidationError) as exc:
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": json.dumps(
-                            {"error": {"kind": "validation", "detail": f"Invalid input: {exc}"}}
-                        ),
-                    }
-                )
-                continue
-
-            result: CommissionResult[Any] = await dispatch(tool, tool_input, ctx)
-            children_cost += result.cost.estimated_usd
             messages.append(
                 {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": _render_tool_result(result),
+                    "role": "assistant",
+                    "content": msg.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in tool_calls
+                    ],
                 }
             )
 
-    if conclude_failures:
-        detail = (
-            f"Exceeded iteration cap of {max_iterations}: conclude was called "
-            f"{conclude_failures} time(s) but its arguments never validated as "
-            f"{output_type.__name__}. Last validation error: "
-            f"{last_conclude_error[:400]}"
+            for tc in tool_calls:
+                name = tc.function.name
+                raw_args = tc.function.arguments
+
+                if name == CONCLUDE_TOOL_NAME:
+                    try:
+                        output = output_type.model_validate_json(raw_args)
+                    except (json.JSONDecodeError, ValidationError) as exc:
+                        conclude_failures += 1
+                        last_conclude_error = str(exc)
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps(
+                                    {
+                                        "error": {
+                                            "kind": "validation",
+                                            "detail": (
+                                                f"conclude arguments failed to "
+                                                f"validate as {output_type.__name__}: "
+                                                f"{exc}"
+                                            ),
+                                        }
+                                    }
+                                ),
+                            }
+                        )
+                        continue
+                    return LoopOutcome(
+                        output=output,
+                        error=None,
+                        in_tokens=in_tokens,
+                        out_tokens=out_tokens,
+                        children_cost=children_cost,
+                    )
+
+                tool = by_name.get(name)
+                if tool is None:
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(
+                                {"error": {"kind": "validation", "detail": f"Unknown tool: {name}"}}
+                            ),
+                        }
+                    )
+                    continue
+
+                try:
+                    tool_input = tool.input_type.model_validate_json(raw_args)
+                except (json.JSONDecodeError, ValidationError) as exc:
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(
+                                {"error": {"kind": "validation", "detail": f"Invalid input: {exc}"}}
+                            ),
+                        }
+                    )
+                    continue
+
+                result: CommissionResult[Any] = await dispatch(tool, tool_input, ctx)
+                children_cost += result.cost.estimated_usd
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": _render_tool_result(result),
+                    }
+                )
+
+        if conclude_failures:
+            detail = (
+                f"Exceeded iteration cap of {max_iterations}: conclude was called "
+                f"{conclude_failures} time(s) but its arguments never validated as "
+                f"{output_type.__name__}. Last validation error: "
+                f"{last_conclude_error[:400]}"
+            )
+        else:
+            detail = f"Exceeded iteration cap of {max_iterations} without calling conclude."
+        return _loop_error(
+            "internal",
+            detail,
+            retryable=True,
+            in_tokens=in_tokens,
+            out_tokens=out_tokens,
+            children_cost=children_cost,
         )
-    else:
-        detail = f"Exceeded iteration cap of {max_iterations} without calling conclude."
-    return _loop_error(
-        "internal",
-        detail,
-        retryable=True,
-        in_tokens=in_tokens,
-        out_tokens=out_tokens,
-        children_cost=children_cost,
-    )
+    finally:
+        deposit_llm_trace(cast("list[dict[str, Any]]", messages))
 
 
 def _to_provider_content(
