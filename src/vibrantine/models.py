@@ -43,7 +43,9 @@ class Model:
 
     id: str
     base_url: str = OPENROUTER_BASE_URL
-    api_key_env: str = "OPENROUTER_API_KEY"
+    # None means the endpoint needs no API key at all (e.g. local Ollama);
+    # a missing key for a keyed endpoint fails fast at first client build.
+    api_key_env: str | None = "OPENROUTER_API_KEY"
     context_window: int | None = None
     input_usd_per_million: float | None = None
     output_usd_per_million: float | None = None
@@ -127,13 +129,13 @@ def ollama(id: str, *, context_window: int | None = None) -> Model:
 
     Ollama runs locally and is genuinely free, so pricing is `0.0` (not
     `None`): a budgeted Commission can run against it without a spurious
-    unpriced-model refusal. Ollama ignores the API key; `OLLAMA_API_KEY` is a
-    conventionally-unset env name that still satisfies the OpenAI client.
+    unpriced-model refusal. Ollama needs no API key, so `api_key_env` is
+    `None` and the missing-key check never blocks a local run.
     """
     return Model(
         id=id,
         base_url="http://localhost:11434/v1",
-        api_key_env="OLLAMA_API_KEY",
+        api_key_env=None,
         context_window=context_window,
         input_usd_per_million=0.0,
         output_usd_per_million=0.0,

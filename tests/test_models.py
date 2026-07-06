@@ -65,7 +65,7 @@ def test_cloud_and_local_models_form_one_menu() -> None:
     assert cloud.base_url == OPENROUTER_BASE_URL
     assert local.base_url == "http://localhost:11434/v1"
     assert cloud.api_key_env == "OPENROUTER_API_KEY"
-    assert local.api_key_env == "OLLAMA_API_KEY"
+    assert local.api_key_env is None  # local Ollama needs no key at all
 
     # Both priced, but local is genuinely free (0.0), not unpriced (None).
     assert cloud.is_priced

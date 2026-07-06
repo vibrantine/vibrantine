@@ -30,6 +30,8 @@ from vibrantine.contract import (
     PersistenceMode,
     Provenance,
 )
+from vibrantine.models import ollama
+from vibrantine.orchestrator import run_one
 
 
 def test_error_kind_literals_match_documented_ssot() -> None:
@@ -240,6 +242,34 @@ def test_client_is_not_constructed_eagerly(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     _BasicProbe()
     _PolicyProbe()  # overrides invoke; must likewise stay client-free
+
+
+async def test_missing_key_fails_fast_with_the_env_var_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A keyed endpoint whose key is absent must fail before any network call,
+    # naming the env var, instead of surfacing as a raw provider 401 mid-run.
+    # The raise crosses invoke, so dispatch's backstop delivers it as a
+    # failure value through the front door.
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    result = await run_one(_BasicProbe(), _PolicyProbeInput())
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "OPENROUTER_API_KEY" in result.error.detail
+    assert result.cost.estimated_usd == 0.0  # failed before spending
+
+
+def test_keyless_model_builds_a_client_without_any_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # api_key_env=None means the endpoint needs no key (local Ollama), so the
+    # missing-key check must never block it. The subject here is the interior
+    # client-building seam itself, hence the direct property access.
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    probe = _BasicProbe(model=ollama("llama3"))
+    assert probe._resolved_client is not None  # pyright: ignore[reportPrivateUsage]
 
 
 def test_class_level_toolbox_is_the_default() -> None:
