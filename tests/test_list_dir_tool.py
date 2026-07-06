@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.tools.list_dir import ListDirInput, ListDirTool
 
 
@@ -20,7 +21,7 @@ async def test_list_dir_returns_files_and_directories(tmp_path: Path) -> None:
     (tmp_path / "b.txt").write_text("", encoding="utf-8")
     (tmp_path / "subdir").mkdir()
 
-    result = await ListDirTool().invoke(ListDirInput(path=tmp_path), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=tmp_path), CallContext())
 
     assert result.status == "success"
     assert result.output is not None
@@ -35,7 +36,7 @@ async def test_list_dir_sorted_by_name(tmp_path: Path) -> None:
     for name in ["zeta", "alpha", "mu"]:
         (tmp_path / name).write_text("", encoding="utf-8")
 
-    result = await ListDirTool().invoke(ListDirInput(path=tmp_path), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=tmp_path), CallContext())
 
     assert result.status == "success"
     assert result.output is not None
@@ -47,7 +48,7 @@ async def test_list_dir_empty_directory(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    result = await ListDirTool().invoke(ListDirInput(path=empty), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=empty), CallContext())
 
     assert result.status == "success"
     assert result.output is not None
@@ -60,7 +61,7 @@ async def test_list_dir_bounds_entries_and_signals_truncation(tmp_path: Path) ->
     for name in ["a", "b", "c"]:
         (tmp_path / name).write_text("", encoding="utf-8")
 
-    result = await ListDirTool().invoke(
+    result = await dispatch(ListDirTool(), 
         ListDirInput(path=tmp_path, max_entries=2),
         CallContext(),
     )
@@ -79,7 +80,7 @@ async def test_list_dir_classifies_symlink(tmp_path: Path) -> None:
     link = tmp_path / "link.txt"
     link.symlink_to(target)
 
-    result = await ListDirTool().invoke(ListDirInput(path=tmp_path), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=tmp_path), CallContext())
 
     assert result.status == "success"
     assert result.output is not None
@@ -89,7 +90,7 @@ async def test_list_dir_classifies_symlink(tmp_path: Path) -> None:
 
 
 async def test_list_dir_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await ListDirTool().invoke(
+    result = await dispatch(ListDirTool(), 
         ListDirInput(path=Path("relative")),
         CallContext(),
     )
@@ -102,7 +103,7 @@ async def test_list_dir_relative_path_returns_validation(tmp_path: Path) -> None
 async def test_list_dir_nonexistent_path_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-dir"
 
-    result = await ListDirTool().invoke(ListDirInput(path=missing), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=missing), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -114,7 +115,7 @@ async def test_list_dir_file_path_returns_validation(tmp_path: Path) -> None:
     f = tmp_path / "actually-a-file.txt"
     f.write_text("", encoding="utf-8")
 
-    result = await ListDirTool().invoke(ListDirInput(path=f), CallContext())
+    result = await dispatch(ListDirTool(), ListDirInput(path=f), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -123,7 +124,7 @@ async def test_list_dir_file_path_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_list_dir_cancelled_returns_cancelled(tmp_path: Path) -> None:
-    result = await ListDirTool().invoke(
+    result = await dispatch(ListDirTool(), 
         ListDirInput(path=tmp_path),
         CallContext(cancel=_AlwaysCancelled()),
     )

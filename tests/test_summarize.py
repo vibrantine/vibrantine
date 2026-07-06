@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 from pydantic import ValidationError
 
 from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine.dispatch import dispatch
 from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
@@ -46,7 +47,7 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "A content cat."})])]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SummarizeInput(content=_SOURCE, length="one_sentence"),
         CallContext(),
     )
@@ -105,7 +106,7 @@ async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
+    await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
 
     assert _tool_names(fake.calls[0]) == {"conclude"}
 
@@ -124,7 +125,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
         ]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SummarizeInput(content=_SOURCE),
         CallContext(budget_usd=0.001),
     )
@@ -139,7 +140,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
 async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SummarizeInput(content=_SOURCE),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -160,7 +161,7 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
         ]
     )
 
-    result = await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
+    result = await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -175,7 +176,7 @@ async def test_summarize_emits_loop_start_progress_event() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await commission.invoke(
+    await dispatch(commission, 
         SummarizeInput(content=_SOURCE),
         CallContext(on_progress=events.append),
     )
@@ -193,7 +194,7 @@ async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> No
         ]
     )
 
-    result = await commission.invoke(SummarizeInput(content=_SOURCE), CallContext())
+    result = await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
 
     assert result.status == "success", result.error
     assert result.output is not None

@@ -53,6 +53,16 @@ scripted client through `client=`; the supported double is
 reply. The model's intelligence is not under test; the Commission's behavior
 around the scripted response is.
 
+Tests are callers, so they use the caller's API: launch the Commission under
+test through the public entry points (`run_one`, or `dispatch` when the test
+supplies its own `CallContext`), never by calling `invoke` directly. `invoke`
+is the hook authors implement, not the call surface, and a test that calls it
+raw skips the framework wrapping (run_id stamping, overflow enforcement,
+exception-to-failure conversion, persistence) that every real caller gets.
+The one exemption is a test whose *subject* is that interior machinery
+itself, such as the dispatch wrapper's own tests or direct `run_llm_loop`
+probes; those necessarily sit inside the boundary.
+
 Cover the contract surface the Commission exercises:
 
 - Public import works from the intended module or package path.

@@ -13,6 +13,7 @@ from typing import cast
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.examples.email_handler import (
     EmailHandlerCommission,
     EmailHandlerInput,
@@ -48,7 +49,7 @@ async def test_email_handler_non_urgent_concludes_directly() -> None:
         ]
     )
 
-    result = await commission.invoke(_input(), CallContext())
+    result = await dispatch(commission, _input(), CallContext())
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -82,7 +83,7 @@ async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
         model="unregistered/model",
     )
 
-    result = await commission.invoke(_input(), CallContext())
+    result = await dispatch(commission, _input(), CallContext())
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -114,7 +115,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
         ]
     )
 
-    result = await commission.invoke(_input(), CallContext())
+    result = await dispatch(commission, _input(), CallContext())
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -127,7 +128,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
 async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await commission.invoke(_input(), CallContext(cancel=AlwaysCancelled()))
+    result = await dispatch(commission, _input(), CallContext(cancel=AlwaysCancelled()))
 
     assert result.status == "failure"
     assert result.error is not None

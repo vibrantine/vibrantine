@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine.dispatch import dispatch
 from vibrantine.examples.morning_briefing import (
     MorningBriefingCommission,
     MorningBriefingInput,
@@ -230,7 +231,7 @@ async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) 
 async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) -> None:
     briefing, fakes = _briefing()
 
-    result = await briefing.invoke(
+    result = await dispatch(briefing, 
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -245,7 +246,7 @@ async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:
     briefing, _ = _briefing()
     events: list[ProgressEvent] = []
 
-    result = await briefing.invoke(
+    result = await dispatch(briefing, 
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         CallContext(budget_usd=0.50, on_progress=events.append),
     )

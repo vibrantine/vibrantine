@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from vibrantine.contract import CallContext
+from vibrantine.dispatch import dispatch
 from vibrantine.tools.edit import EditInput, EditTool
 
 
@@ -21,7 +22,7 @@ def _make_file(tmp_path: Path, name: str, content: str) -> Path:
 async def test_edit_single_replacement_succeeds(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "hello world")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="world", new_string="earth"),
         CallContext(),
     )
@@ -38,7 +39,7 @@ async def test_edit_single_replacement_succeeds(tmp_path: Path) -> None:
 async def test_edit_replace_all_replaces_every_occurrence(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "foo bar foo baz foo")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="foo", new_string="XX", replace_all=True),
         CallContext(),
     )
@@ -52,7 +53,7 @@ async def test_edit_replace_all_replaces_every_occurrence(tmp_path: Path) -> Non
 async def test_edit_multiple_matches_without_replace_all_fails(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "foo bar foo baz")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="foo", new_string="X"),
         CallContext(),
     )
@@ -68,7 +69,7 @@ async def test_edit_multiple_matches_without_replace_all_fails(tmp_path: Path) -
 async def test_edit_no_matches_returns_validation(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "hello world")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="missing", new_string="x"),
         CallContext(),
     )
@@ -83,7 +84,7 @@ async def test_edit_no_matches_returns_validation(tmp_path: Path) -> None:
 async def test_edit_empty_old_string_returns_validation(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "anything")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="", new_string="x"),
         CallContext(),
     )
@@ -98,7 +99,7 @@ async def test_edit_same_old_and_new_succeeds_unchanged(tmp_path: Path) -> None:
     # Idempotent edit: same string in and out. Should still report success.
     path = _make_file(tmp_path, "doc.txt", "stable")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="stable", new_string="stable"),
         CallContext(),
     )
@@ -114,7 +115,7 @@ async def test_edit_preserves_exact_bytes_around_match(tmp_path: Path) -> None:
     original = "line1\n  spaced  \nline3\n"
     path = _make_file(tmp_path, "doc.txt", original)
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="spaced", new_string="changed"),
         CallContext(),
     )
@@ -125,7 +126,7 @@ async def test_edit_preserves_exact_bytes_around_match(tmp_path: Path) -> None:
 
 
 async def test_edit_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=Path("relative.txt"), old_string="x", new_string="y"),
         CallContext(),
     )
@@ -138,7 +139,7 @@ async def test_edit_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_edit_nonexistent_file_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-file.txt"
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=missing, old_string="x", new_string="y"),
         CallContext(),
     )
@@ -150,7 +151,7 @@ async def test_edit_nonexistent_file_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_edit_directory_returns_validation(tmp_path: Path) -> None:
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=tmp_path, old_string="x", new_string="y"),
         CallContext(),
     )
@@ -165,7 +166,7 @@ async def test_edit_binary_file_returns_internal_for_encoding(tmp_path: Path) ->
     binary = tmp_path / "binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01\xff")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=binary, old_string="anything", new_string="x"),
         CallContext(),
     )
@@ -179,7 +180,7 @@ async def test_edit_binary_file_returns_internal_for_encoding(tmp_path: Path) ->
 async def test_edit_cancelled_before_edit_returns_cancelled(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "doc.txt", "hello world")
 
-    result = await EditTool().invoke(
+    result = await dispatch(EditTool(), 
         EditInput(path=path, old_string="world", new_string="earth"),
         CallContext(cancel=_AlwaysCancelled()),
     )

@@ -13,6 +13,7 @@ from typing import cast
 from openai import AsyncOpenAI
 
 from vibrantine.contract import CallContext, ProgressEvent, Provenance
+from vibrantine.dispatch import dispatch
 from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
@@ -62,7 +63,7 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
         [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(),
     )
@@ -90,7 +91,7 @@ async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> Non
         [llm_response(content="free"), llm_response(content=structured)]
     )
 
-    result = await commission.invoke(SynthesizeInput(sources=sources), CallContext())
+    result = await dispatch(commission, SynthesizeInput(sources=sources), CallContext())
 
     assert result.status == "success"
     assert result.output is not None
@@ -110,7 +111,7 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
         ]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(),
     )
@@ -124,7 +125,7 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
 async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:
     commission, fake = _commission([llm_response(content="unused"), llm_response(content="unused")])
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0)]),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -142,7 +143,7 @@ async def test_synthesize_emits_progress_events_for_each_phase() -> None:
         [llm_response(content="free"), llm_response(content=_VALID_STRUCTURED)]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(on_progress=events.append),
     )
@@ -158,7 +159,7 @@ async def test_synthesize_budget_too_small_blocks_before_any_llm_call() -> None:
     # Pre-flight: estimated input cost from the prompt alone exceeds $0.0000001.
     commission, fake = _commission([llm_response(content="unused"), llm_response(content="unused")])
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(budget_usd=1e-7),
     )
@@ -181,7 +182,7 @@ async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> No
         ]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(budget_usd=0.0005),
     )
@@ -203,7 +204,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
     )
     bulky_source = _src(0, content="lorem ipsum dolor sit amet " * 50)
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[bulky_source]),
         CallContext(),
     )
@@ -219,7 +220,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
 async def test_synthesize_empty_sources_fails_validation_before_llm() -> None:
     commission, fake = _commission([])
 
-    result = await commission.invoke(SynthesizeInput(sources=[]), CallContext())
+    result = await dispatch(commission, SynthesizeInput(sources=[]), CallContext())
 
     assert result.status == "failure"
     assert result.error is not None
@@ -241,7 +242,7 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
         [llm_response(content="free"), llm_response(content=structured)]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(),
     )
@@ -266,7 +267,7 @@ async def test_synthesize_budget_with_unpriced_model_refuses_before_any_call() -
         model="unregistered/model",
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(budget_usd=1.0),
     )
@@ -286,7 +287,7 @@ async def test_synthesize_unpriced_model_without_budget_still_runs() -> None:
         model="unregistered/model",
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(),
     )
@@ -305,7 +306,7 @@ async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
         ]
     )
 
-    result = await commission.invoke(
+    result = await dispatch(commission, 
         SynthesizeInput(sources=[_src(0), _src(1)]),
         CallContext(),
     )
