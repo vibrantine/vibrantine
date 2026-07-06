@@ -47,3 +47,6 @@ Thumbs.db
 
 # Private scratchpad: working notes, retired docs, external research; never ships
 notes/
+
+# Demo output: the morning_briefing example writes its briefing to cwd
+morning-briefing-demo.md
