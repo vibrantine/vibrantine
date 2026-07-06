@@ -7,6 +7,7 @@ cancellation lands before any network work.
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -19,6 +20,7 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
+from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 
 
@@ -74,6 +76,56 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
     assert result.output.summary_text == "Both sources confirm X."
     assert len(result.output.claims) >= 1
     assert result.output.claims[0].value == "X is true"
+
+
+async def test_synthesize_record_carries_both_pass_transcripts(tmp_path: Path) -> None:
+    backend = FilesystemBackend(tmp_path)
+    commission, _fake = _commission(
+        [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
+    )
+
+    result = await dispatch(
+        commission,
+        SynthesizeInput(sources=[_src(0), _src(1)]),
+        CallContext(backend=backend, record="always"),
+    )
+
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None and record.llm_trace is not None
+    # Two passes, each system + user + assistant, concatenated in run order.
+    assert [m["role"] for m in record.llm_trace] == [
+        "system",
+        "user",
+        "assistant",
+        "system",
+        "user",
+        "assistant",
+    ]
+    assert record.llm_trace[2]["content"] == "Both sources agree X."
+    assert record.llm_trace[5]["content"] == _VALID_STRUCTURED
+
+
+async def test_synthesize_failed_run_still_carries_transcripts(tmp_path: Path) -> None:
+    # A structured pass that emits junk fails the run; the record still holds
+    # both conversations, which is the autopsy the trace exists for.
+    backend = FilesystemBackend(tmp_path)
+    commission, _fake = _commission(
+        [llm_response(content="free"), llm_response(content="not json")]
+    )
+
+    result = await dispatch(
+        commission,
+        SynthesizeInput(sources=[_src(0)]),
+        CallContext(backend=backend, record="always"),
+    )
+
+    assert result.status == "failure"
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None and record.llm_trace is not None
+    assert len(record.llm_trace) == 6
+    assert record.llm_trace[5]["content"] == "not json"
 
 
 async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> None:

@@ -12,7 +12,7 @@ scripted client through the constructor's `client` parameter.
 
 import json
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
@@ -28,6 +28,7 @@ from vibrantine.contract import (
     Provenance,
     estimate_tokens,
 )
+from vibrantine.dispatch import deposit_llm_trace
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are a research analyst. Read the provided sources and write a concise, "
@@ -272,6 +273,27 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
+        # Each pass deposits its transcript (outgoing messages plus the
+        # assistant reply, when one arrived) on every exit path; the trace
+        # mailbox concatenates the two passes in run order, so the record
+        # carries the whole conversation even for failed runs.
+        reply: list[dict[str, Any]] = []
+        try:
+            return await self._call_inner(
+                messages, provenance, cost_so_far, reply, json_mode=json_mode
+            )
+        finally:
+            deposit_llm_trace([*cast("list[dict[str, Any]]", messages), *reply])
+
+    async def _call_inner(
+        self,
+        messages: list[ChatCompletionMessageParam],
+        provenance: Provenance,
+        cost_so_far: CostMetrics,
+        reply: list[dict[str, Any]],
+        *,
+        json_mode: bool,
+    ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
         try:
             if json_mode:
                 response: ChatCompletion = await self._resolved_client.chat.completions.create(
@@ -332,6 +354,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 ),
             )
         content = response.choices[0].message.content or ""
+        reply.append({"role": "assistant", "content": content})
         return content, in_tokens, out_tokens, None
 
 
