@@ -267,7 +267,7 @@ Releases are git tags (`vX.Y.Z`; see `CHANGELOG.md`). Pin a tag rather than
 `main`, so your dependency stays fixed while `main` moves:
 
 ```bash
-uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.1.0"
+uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.2.0"
 ```
 
 Or from a local checkout:
@@ -283,11 +283,11 @@ the environment before running them. Deterministic tools do not need a key.
 
 ## Current Status
 
-Vibrantine is early-stage software. The current release is v0.1.0, tagged in
+Vibrantine is early-stage software. The current release is v0.2.0, tagged in
 this repository and recorded in `CHANGELOG.md`; the project is not yet on
 PyPI.
 
-Available in v0.1.0:
+Available in v0.2.0:
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
@@ -295,8 +295,10 @@ Available in v0.1.0:
 - `run_one`, `invoke_sync`, and `dispatch` entry points.
 - LLM-loop support with a synthetic `conclude` tool.
 - Deterministic tools for file, shell, fetch, search, and filesystem work.
-- Cost and provenance on results, with child cost rollup.
-- Optional persistence with full LLM transcripts in the records.
+- Cost and provenance on results, with child cost rollup and raw token
+  counts.
+- Optional persistence with full LLM transcripts in the records; two shipped
+  backends (JSON files, SQLite).
 - Observability in three tiers: stdlib logging to watch, progress events to
   react, persisted records to query.
 - A public testing seam: `client=` injection plus `vibrantine.testing`.
