@@ -383,7 +383,7 @@ Checklist:
   accepting provisional status.
 - [ ] Do not import underscore-prefixed modules or helpers.
 - [ ] Do not depend on `dispatch` internals.
-- [ ] Test with an injected fake client.
+- [ ] Test with an injected `ScriptedLLM` from `vibrantine.testing`.
 - [ ] Run tests without any API key.
 - [ ] Add one optional integration test that skips without credentials.
 

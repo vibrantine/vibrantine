@@ -19,13 +19,12 @@ from vibrantine.examples.morning_briefing import (
 from vibrantine.examples.morning_briefing.tests.fakes import (
     SYNTH_COST,
     TURN_COST,
-    AlwaysCancelled,
-    FakeClient,
     make_digest,
     make_summarize,
     make_weather,
 )
 from vibrantine.orchestrator import run_one
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM
 
 WORLD_PAGES = {
     "https://news.test/world/a": (200, "world story a"),
@@ -51,7 +50,7 @@ def _briefing(
     world_pages: dict[str, tuple[int, str]] | None = None,
     tech_pages: dict[str, tuple[int, str]] | None = None,
     world_claims: list[dict[str, Any]] | None = None,
-) -> tuple[MorningBriefingCommission, dict[str, FakeClient]]:
+) -> tuple[MorningBriefingCommission, dict[str, ScriptedLLM]]:
     weather, weather_fake = make_weather(fails=weather_fails)
     world, world_fake = make_digest(
         field="international",
@@ -192,7 +191,7 @@ async def test_all_sections_failing_fails_without_writing(tmp_path: Path) -> Non
     assert result.error.kind == "internal"
     assert "All 3 sections failed" in result.error.detail
     assert not out_path.exists()
-    assert len(fakes["summarize"].completions.calls) == 0
+    assert len(fakes["summarize"].calls) == 0
 
 
 async def test_executive_summary_failure_degrades_instead_of_killing(
@@ -239,7 +238,7 @@ async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) ->
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
-    assert all(len(fake.completions.calls) == 0 for fake in fakes.values())
+    assert all(len(fake.calls) == 0 for fake in fakes.values())
 
 
 async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:

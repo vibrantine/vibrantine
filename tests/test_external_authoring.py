@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import ClassVar, cast
 
 import pytest
-from conftest import FakeClient, llm_response
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
@@ -22,6 +21,7 @@ from vibrantine import (
     Provenance,
     invoke_sync,
 )
+from vibrantine.testing import ScriptedLLM, llm_response
 from vibrantine.tools import (
     DeleteInput,
     EditInput,
@@ -105,15 +105,15 @@ class _BasicCommission(Commission[_AnswerInput, _AnswerOutput]):
 
 def test_injected_client_runs_the_loop_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    fake = FakeClient([llm_response(tool_calls=[("c1", "conclude", {"answer": "42"})])])
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "42"})])])
     commission = _BasicCommission(client=cast(AsyncOpenAI, fake), model=_MODEL)
 
     res = invoke_sync(commission, _AnswerInput(prompt="what is the answer?"), budget_usd=0.10)
 
     assert res.status == "success"
     assert res.output is not None and res.output.answer == "42"
-    # A duck-typed SimpleNamespace client satisfies the seam: no real AsyncOpenAI.
-    assert isinstance(fake, FakeClient)
+    # The supported double satisfies the seam: no real AsyncOpenAI involved.
+    assert isinstance(fake, ScriptedLLM)
 
 
 # --- §3.3: the override rule is "at least one", not "exactly one" ---

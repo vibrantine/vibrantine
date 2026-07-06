@@ -363,78 +363,55 @@ does and does not protect.
 
 ## Step 6: Contract Tests
 
-Prove the boundary without spending a cent. The trick: inject a fake client
-whose "model" is a script you wrote. The model's intelligence is not under
-test; your Commission's behavior around the responses is.
+Prove the boundary without spending a cent. The trick: inject a client whose
+"model" is a script you wrote, via the same `client=` parameter every
+Commission constructor takes. The model's intelligence is not under test;
+your Commission's behavior around the responses is.
+
+The doubles for this are supported library surface, in `vibrantine.testing`:
+
+- `ScriptedLLM(responses)`: the injectable client. Pops one response per LLM
+  call, in order, and records every request it received in `calls` so you
+  can assert on exactly what your Commission sent. Running past the end of
+  the script fails the test loudly.
+- `llm_response(...)`: builds one scripted reply, either tool calls or plain
+  text, with token counts so cost and budget math run for real.
+- `AlwaysCancelled`: a cancel token that is already cancelled, for proving
+  your Commission checks before doing the work.
 
 ```python
 # src/doctag/tests/test_commission.py
-"""Contract tests: fake LLM client, no API key, no network."""
+"""Contract tests: scripted LLM, no API key, no network."""
 
-import json
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 from openai import AsyncOpenAI
 
 from vibrantine import invoke_sync
+from vibrantine.testing import ScriptedLLM, llm_response
 
 from doctag.commission import DocTagCommission
 from doctag.types import DocTagInput
-
-
-def llm_response(tool_calls: list[tuple[str, str, dict[str, Any]]]) -> SimpleNamespace:
-    """One scripted chat-completions response."""
-    return SimpleNamespace(
-        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(
-                    content=None,
-                    tool_calls=[
-                        SimpleNamespace(
-                            id=tc_id,
-                            type="function",
-                            function=SimpleNamespace(name=name, arguments=json.dumps(args)),
-                        )
-                        for tc_id, name, args in tool_calls
-                    ],
-                )
-            )
-        ],
-    )
-
-
-class FakeClient:
-    def __init__(self, responses: list[SimpleNamespace]) -> None:
-        self.completions = SimpleNamespace(
-            _responses=list(responses),
-            calls=[],
-        )
-        self.completions.create = self._create
-        self.chat = SimpleNamespace(completions=self.completions)
-
-    async def _create(self, **kwargs: Any) -> SimpleNamespace:
-        self.completions.calls.append(kwargs)
-        return self.completions._responses.pop(0)
 
 
 def test_concludes_with_typed_output(tmp_path: Path) -> None:
     # Script: the "model" reads the file, then concludes with a valid output.
     doc = tmp_path / "note.txt"
     doc.write_text("Meeting notes about the quarterly budget.", encoding="utf-8")
-    fake = FakeClient(
+    scripted = ScriptedLLM(
         [
-            llm_response([("t1", "read", {"path": str(doc)})]),
+            llm_response(tool_calls=[("t1", "read", {"path": str(doc)})]),
             llm_response(
-                [("t2", "conclude", {"summary": "Budget meeting notes.", "tags": ["budget"]})]
+                tool_calls=[
+                    ("t2", "conclude", {"summary": "Budget meeting notes.", "tags": ["budget"]})
+                ]
             ),
         ]
     )
 
     result = invoke_sync(
-        DocTagCommission(client=cast(AsyncOpenAI, fake)),
+        DocTagCommission(client=cast(AsyncOpenAI, scripted)),
         DocTagInput(file_path=doc),
     )
 
@@ -448,7 +425,7 @@ def test_concludes_with_typed_output(tmp_path: Path) -> None:
 uv run pytest
 ```
 
-Notice what happened in that script: the fake replaced only the *LLM*. The
+Notice what happened in that script: the double replaced only the *LLM*. The
 `read` tool call went through the real `ReadTool` against a real temp file.
 You scripted the model's decisions and everything else was live machinery.
 
@@ -979,7 +956,7 @@ Constructor kwargs (all keyword-only):
 | kwarg | Default | Purpose |
 |---|---|---|
 | `model` | `None`, resolving to `DEFAULT_MODEL` | Which LLM the default loop uses |
-| `client` | `None`, lazy OpenRouter client | Inject a test or alternative `AsyncOpenAI` |
+| `client` | `None`, lazy OpenRouter client | Inject an alternative `AsyncOpenAI`, or `vibrantine.testing.ScriptedLLM` in tests |
 | `max_iterations` | `10` | LLM-loop cap |
 | `toolbox` | class default | Dependency-injection override |
 | `max_input_tokens` | model context window, else `None` | Input size gate |
@@ -1144,8 +1121,8 @@ Before you ship a Commission, confirm:
   scope.
 - [ ] **Launch via `run_one` / `invoke_sync`**, never by calling `invoke`
   directly.
-- [ ] **Tested and evaluated**: contract tests with a fake client, a BRIEF
-  with an efficacy bar, and eval cases per
+- [ ] **Tested and evaluated**: contract tests with a `ScriptedLLM` from
+  `vibrantine.testing`, a BRIEF with an efficacy bar, and eval cases per
   [`commission-testing.md`](commission-testing.md).
 
 If all of these hold, the Commission is well-formed and composes with any

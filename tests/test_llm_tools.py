@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
-from conftest import FakeClient, llm_response
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
@@ -27,6 +26,7 @@ from vibrantine.contract import (
     TextPart,
 )
 from vibrantine.llm_tools import run_llm_loop
+from vibrantine.testing import ScriptedLLM, llm_response
 
 
 class _Out(BaseModel):
@@ -35,7 +35,7 @@ class _Out(BaseModel):
 
 async def _run(user_message: str | list[Any]) -> dict[str, Any]:
     """Run one loop with the given opening message; return the user message sent."""
-    fake = FakeClient(
+    fake = ScriptedLLM(
         [llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})], in_tokens=10, out_tokens=5)]
     )
     await run_llm_loop(
@@ -49,7 +49,7 @@ async def _run(user_message: str | list[Any]) -> dict[str, Any]:
         max_iterations=3,
         prices_per_million=(0.0, 0.0),
     )
-    messages = fake.completions.calls[0]["messages"]
+    messages = fake.calls[0]["messages"]
     return next(m for m in messages if m["role"] == "user")
 
 
@@ -125,7 +125,7 @@ async def test_partial_child_result_renders_output_and_error() -> None:
     # A partial child's output must reach the calling LLM; partial is the
     # policy that *preserves* usable output, so rendering only the error
     # would waste the child's spend.
-    fake = FakeClient(
+    fake = ScriptedLLM(
         [
             llm_response(tool_calls=[("t1", "partial_probe", {"query": "q"})]),
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
@@ -143,7 +143,7 @@ async def test_partial_child_result_renders_output_and_error() -> None:
         prices_per_million=(0.0, 0.0),
     )
     assert outcome.output is not None
-    second_call_messages = fake.completions.calls[1]["messages"]
+    second_call_messages = fake.calls[1]["messages"]
     tool_msg = next(m for m in second_call_messages if m["role"] == "tool")
     rendered = json.loads(tool_msg["content"])
     assert rendered["partial_output"] == {"text": "the usable half"}
@@ -154,7 +154,7 @@ async def test_partial_child_result_renders_output_and_error() -> None:
 
 
 async def test_free_text_reply_gets_one_corrective_nudge() -> None:
-    fake = FakeClient(
+    fake = ScriptedLLM(
         [
             llm_response(content="I think the answer is x."),
             llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})]),
@@ -176,7 +176,7 @@ async def test_free_text_reply_gets_one_corrective_nudge() -> None:
     # The corrective user message was appended after the free-text reply.
     # (The fake records a live reference to the loop's message list, so
     # assert on presence, not position.)
-    second_call_messages = fake.completions.calls[1]["messages"]
+    second_call_messages = fake.calls[1]["messages"]
     nudges = [
         m
         for m in second_call_messages
@@ -186,7 +186,7 @@ async def test_free_text_reply_gets_one_corrective_nudge() -> None:
 
 
 async def test_second_free_text_reply_fails_the_loop() -> None:
-    fake = FakeClient(
+    fake = ScriptedLLM(
         [
             llm_response(content="prose"),
             llm_response(content="more prose"),
@@ -210,7 +210,7 @@ async def test_second_free_text_reply_fails_the_loop() -> None:
 
 
 async def test_empty_provider_choices_fail_as_loop_error() -> None:
-    fake = FakeClient(
+    fake = ScriptedLLM(
         [
             SimpleNamespace(
                 usage=SimpleNamespace(prompt_tokens=12, completion_tokens=3),

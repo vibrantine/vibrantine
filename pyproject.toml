@@ -55,6 +55,5 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.basedpyright]
 include = ["src", "tests"]
-extraPaths = ["tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"

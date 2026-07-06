@@ -9,10 +9,10 @@ from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
 )
 from vibrantine.examples.morning_briefing.tests.fakes import (
     SYNTH_COST,
-    AlwaysCancelled,
     make_digest,
 )
 from vibrantine.orchestrator import run_one
+from vibrantine.testing import AlwaysCancelled
 
 DATE = "Monday 06 July 2026"
 
@@ -79,7 +79,7 @@ async def test_all_sources_failing_fails_before_any_llm_call() -> None:
     assert result.error is not None
     assert result.error.kind == "internal"
     assert "tech" in result.error.detail
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
 
 
 async def test_synthesize_failure_propagates_its_error_kind() -> None:
@@ -108,4 +108,4 @@ async def test_cancellation_before_fetches_returns_cancelled() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
-    assert len(fake.completions.calls) == 0
+    assert len(fake.calls) == 0
