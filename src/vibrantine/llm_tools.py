@@ -154,6 +154,12 @@ async def run_llm_loop[OutputT: BaseModel](
     # that forfeiting the entire spend on the first slip is a bad trade. The
     # second slip fails as before.
     nudged_for_missing_tool_call = False
+    # Failed conclude attempts change what the iteration-cap error must say:
+    # "never called conclude" points at prompting, "called it N times but the
+    # args never validated" points at the output type's shape. Conflating the
+    # two sent a live debugging session in the wrong direction.
+    conclude_failures = 0
+    last_conclude_error = ""
 
     for _ in range(max_iterations):
         if ctx.cancel.is_cancelled:
@@ -282,6 +288,8 @@ async def run_llm_loop[OutputT: BaseModel](
                 try:
                     output = output_type.model_validate_json(raw_args)
                 except (json.JSONDecodeError, ValidationError) as exc:
+                    conclude_failures += 1
+                    last_conclude_error = str(exc)
                     messages.append(
                         {
                             "role": "tool",
@@ -346,9 +354,18 @@ async def run_llm_loop[OutputT: BaseModel](
                 }
             )
 
+    if conclude_failures:
+        detail = (
+            f"Exceeded iteration cap of {max_iterations}: conclude was called "
+            f"{conclude_failures} time(s) but its arguments never validated as "
+            f"{output_type.__name__}. Last validation error: "
+            f"{last_conclude_error[:400]}"
+        )
+    else:
+        detail = f"Exceeded iteration cap of {max_iterations} without calling conclude."
     return _loop_error(
         "internal",
-        f"Exceeded iteration cap of {max_iterations} without calling conclude.",
+        detail,
         retryable=True,
         in_tokens=in_tokens,
         out_tokens=out_tokens,
