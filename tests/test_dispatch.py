@@ -8,6 +8,7 @@ enforcement.
 """
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar, cast
@@ -421,6 +422,44 @@ async def test_dispatch_does_not_swallow_cancellation() -> None:
     # propagate, never be converted to an `internal` failure value.
     with pytest.raises(asyncio.CancelledError):
         await dispatch(_Raiser(asyncio.CancelledError()), _Input(q="?"), CallContext())
+
+
+# --- stdlib logging tests ---------------------------------------------------
+
+
+async def test_run_emits_stdlib_logs(caplog: pytest.LogCaptureFixture) -> None:
+    # The framework emits through standard logging at its choke points; an
+    # application that sets a level sees every call and every LLM turn with
+    # zero vibrantine-specific setup. INFO = one line per LLM round-trip
+    # (from the loop) plus one line per completed call (from dispatch).
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"a": "done"})])])
+    probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
+
+    with caplog.at_level(logging.INFO, logger="vibrantine"):
+        await dispatch(probe, _Input(q="hi"), CallContext())
+
+    assert "LLM turn model=" in caplog.text
+    assert "loop_probe finished status=success" in caplog.text
+
+
+async def test_conclude_validation_failure_logs_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The live-debugging lesson: a conclude that keeps failing validation must
+    # be visible without persistence set up.
+    fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("c1", "conclude", {"wrong_field": 1})]),
+            llm_response(tool_calls=[("c2", "conclude", {"a": "ok"})]),
+        ]
+    )
+    probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        result = await dispatch(probe, _Input(q="hi"), CallContext())
+
+    assert result.status == "success"
+    assert "conclude args failed to validate as _Output" in caplog.text
 
 
 # --- llm_trace mailbox tests ------------------------------------------------

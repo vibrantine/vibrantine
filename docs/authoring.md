@@ -645,6 +645,30 @@ threads it back in through a typed input field (for example
 run *records* for observability; assembling records into resumable state is
 the caller's job, not the Commission's.
 
+## Seeing a run
+
+The framework emits through Python's standard `logging` module at its own
+choke points, so watching a run costs one line of ordinary Python and no
+vibrantine-specific setup:
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)
+```
+
+At INFO you get one line per LLM round-trip (model and token counts) and one
+line per completed call (name, status, cost, run_id), at any nesting depth.
+WARNING surfaces the things worth a human's attention (a Commission that
+raised, a conclude that failed validation, a persistence backend that
+errored); DEBUG adds call starts and the loop's self-corrections. The library
+never installs handlers or writes files on its own.
+
+Beyond watching: `on_progress` on the `CallContext` streams typed
+`ProgressEvent`s to a callback for building live UIs, and the persistence
+layer stores full structured records (input, result, cost, the LLM
+transcript) for programmatic autopsy. Three tiers, all optional: log lines
+to watch, events to react, records to query.
+
 ## Worked build: a corpus-research coordinator
 
 The system: a custom **coordinator** that, for each round, dispatches a
