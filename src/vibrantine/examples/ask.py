@@ -34,7 +34,11 @@ class AskInput(BaseModel):
     """Inputs for one ask call."""
 
     question: str = Field(description="The question to answer about the file.")
-    file_path: Path = Field(description="Absolute path to the file to consult.")
+    file_path: Path = Field(
+        description=(
+            "Path to the file to consult; a relative path resolves against the working directory."
+        ),
+    )
 
 
 class AskOutput(BaseModel):
@@ -65,4 +69,6 @@ class AskCommission(Commission[AskInput, AskOutput]):
     toolbox = (ReadTool(),)
 
     def build_user_message(self, input: AskInput, ctx: CallContext) -> str:
-        return f"File path: {input.file_path}\nQuestion: {input.question}"
+        # Resolved here because the LLM can't: `read` requires an absolute
+        # path, and a relative one would leave the loop guessing at roots.
+        return f"File path: {input.file_path.resolve()}\nQuestion: {input.question}"
