@@ -47,7 +47,8 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "A content cat."})])]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         SummarizeInput(content=_SOURCE, length="one_sentence"),
         CallContext(),
     )
@@ -125,7 +126,8 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         SummarizeInput(content=_SOURCE),
         CallContext(budget_usd=0.001),
     )
@@ -140,7 +142,8 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
 async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         SummarizeInput(content=_SOURCE),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -176,7 +179,8 @@ async def test_summarize_emits_loop_start_progress_event() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await dispatch(commission, 
+    await dispatch(
+        commission,
         SummarizeInput(content=_SOURCE),
         CallContext(on_progress=events.append),
     )

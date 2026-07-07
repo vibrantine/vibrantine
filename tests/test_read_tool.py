@@ -65,7 +65,8 @@ async def test_read_slicing_returns_correct_window(tmp_path: Path) -> None:
     content = "".join(f"line{i}\n" for i in range(10))
     path = _make_file(tmp_path, "ten.txt", content)
 
-    result = await dispatch(ReadTool(), 
+    result = await dispatch(
+        ReadTool(),
         ReadInput(path=path, offset=3, limit=4),
         CallContext(),
     )
@@ -82,7 +83,8 @@ async def test_read_truncated_false_when_slice_reaches_end(tmp_path: Path) -> No
     content = "".join(f"line{i}\n" for i in range(5))
     path = _make_file(tmp_path, "five.txt", content)
 
-    result = await dispatch(ReadTool(), 
+    result = await dispatch(
+        ReadTool(),
         ReadInput(path=path, offset=3, limit=10),
         CallContext(),
     )
@@ -96,7 +98,8 @@ async def test_read_truncated_false_when_slice_reaches_end(tmp_path: Path) -> No
 async def test_read_offset_past_end_returns_empty_slice(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "small.txt", "one\ntwo\n")
 
-    result = await dispatch(ReadTool(), 
+    result = await dispatch(
+        ReadTool(),
         ReadInput(path=path, offset=100, limit=10),
         CallContext(),
     )
@@ -126,7 +129,8 @@ async def test_read_oversized_line_is_truncated_with_marker(tmp_path: Path) -> N
 
 
 async def test_read_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(ReadTool(), 
+    result = await dispatch(
+        ReadTool(),
         ReadInput(path=Path("relative/path.txt")),
         CallContext(),
     )
@@ -172,7 +176,8 @@ async def test_read_binary_file_returns_internal_for_encoding(tmp_path: Path) ->
 async def test_read_cancelled_before_read_returns_cancelled(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "any.txt", "ignored\n")
 
-    result = await dispatch(ReadTool(), 
+    result = await dispatch(
+        ReadTool(),
         ReadInput(path=path),
         CallContext(cancel=_AlwaysCancelled()),
     )

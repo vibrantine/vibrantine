@@ -61,7 +61,8 @@ async def test_list_dir_bounds_entries_and_signals_truncation(tmp_path: Path) ->
     for name in ["a", "b", "c"]:
         (tmp_path / name).write_text("", encoding="utf-8")
 
-    result = await dispatch(ListDirTool(), 
+    result = await dispatch(
+        ListDirTool(),
         ListDirInput(path=tmp_path, max_entries=2),
         CallContext(),
     )
@@ -90,7 +91,8 @@ async def test_list_dir_classifies_symlink(tmp_path: Path) -> None:
 
 
 async def test_list_dir_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(ListDirTool(), 
+    result = await dispatch(
+        ListDirTool(),
         ListDirInput(path=Path("relative")),
         CallContext(),
     )
@@ -124,7 +126,8 @@ async def test_list_dir_file_path_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_list_dir_cancelled_returns_cancelled(tmp_path: Path) -> None:
-    result = await dispatch(ListDirTool(), 
+    result = await dispatch(
+        ListDirTool(),
         ListDirInput(path=tmp_path),
         CallContext(cancel=_AlwaysCancelled()),
     )

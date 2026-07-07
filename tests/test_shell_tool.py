@@ -23,7 +23,8 @@ _PYTHON = sys.executable
 
 
 async def test_shell_success_captures_stdout(tmp_path: Path) -> None:
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "print(\'hello\')"'),
         CallContext(),
     )
@@ -39,7 +40,8 @@ async def test_shell_success_captures_stdout(tmp_path: Path) -> None:
 
 async def test_shell_non_zero_exit_returned_as_success(tmp_path: Path) -> None:
     # A non-zero exit is data the caller interprets, not a tool-level failure.
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "import sys; sys.exit(7)"'),
         CallContext(),
     )
@@ -51,7 +53,8 @@ async def test_shell_non_zero_exit_returned_as_success(tmp_path: Path) -> None:
 
 async def test_shell_stderr_separated_from_stdout(tmp_path: Path) -> None:
     code = "import sys; print('out'); print('err', file=sys.stderr)"
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "{code}"'),
         CallContext(),
     )
@@ -66,7 +69,8 @@ async def test_shell_stderr_separated_from_stdout(tmp_path: Path) -> None:
 
 async def test_shell_timeout_kills_process_and_returns_timeout(tmp_path: Path) -> None:
     code = "import time; time.sleep(5)"
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(
             command=f'"{_PYTHON}" -c "{code}"',
             timeout_seconds=0.5,
@@ -81,7 +85,8 @@ async def test_shell_timeout_kills_process_and_returns_timeout(tmp_path: Path) -
 
 
 async def test_shell_cancelled_before_launch_returns_cancelled(tmp_path: Path) -> None:
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "print(\'should not run\')"'),
         CallContext(cancel=_AlwaysCancelled()),
     )
@@ -97,7 +102,8 @@ async def test_shell_cwd_honored(tmp_path: Path) -> None:
     (tmp_path / "marker.txt").write_text("here", encoding="utf-8")
     code = "import os; print(os.path.exists('marker.txt'))"
 
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "{code}"', cwd=tmp_path),
         CallContext(),
     )
@@ -108,7 +114,8 @@ async def test_shell_cwd_honored(tmp_path: Path) -> None:
 
 
 async def test_shell_relative_cwd_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command="echo hi", cwd=Path("relative")),
         CallContext(),
     )
@@ -121,7 +128,8 @@ async def test_shell_relative_cwd_returns_validation(tmp_path: Path) -> None:
 async def test_shell_nonexistent_cwd_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-dir"
 
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command="echo hi", cwd=missing),
         CallContext(),
     )
@@ -133,7 +141,8 @@ async def test_shell_nonexistent_cwd_returns_validation(tmp_path: Path) -> None:
 
 async def test_shell_caps_stdout_and_flags_truncation(tmp_path: Path) -> None:
     # Emit 500 chars on stdout; cap at 100 → head kept, truncated, total reported.
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(
             command=f"\"{_PYTHON}\" -c \"print('x' * 500, end='')\"",
             max_output_chars=100,
@@ -152,7 +161,8 @@ async def test_shell_caps_stdout_and_flags_truncation(tmp_path: Path) -> None:
 
 
 async def test_shell_small_output_not_truncated(tmp_path: Path) -> None:
-    result = await dispatch(ShellTool(), 
+    result = await dispatch(
+        ShellTool(),
         ShellInput(command=f"\"{_PYTHON}\" -c \"print('hi', end='')\""),
         CallContext(),
     )

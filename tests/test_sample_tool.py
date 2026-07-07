@@ -24,7 +24,8 @@ async def test_sample_small_file_returns_full_head_and_tail(tmp_path: Path) -> N
     path = _make(tmp_path, "small.txt", "one\ntwo\nthree\n")
     before = datetime.now(UTC)
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=path),
         CallContext(),
     )
@@ -46,7 +47,8 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
     content = "".join(f"line{i}\n" for i in range(100))
     path = _make(tmp_path, "many.txt", content)
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=path, head_lines=3, tail_lines=2),
         CallContext(),
     )
@@ -61,7 +63,8 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
 async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
     path = _make(tmp_path, "doc.txt", "a\nb\nc\nd\n")
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=path, head_lines=0, tail_lines=2),
         CallContext(),
     )
@@ -75,7 +78,8 @@ async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
 async def test_sample_empty_file(tmp_path: Path) -> None:
     path = _make(tmp_path, "empty.txt", "")
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=path),
         CallContext(),
     )
@@ -89,7 +93,8 @@ async def test_sample_empty_file(tmp_path: Path) -> None:
 
 
 async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=Path("relative.txt")),
         CallContext(),
     )
@@ -102,7 +107,8 @@ async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "missing.txt"
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=missing),
         CallContext(),
     )
@@ -114,7 +120,8 @@ async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_sample_directory_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=tmp_path),
         CallContext(),
     )
@@ -129,7 +136,8 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
     binary = tmp_path / "binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01")
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=binary),
         CallContext(),
     )
@@ -143,7 +151,8 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
 async def test_sample_cancelled_returns_cancelled(tmp_path: Path) -> None:
     path = _make(tmp_path, "any.txt", "x")
 
-    result = await dispatch(SampleTool(), 
+    result = await dispatch(
+        SampleTool(),
         SampleInput(path=path),
         CallContext(cancel=_AlwaysCancelled()),
     )
