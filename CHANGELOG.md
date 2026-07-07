@@ -8,6 +8,15 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Fixed
+
+- The default LLM loop now dispatches each child with the remaining budget
+  (the grant minus everything already spent on own turns and prior
+  children), never an unchanged copy of the caller's grant. Previously,
+  children delegated between the loop's budget checks each inherited the
+  full grant as their own ceiling, so a delegating tree could spend a
+  multiple of its budget before enforcement fired.
+
 ### Added
 
 - `create_commission`: a deterministic authoring factory. Builds a basic
