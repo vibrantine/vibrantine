@@ -240,7 +240,20 @@ async def run_llm_loop[OutputT: BaseModel](
                     out_tokens=out_tokens,
                     children_cost=children_cost,
                 )
+            except openai.APIStatusError as exc:
+                # A non-429 4xx is deterministic (bad request, context
+                # overflow): the same input fails the same way, so don't
+                # tell the caller a retry might succeed. 5xx may clear.
+                return _loop_error(
+                    "internal",
+                    f"LLM provider error: {exc}",
+                    retryable=exc.status_code >= 500,
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
             except openai.APIError as exc:
+                # Connection or timeout trouble; retrying may succeed.
                 return _loop_error(
                     "internal",
                     f"LLM provider error: {exc}",
@@ -259,6 +272,17 @@ async def run_llm_loop[OutputT: BaseModel](
                     model,
                     usage.prompt_tokens,
                     usage.completion_tokens,
+                )
+            else:
+                # Without usage data this turn's tokens go uncounted: budget
+                # enforcement and the reported cost silently understate the
+                # true spend. Loud, because budget_usd is a hard-ceiling
+                # promise.
+                logger.warning(
+                    "LLM response carried no usage data (model=%s); this "
+                    "turn's tokens are uncounted and budget enforcement "
+                    "understates real spend.",
+                    model,
                 )
 
             # Own token cost plus everything dispatched children spent, so a
@@ -309,7 +333,10 @@ async def run_llm_loop[OutputT: BaseModel](
                     )
                 nudged_for_missing_tool_call = True
                 logger.debug("LLM replied free-text with no tool call; nudging once")
-                messages.append({"role": "assistant", "content": msg.content})
+                # `or ""`: an empty reply has content=None, and an assistant
+                # message without tool_calls must carry string content or
+                # spec-compliant providers reject the whole transcript.
+                messages.append({"role": "assistant", "content": msg.content or ""})
                 messages.append(
                     {
                         "role": "user",
