@@ -16,9 +16,9 @@ This is the first Commission wired into an LLM-loop toolbox, so its
 `description` is LLM-facing and follows the tool prose pattern.
 """
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from vibrantine._prompts import load_prompt
 from vibrantine.contract import (
     DEFAULT_MAX_ITERATIONS,
     CallContext,
@@ -35,7 +35,10 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-_PACKAGE = "vibrantine.examples.recursive_research"
+# The prompt lives in prompts/system.md, read the way authoring.md's
+# Step 2 documents; a worked example must lean only on the public
+# contract and the standard library.
+_PROMPT = (Path(__file__).parent / "prompts" / "system.md").read_text(encoding="utf-8").strip()
 
 
 # Budget wind-down is prompt-driven: the loop's `[budget]` status line gives
@@ -63,7 +66,7 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     )
     input_type: ClassVar[type] = ResearchInput
     output_type: ClassVar[type] = ResearchOutput
-    system_prompt: ClassVar[str | None] = load_prompt(_PACKAGE)
+    system_prompt: ClassVar[str | None] = _PROMPT
 
     # Sub-answers are rendered whole into the parent loop's context, so an
     # oversized one is chopped at the boundary: `truncate_output` below keeps

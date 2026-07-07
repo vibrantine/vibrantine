@@ -143,7 +143,6 @@ src/
     models.py                         # Model objects (identity + endpoint + pricing); KNOWN_MODELS + DEFAULT_MODEL
     persistence.py                    # shipped backends: FilesystemBackend + SqliteBackend
     testing.py                        # supported test doubles for the client= seam
-    _prompts.py                       # package-resource prompt loading
     examples/                         # worked example Commissions (importable, provisional)
       ask.py summarize.py synthesize.py
       email_handler.py                # provisional validator (LLM-loop routing probe)
