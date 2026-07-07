@@ -96,18 +96,18 @@ class DemoAgentCommission(Commission[ChatInput, ChatOutput]):
 def demo_agent(model: str | Model | None = None) -> DemoAgentCommission:
     """Build the agent over demo-configured instances of the four examples."""
     from vibrantine.examples.demo.catalog import (
-        build_ask,
-        build_morning_briefing,
-        build_recursive_research,
-        build_synthesize,
+        make_ask,
+        make_morning_briefing,
+        make_recursive_research,
+        make_synthesize,
     )
 
     return DemoAgentCommission(
         model=model,
         toolbox=(
-            build_ask(model)[0],
-            build_synthesize(model)[0],
-            build_morning_briefing(model)[0],
-            build_recursive_research(model)[0],
+            make_ask(model),
+            make_synthesize(model),
+            make_morning_briefing(model),
+            make_recursive_research(model),
         ),
     )

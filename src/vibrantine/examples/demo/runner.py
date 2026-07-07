@@ -46,9 +46,6 @@ from vibrantine.examples.synthesize import SynthesizeOutput
 from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, ollama
 
 # Spending policy is the caller's, so it lives here, not on the examples.
-# Tiers are backstops sized well above a normal run (a cap that fires should
-# mean misbehavior, not an expected stop), small enough that a runaway run
-# costs cents.
 AGENT_BUDGET_USD = 0.20
 
 
@@ -97,6 +94,9 @@ def _present_research(output: ResearchOutput) -> str:
     return "\n".join(lines)
 
 
+# Per-entry budgets are backstops sized well above a normal run (a cap that
+# fires should mean misbehavior, not an expected stop), small enough that a
+# runaway run costs cents.
 MENU: tuple[MenuEntry, ...] = (
     MenuEntry(
         key="1",
@@ -188,7 +188,7 @@ def key_missing_message(model: Model) -> str | None:
     )
 
 
-def _clip(text: str) -> str:
+def _preview(text: str) -> str:
     return text[:97] + "..." if len(text) > 100 else text
 
 
@@ -206,9 +206,9 @@ def describe_input(demo_input: BaseModel) -> str:
             if not items:
                 lines.append(f"  {name}: []")
             for index, item in enumerate(items):
-                lines.append(f"  {name}[{index}]: {_clip(str(item))}")
+                lines.append(f"  {name}[{index}]: {_preview(str(item))}")
         else:
-            lines.append(f"  {name}: {_clip(str(field_value))}")
+            lines.append(f"  {name}: {_preview(str(field_value))}")
     return "\n".join(lines)
 
 
