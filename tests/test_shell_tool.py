@@ -10,7 +10,11 @@ from pathlib import Path
 
 from vibrantine.contract import CallContext
 from vibrantine.dispatch import dispatch
-from vibrantine.tools.shell import ShellInput, ShellTool
+from vibrantine.tools.shell import (
+    ShellInput,
+    ShellTool,
+    _decode,  # pyright: ignore[reportPrivateUsage]
+)
 
 
 class _AlwaysCancelled:
@@ -172,3 +176,38 @@ async def test_shell_small_output_not_truncated(tmp_path: Path) -> None:
     assert result.output.stdout == "hi"
     assert result.output.stdout_truncated is False
     assert result.output.stdout_total_chars == 2
+
+
+# --- output decoding: strict UTF-8 first, legacy codepage fallback ----------
+
+
+def test_decode_valid_utf8_is_exact() -> None:
+    assert _decode("café ✓".encode()) == "café ✓"
+
+
+def test_decode_falls_back_to_legacy_codepage() -> None:
+    # 0x82 is é in cp437 (a Windows OEM codepage) and invalid as UTF-8.
+    # The fallback is passed explicitly so the test is deterministic on
+    # every machine and platform.
+    assert _decode(b"caf\x82", fallback="cp437") == "café"
+
+
+def test_decode_replace_is_the_final_backstop() -> None:
+    # Bytes unreadable in both codebooks degrade to replacement characters
+    # rather than raising: the old behavior, now last resort.
+    assert _decode(b"caf\xff", fallback="ascii") == "caf�"
+
+
+async def test_shell_utf8_output_round_trips(tmp_path: Path) -> None:
+    # End to end: genuine UTF-8 bytes from a real subprocess survive intact
+    # on every platform (the strict-decode path, which is the modern norm).
+    code = "import sys; sys.stdout.buffer.write('café'.encode('utf-8'))"
+    result = await dispatch(
+        ShellTool(),
+        ShellInput(command=f'"{_PYTHON}" -c "{code}"'),
+        CallContext(),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.stdout == "café"

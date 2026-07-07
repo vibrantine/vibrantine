@@ -14,6 +14,12 @@ ErrorState(kind="timeout", retryable=True). The kill targets the shell
 process itself; on Windows especially, grandchildren the shell spawned
 may survive it (no process-tree kill).
 
+Output is decoded as strict UTF-8 first (the modern norm on every
+platform); bytes that refuse that reading fall back to the machine's
+legacy codepage (the OEM codepage on Windows, where console-era
+programs still write it), so accented filenames and localized messages
+reach the LLM as text instead of replacement characters.
+
 Host shell is whatever asyncio.create_subprocess_shell uses on the
 running platform (cmd.exe on Windows, /bin/sh on POSIX). The agent's
 prompt is responsible for knowing which shell semantics apply; this
@@ -21,9 +27,11 @@ tool does not paper over the difference.
 """
 
 import asyncio
+import locale
+import sys
 import time
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +39,30 @@ from vibrantine.contract import CallContext, Commission, CommissionResult
 from vibrantine.tools._helpers import ZERO_COST, failure, provenance
 
 DEFAULT_MAX_OUTPUT_CHARS: int = 30_000
+
+# The codebook for bytes that provably aren't UTF-8. Windows console-era
+# programs (cmd.exe built-ins among them) write the machine's OEM codepage,
+# for which Python ships the "oem" alias; on POSIX the locale encoding is
+# the only other plausible reading. Where the locale is itself UTF-8 (the
+# POSIX norm), the fallback degrades to today's replace behavior.
+_FALLBACK_ENCODING: Final[str] = (
+    "oem" if sys.platform == "win32" else locale.getpreferredencoding(False)
+)
+
+
+def _decode(data: bytes, fallback: str = _FALLBACK_ENCODING) -> str:
+    """Decode command output: strict UTF-8 first, legacy codepage second.
+
+    UTF-8 is self-validating, so a strict decode succeeding means the bytes
+    almost certainly were UTF-8. Bytes that refuse that reading are the
+    legacy tail; reading them with the machine's own codebook beats
+    rendering them as replacement characters inside a "success" result.
+    `errors="replace"` survives only as the final backstop.
+    """
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode(fallback, errors="replace")
 
 
 class ShellInput(BaseModel):
@@ -69,10 +101,16 @@ class ShellOutput(BaseModel):
 
     exit_code: int = Field(description="Process exit code (0 = success in most shells).")
     stdout: str = Field(
-        description="Captured standard output (decoded UTF-8), capped at max_output_chars.",
+        description=(
+            "Captured standard output (UTF-8, with a legacy-codepage fallback "
+            "for non-UTF-8 bytes), capped at max_output_chars."
+        ),
     )
     stderr: str = Field(
-        description="Captured standard error (decoded UTF-8), capped at max_output_chars.",
+        description=(
+            "Captured standard error (UTF-8, with a legacy-codepage fallback "
+            "for non-UTF-8 bytes), capped at max_output_chars."
+        ),
     )
     runtime_seconds: float = Field(description="Wall-clock runtime of the command.")
     stdout_truncated: bool = Field(
@@ -191,12 +229,8 @@ class ShellTool(Commission[ShellInput, ShellOutput]):
 
         runtime = time.monotonic() - start
 
-        stdout, stdout_truncated, stdout_total = _cap(
-            stdout_bytes.decode("utf-8", errors="replace"), input.max_output_chars
-        )
-        stderr, stderr_truncated, stderr_total = _cap(
-            stderr_bytes.decode("utf-8", errors="replace"), input.max_output_chars
-        )
+        stdout, stdout_truncated, stdout_total = _cap(_decode(stdout_bytes), input.max_output_chars)
+        stderr, stderr_truncated, stderr_total = _cap(_decode(stderr_bytes), input.max_output_chars)
 
         return CommissionResult[ShellOutput](
             status="success",
