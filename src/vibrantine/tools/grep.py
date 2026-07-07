@@ -25,7 +25,13 @@ from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import CallContext, Commission, CommissionResult, ErrorKind
-from vibrantine.tools._helpers import ZERO_COST, failure, provenance
+from vibrantine.tools._helpers import (
+    ZERO_COST,
+    ReadFailure,
+    failure,
+    provenance,
+    read_text_utf8,
+)
 
 
 class GrepMatch(BaseModel):
@@ -212,20 +218,13 @@ def _grep_file(
     aborts the rest of the walk.
     """
     try:
-        text = file.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        # During a walk this is a race: the file vanished between listing
-        # and reading. Skip it like any other unreadable entry.
+        text = read_text_utf8(file)
+    except ReadFailure as exc:
+        # During a walk every unreadable entry (vanished mid-walk, permission
+        # denied, binary content) is skipped so one bad file never aborts the
+        # rest; a direct path surfaces the classified failure.
         if surface_read_errors:
-            return [], ("validation", f"File not found: {file!s}.")
-        return [], None
-    except PermissionError:
-        if surface_read_errors:
-            return [], ("internal", f"Permission denied reading {file!s}.")
-        return [], None
-    except UnicodeDecodeError as exc:
-        if surface_read_errors:
-            return [], ("internal", f"Could not decode {file!s} as UTF-8: {exc}.")
+            return [], (exc.kind, exc.detail)
         return [], None
     matches = [
         GrepMatch(path=file, line_number=i + 1, line=line)

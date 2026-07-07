@@ -8,6 +8,7 @@ themselves.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final, cast
 
 from vibrantine.contract import (
@@ -19,6 +20,36 @@ from vibrantine.contract import (
 )
 
 ZERO_COST: Final[CostMetrics] = CostMetrics(estimated_usd=0.0)
+
+
+class ReadFailure(Exception):
+    """A classified UTF-8 read failure, carrying the standard (kind, detail).
+
+    Raised by `read_text_utf8` and caught at each tool's own boundary, where
+    it becomes a failure value; it never crosses invoke.
+    """
+
+    def __init__(self, kind: ErrorKind, detail: str) -> None:
+        super().__init__(detail)
+        self.kind: ErrorKind = kind
+        self.detail = detail
+
+
+def read_text_utf8(path: Path) -> str:
+    """Read a file as UTF-8, raising `ReadFailure` with the standard classification.
+
+    One shared classification (a missing file is the caller's mistake, so
+    `validation`; permission and decode trouble is environment, so `internal`)
+    so the file-reading tools can't silently diverge on equivalent failures.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ReadFailure("validation", f"File not found: {path!s}.") from None
+    except PermissionError as exc:
+        raise ReadFailure("internal", f"Permission denied reading {path!s}: {exc}.") from exc
+    except UnicodeDecodeError as exc:
+        raise ReadFailure("internal", f"Could not decode {path!s} as UTF-8: {exc}.") from exc
 
 
 def provenance(source: str) -> Provenance:
