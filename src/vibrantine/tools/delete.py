@@ -10,6 +10,7 @@ file. A separate RemoveDirectory tool would handle that case if it
 ever earns its slot.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -75,7 +76,11 @@ class DeleteTool(Commission[DeleteInput, DeleteOutput]):
                 provenance=prov,
             )
 
-        if not input.path.exists():
+        # lexists, not exists: a broken symlink is still an entry the
+        # caller can see (list_dir reports it) and unlink can remove;
+        # exists() follows the link and would falsely report "does not
+        # exist".
+        if not os.path.lexists(input.path):
             return failure(
                 "validation",
                 f"Path does not exist: {input.path!s}.",

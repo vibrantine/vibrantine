@@ -88,6 +88,26 @@ async def test_move_existing_target_with_overwrite_succeeds(tmp_path: Path) -> N
     assert dst.read_text(encoding="utf-8") == "new"
 
 
+async def test_move_onto_directory_attests_actual_destination(tmp_path: Path) -> None:
+    # shutil.move relocates the file INTO an existing directory target;
+    # the attestation must report where the file actually landed.
+    src = _make(tmp_path / "src.txt", "payload")
+    destdir = tmp_path / "destdir"
+    destdir.mkdir()
+
+    result = await dispatch(
+        MoveTool(),
+        MoveInput(source=src, target=destdir, overwrite=True),
+        CallContext(),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.target == destdir / "src.txt"
+    assert (destdir / "src.txt").read_text(encoding="utf-8") == "payload"
+    assert not src.exists()
+
+
 async def test_move_source_does_not_exist_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-file.txt"
 

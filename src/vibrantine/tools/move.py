@@ -7,6 +7,7 @@ lost; default `overwrite=False` rejects that case as a validation
 error.
 """
 
+import os
 import shutil
 from pathlib import Path
 from typing import ClassVar
@@ -52,8 +53,12 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
         "- By default the call fails if `target` already exists; set\n"
         "  `overwrite=true` to replace an existing target.\n"
         "- The target's parent directory must exist.\n"
+        "- If `target` is an existing directory (reachable only with\n"
+        "  `overwrite=true`), the file is moved INTO that directory; the\n"
+        "  returned `target` is the file's actual new path.\n"
         "\n"
-        "Returns `source` (for confirmation) and `target` (new path)."
+        "Returns `source` (for confirmation) and `target` (the actual new\n"
+        "path the file landed at)."
     )
     input_type: ClassVar[type] = MoveInput
     output_type: ClassVar[type] = MoveOutput
@@ -92,7 +97,9 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
                 provenance=prov,
             )
 
-        if not input.source.exists():
+        # lexists on both checks: a broken symlink is still a real entry;
+        # exists() follows the link and would misreport it as absent.
+        if not os.path.lexists(input.source):
             return failure(
                 "validation",
                 f"source does not exist: {input.source!s}.",
@@ -108,7 +115,7 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
                 provenance=prov,
             )
 
-        if input.target.exists() and not input.overwrite:
+        if os.path.lexists(input.target) and not input.overwrite:
             return failure(
                 "validation",
                 f"target already exists and overwrite is false: {input.target!s}.",
@@ -125,7 +132,10 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
             )
 
         try:
-            shutil.move(str(input.source), str(input.target))
+            # Attest where the file actually landed: when target is an
+            # existing directory, shutil.move relocates the file INTO it
+            # and returns that inner path, not the requested target.
+            moved_to = Path(shutil.move(str(input.source), str(input.target)))
         except PermissionError as exc:
             return failure(
                 "internal",
@@ -143,7 +153,7 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
 
         return CommissionResult[MoveOutput](
             status="success",
-            output=MoveOutput(source=input.source, target=input.target),
+            output=MoveOutput(source=input.source, target=moved_to),
             provenance=prov,
             cost=ZERO_COST,
         )
