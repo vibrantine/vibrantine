@@ -33,6 +33,18 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Added
 
+- The `truncate_with_reference` overflow policy now does its real work
+  (previously a stub that degraded to `partial`). When an output exceeds
+  `max_output_tokens`, dispatch asks the Commission's new
+  `truncate_output(output, max_tokens)` hook for a smaller, still-valid
+  output, force-persists the full result under the run's `run_id` (record
+  mode `always`), and returns the chopped output as `partial` with the
+  run_id named in the error detail. Without a backend, without a hook
+  override (the base declines), or on a failed store, the policy degrades
+  to `partial` with the full output preserved — never silent.
+  `RecursiveResearchCommission` is the first consumer: it implements the
+  hook (keeping cited claims over answer prose) and now defaults to
+  `truncate_with_reference`.
 - `create_commission`: a deterministic authoring factory. Builds a basic
   LLM-loop Commission from the crafted decisions (name, description, typed
   input/output, tools); the system prompt, opening message, and all

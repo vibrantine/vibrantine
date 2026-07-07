@@ -129,8 +129,10 @@ async def dispatch[InputT, OutputT](
     # trace is their message histories concatenated in run order.
     llm_trace = [message for deposit in box for message in deposit] or None
 
-    result = _apply_overflow_policy(result, commission, ctx_for_invoke)
+    # Stamp before the overflow policy runs, so a truncate_with_reference
+    # detail can name the run_id the full output is persisted under.
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
+    result, full_result = _apply_overflow_policy(result, commission, ctx_for_invoke)
     logger.info(
         "%s finished status=%s cost=$%.6f run_id=%s",
         commission.name,
@@ -146,6 +148,14 @@ async def dispatch[InputT, OutputT](
     if mode is None:
         mode = ctx.record if ctx.record is not None else "off"
 
+    # truncate_with_reference forces this run's record on: the chopped
+    # envelope references the full output by run_id, so the full (pre-chop)
+    # result must be the one persisted or the reference points at nothing.
+    # The record's mode is "always" because the policy, not the recording
+    # configuration, demanded it.
+    if full_result is not None:
+        mode = "always"
+
     if ctx.backend is not None and _should_persist(mode, result.status):
         record = _build_record(
             run_id=my_run_id,
@@ -153,7 +163,7 @@ async def dispatch[InputT, OutputT](
             commission=commission,
             mode=mode,
             input=input,
-            result=result,
+            result=full_result if full_result is not None else result,
             ctx=ctx_for_invoke,
             llm_trace=llm_trace,
         )
@@ -179,6 +189,18 @@ async def dispatch[InputT, OutputT](
                         phase="persist_failed",
                         detail=f"{type(exc).__name__}: {exc}",
                     )
+                )
+            if full_result is not None:
+                # The chopped envelope's reference now dangles; returning it
+                # would silently lose data. Fall back to the full output as
+                # partial, the same non-breaking degradation the policy uses
+                # everywhere it cannot complete its mechanic.
+                result = _overflow_degrade(
+                    full_result,
+                    _estimate_output_tokens(full_result.output),
+                    cast(int, commission.max_output_tokens),
+                    f"the persistence backend failed while storing the full "
+                    f"version ({type(exc).__name__}: {exc})",
                 )
 
     return result
@@ -274,13 +296,21 @@ def _apply_overflow_policy[InputT, OutputT](
     result: CommissionResult[OutputT],
     commission: Commission[InputT, OutputT],
     ctx: CallContext,
-) -> CommissionResult[OutputT]:
-    if commission.max_output_tokens is None or result.output is None:
-        return result
+) -> tuple[CommissionResult[OutputT], CommissionResult[OutputT] | None]:
+    """Enforce the Commission's output cap on the result.
 
-    estimated = _estimate_output_tokens(result.output)
+    Returns `(result_to_return, full_result_to_persist)`. The second element
+    is non-None only when `truncate_with_reference` chopped: it is the full,
+    pre-chop result that dispatch must persist under this run's run_id, or
+    the reference embedded in the returned envelope points at nothing.
+    """
+    output = result.output
+    if commission.max_output_tokens is None or output is None:
+        return result, None
+
+    estimated = _estimate_output_tokens(output)
     if estimated <= commission.max_output_tokens:
-        return result
+        return result, None
 
     cap = commission.max_output_tokens
     policy = commission.overflow_policy
@@ -296,7 +326,7 @@ def _apply_overflow_policy[InputT, OutputT](
                     retryable=False,
                 ),
             }
-        )
+        ), None
     if policy == "partial":
         return result.model_copy(
             update={
@@ -309,7 +339,7 @@ def _apply_overflow_policy[InputT, OutputT](
                     retryable=False,
                 ),
             }
-        )
+        ), None
     if policy == "flag":
         if ctx.on_progress is not None:
             ctx.on_progress(
@@ -319,33 +349,89 @@ def _apply_overflow_policy[InputT, OutputT](
                     detail=f"~{estimated} tokens / cap {cap}",
                 )
             )
-        return result
+        return result, None
     if policy == "truncate_with_reference":
-        # STUB: the full mechanic is a near-term TODO.
-        # The real mechanic chops the output to fit, persists the full output via
-        # the backend, and embeds its run_id as a reference. The chop step needs
-        # Commission-specific knowledge (how to shrink a typed OutputT without
-        # making it invalid or self-contradicting: a `summary_text` vs a
-        # `list[Claim]` vs an opaque payload), which wants a real consumer to
-        # design against. Until that authoring interface lands we degrade to
-        # `partial`: the full output is preserved and the jacket flags that real
-        # truncation-with-reference is pending. Non-breaking, never silent.
-        return result.model_copy(
-            update={
-                "status": "partial",
-                "error": ErrorState(
-                    kind="output_too_large",
-                    detail=(
-                        f"Output of ~{estimated} tokens exceeds cap of {cap}. "
-                        f"truncate_with_reference is stubbed: returning the full "
-                        f"output as partial (chop + persist-reference mechanic "
-                        f"pending)."
-                    ),
-                    retryable=False,
+        return _truncate_with_reference(result, output, commission, ctx, estimated, cap)
+    return result, None  # unreachable; appeases exhaustiveness checks
+
+
+def _truncate_with_reference[InputT, OutputT](
+    result: CommissionResult[OutputT],
+    output: OutputT,
+    commission: Commission[InputT, OutputT],
+    ctx: CallContext,
+    estimated: int,
+    cap: int,
+) -> tuple[CommissionResult[OutputT], CommissionResult[OutputT] | None]:
+    """Chop the output; hand the full result back for forced persistence.
+
+    Three conditions must hold, or the policy degrades to `partial` with the
+    full output preserved (non-breaking, never silent): a backend to persist
+    the full version, a Commission whose `truncate_output` knows how to chop
+    its own output type, and a chop that actually fits the cap.
+    """
+    if ctx.backend is None:
+        return _overflow_degrade(
+            result,
+            estimated,
+            cap,
+            "no persistence backend is wired, so the full output cannot be persisted for reference",
+        ), None
+    chopped = commission.truncate_output(output, cap)
+    if chopped is None:
+        return _overflow_degrade(
+            result,
+            estimated,
+            cap,
+            f"{commission.name} does not implement truncate_output",
+        ), None
+    chopped_size = _estimate_output_tokens(chopped)
+    if chopped_size > cap:
+        return _overflow_degrade(
+            result,
+            estimated,
+            cap,
+            f"truncate_output returned ~{chopped_size} tokens, still above the cap",
+        ), None
+    truncated = result.model_copy(
+        update={
+            "status": "partial",
+            "output": chopped,
+            "error": ErrorState(
+                kind="output_too_large",
+                detail=(
+                    f"Output of ~{estimated} tokens exceeds cap of {cap}; "
+                    f"truncated to ~{chopped_size} tokens. The full output is "
+                    f"persisted under run_id {result.run_id}; load it from the "
+                    f"persistence backend."
                 ),
-            }
-        )
-    return result  # unreachable; appeases exhaustiveness checks
+                retryable=False,
+            ),
+        }
+    )
+    return truncated, result
+
+
+def _overflow_degrade[OutputT](
+    result: CommissionResult[OutputT],
+    estimated: int,
+    cap: int,
+    reason: str,
+) -> CommissionResult[OutputT]:
+    """truncate_with_reference's fallback: full output as `partial`, flagged."""
+    return result.model_copy(
+        update={
+            "status": "partial",
+            "error": ErrorState(
+                kind="output_too_large",
+                detail=(
+                    f"Output of ~{estimated} tokens exceeds cap of {cap}; "
+                    f"returned in full as partial because {reason}."
+                ),
+                retryable=False,
+            ),
+        }
+    )
 
 
 def _estimate_output_tokens(output: Any) -> int:

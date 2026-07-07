@@ -385,7 +385,13 @@ bounds are already on your Commission; this step is about knowing them.
 - **Output size.** `max_output_tokens` plus an `overflow_policy` say what
   happens when the deliverable is oversized. DocTag's output is tiny, so the
   defaults are fine; when you do set a policy, know that `"partial"` flags
-  the oversize through the jacket but does not trim it.
+  the oversize through the jacket but does not trim it. The one policy that
+  does trim, `"truncate_with_reference"`, needs two things from you: a
+  `truncate_output` override (only the author knows how to shrink a typed
+  output without invalidating it) and a persistence backend on the run, so
+  the full version stays reachable by the run_id named in the jacket.
+  Missing either, it degrades to `"partial"` — full output, flagged, never
+  silent.
 - **Cancellation.** The `CallContext` carries a cancel token that
   well-behaved Commissions check before expensive work.
 
@@ -407,8 +413,9 @@ timeout) or cannot (a validation failure). Nothing in this block can raise;
 that is the contract.
 
 **Specimen:** `RecursiveResearchCommission` sets `max_output_tokens` and
-`overflow_policy` explicitly, with a comment stating exactly what the policy
-does and does not protect.
+`overflow_policy="truncate_with_reference"` explicitly, and implements
+`truncate_output` to keep cited claims over answer prose, with a comment
+stating exactly what the policy does and does not protect.
 
 ## Step 6: Contract Tests
 
@@ -1031,6 +1038,14 @@ Behavior slots (class attributes, instance-overridable via constructor):
 | `persistence_mode` | `None` | `PersistenceMode`; `None` = no opinion, follow the caller's `record=` default. An explicit mode, `"off"` included, beats the caller |
 | `max_output_tokens` | `None` | Output cap; `None` = no enforcement |
 | `overflow_policy` | `"partial"` | `OverflowPolicy`; enforced by `dispatch` |
+
+One optional hook supports the `truncate_with_reference` policy:
+`truncate_output(output, max_tokens)` returns a smaller, still-valid
+`OutputT` that fits the cap (measured by `estimate_tokens` over the JSON
+serialization), or `None` to decline. The base implementation declines;
+dispatch then degrades the policy to `partial`. When the hook does chop,
+dispatch force-persists the full result and the returned envelope names the
+run_id it lives under.
 
 Constructor kwargs (all keyword-only):
 
