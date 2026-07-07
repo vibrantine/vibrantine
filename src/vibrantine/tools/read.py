@@ -12,7 +12,13 @@ from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import CallContext, Commission, CommissionResult
-from vibrantine.tools._helpers import ZERO_COST, failure, provenance
+from vibrantine.tools._helpers import (
+    ZERO_COST,
+    ReadFailure,
+    failure,
+    provenance,
+    read_text_utf8,
+)
 
 _MAX_LINE_CHARS = 30_000
 _TRUNCATION_MARKER = "…[truncated]"
@@ -102,28 +108,9 @@ class ReadTool(Commission[ReadInput, ReadOutput]):
             )
 
         try:
-            text = input.path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return failure(
-                "validation",
-                f"File not found: {input.path!s}.",
-                retryable=False,
-                provenance=prov,
-            )
-        except PermissionError as exc:
-            return failure(
-                "internal",
-                f"Permission denied reading {input.path!s}: {exc}.",
-                retryable=False,
-                provenance=prov,
-            )
-        except UnicodeDecodeError as exc:
-            return failure(
-                "internal",
-                f"Could not decode {input.path!s} as UTF-8: {exc}.",
-                retryable=False,
-                provenance=prov,
-            )
+            text = read_text_utf8(input.path)
+        except ReadFailure as exc:
+            return failure(exc.kind, exc.detail, retryable=False, provenance=prov)
 
         all_lines = text.splitlines(keepends=True)
         total_lines = len(all_lines)
