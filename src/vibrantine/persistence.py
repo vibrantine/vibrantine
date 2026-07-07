@@ -29,6 +29,22 @@ DEV_RING_BUFFER_SIZE: Final[int] = 100
 ON_FAILURE_RETENTION_DAYS: Final[int] = 7
 
 
+def _require_aware(cutoff: datetime) -> None:
+    """Refuse a naive cutoff before any record is touched.
+
+    `delete_older_than` destroys data, and a naive datetime's timezone can
+    only be guessed (the two plausible guesses, UTC and local time, can sit
+    hours apart). The contract rules the guess out: the cutoff must be
+    timezone-aware, per `PersistenceBackend`.
+    """
+    if cutoff.tzinfo is None:
+        raise ValueError(
+            "delete_older_than requires a timezone-aware cutoff; a naive "
+            "datetime's timezone would have to be guessed before deleting "
+            "records. Build it like: datetime.now(UTC) - timedelta(days=7)."
+        )
+
+
 class FilesystemBackend:
     """JSON-on-disk persistence backend. One file per run_id."""
 
@@ -58,6 +74,7 @@ class FilesystemBackend:
         await asyncio.to_thread(self._delete_sync, run_id)
 
     async def delete_older_than(self, cutoff: datetime) -> int:
+        _require_aware(cutoff)
         return await asyncio.to_thread(self._delete_older_than_sync, cutoff)
 
     # --- sync helpers run in threadpool ---
@@ -207,6 +224,7 @@ class SqliteBackend:
         await asyncio.to_thread(self._delete_sync, run_id)
 
     async def delete_older_than(self, cutoff: datetime) -> int:
+        _require_aware(cutoff)
         return await asyncio.to_thread(self._delete_older_than_sync, cutoff)
 
     # --- sync helpers run in threadpool ---

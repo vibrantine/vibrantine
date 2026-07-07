@@ -45,6 +45,10 @@ class RecordingBackend:
             self._order.remove(run_id)
 
     async def delete_older_than(self, cutoff: datetime) -> int:
+        # The PersistenceBackend contract: refuse to guess a naive cutoff's
+        # timezone before deleting anything.
+        if cutoff.tzinfo is None:
+            raise ValueError("delete_older_than requires a timezone-aware cutoff.")
         stale = [run_id for run_id in self._order if self._records[run_id].created_at < cutoff]
         for run_id in stale:
             await self.delete(run_id)

@@ -118,6 +118,21 @@ async def test_delete_older_than_evicts_only_older(make_backend: BackendFactory)
     assert await backend.load("young") is not None
 
 
+async def test_delete_older_than_rejects_naive_cutoff(make_backend: BackendFactory) -> None:
+    # The Protocol rules out timezone guessing: a naive cutoff is refused
+    # with ValueError before any record is touched, identically on both
+    # backends (previously one raised TypeError mid-sweep and the other
+    # silently read the cutoff as local time).
+    backend = make_backend()
+    await backend.store(_record(run_id="keep", mode="always", created_at=datetime.now(UTC)))
+
+    naive = datetime.now() - timedelta(days=365)  # noqa: DTZ005 - naive on purpose
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await backend.delete_older_than(naive)
+
+    assert await backend.load("keep") is not None
+
+
 async def test_dev_mode_evicts_oldest_when_over_ring_buffer(
     make_backend: BackendFactory,
 ) -> None:

@@ -237,6 +237,11 @@ class PersistenceBackend(Protocol):
     The library ships a default filesystem backend; apps can substitute
     any implementation that satisfies this protocol (KV store, SQLite,
     in-memory for tests, etc.).
+
+    `delete_older_than` destroys records, so its `cutoff` must be
+    timezone-aware; an implementation rejects a naive datetime with
+    `ValueError` rather than guess which timezone it meant. All datetimes
+    the framework writes (`PersistedRecord.created_at`) are UTC-aware.
     """
 
     async def store(self, record: PersistedRecord) -> None: ...
