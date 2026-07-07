@@ -408,6 +408,17 @@ wishes do not belong in the design record.
   budgets and token/time accounting are the settled direction. Built
   with the first genuinely tiered workload: frontier judgment above,
   local fan workers below.
+- **Model ownership: catalog, profile, grant.** The settled ownership
+  spine for model access: the application owns the inventory of model
+  profiles (a catalog, living above the library where state belongs), a
+  Commission owns its default model and capacity, the caller grants a run
+  its permitted subset, and a crafted Commission picks by key from within
+  the grant — it never freely discovers or invents model access. A
+  builder-side static spend cap ("this worker may never exceed $0.01",
+  the capacity half of budgeting, taking the minimum with the caller's
+  grant) rides the same direction. Built with autonomous Commission
+  crafting, or with the first application that must hand different
+  callers different model menus.
 - **Adapters.** Small wrappers that expose any Commission as a tool to
   external agent systems, MCP first. Built when the first external
   consumer wants one.

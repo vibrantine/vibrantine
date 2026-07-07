@@ -206,4 +206,4 @@ Three documents cover Vibrantine, and each has one job:
 - `docs/design.md`: the design record: the goal and the two-sentence core, every settled decision with its reason and what it rules out, what the library refuses to do, the trades, what is not built yet, and the thesis.
 - `docs/authoring.md`: the builder's manual, machine-checked in CI.
 
-[`docs/README.md`](docs/README.md) indexes everything else: the testing standard, the release checklist, and the `working/concepts/` drafts. Process records and retired drafts live outside the repo.
+[`docs/README.md`](docs/README.md) indexes everything else: the testing standard, the release checklist, and the working notes under `docs/working/`. Process records and retired drafts live outside the repo.

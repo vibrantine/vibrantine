@@ -34,12 +34,17 @@ Audience-facing guides, not architecture.
   release checklist covering security/privacy passes, Commission audits,
   examples, external consumer proof, and final validation.
 
-## Working drafts ([`working/concepts/`](working/concepts/))
+## Working notes ([`working/`](working/))
 
-Aspirational and fenced: deeper concept drafts, not live guidance. The
-root README owns the front-door role; this folder shrinks as material
-promotes into live docs or retires. See its
-[`README.md`](working/concepts/README.md) for contents.
+Working material, not live guidance; this folder shrinks as material
+promotes into the live docs or retires. Currently one note:
+[`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md),
+the decision record for the standard folder-sized Commission layout, its
+sketches, and its open threads.
+
+The concept drafts that used to live under `working/concepts/` promoted
+into `authoring.md` (the five-surface ownership map, the boundary-type
+design moves, and the composition shapes) and retired.
 
 Process records, retired drafts, and external research notes live outside
 the repo.

@@ -203,6 +203,36 @@ Two things to notice:
 - The output is deliberately small. A Commission promises a deliverable, not
   a transcript of its work.
 
+Designing the two types is its own small craft. For the input:
+
+- **Substance first.** Split the fields into the substance (the thing the
+  run exists to process — there is usually exactly one) and the steering
+  (the knobs that shape *how*: a target length, an optional focus). Steering
+  fields carry defaults.
+- **Preconditions live in the type.** `Field(min_length=1)`, numeric bounds,
+  and a `Literal` for closed choices make a bad request fail in the caller's
+  code, before the work ever starts.
+- **Name the work, not the prompt.** An input like `prompt: str` makes every
+  caller learn how to ask; fields like `content` and `focus` let the
+  Commission own the wording once, in `build_user_message`. Keep reusable
+  primitives domain-neutral (`content`, not `email_thread`); a
+  domain-specific Commission's boundary should be honest about its domain
+  instead.
+
+For the output:
+
+- **The smallest shape the caller consumes.** One field is not under-design;
+  it is an honest return type. Add a field only when a caller will read it.
+- **If the result asserts facts, return the trail.** Reach for `Claim[T]`
+  (an asserted value carried with the `Provenance` records that back it)
+  when a caller should be able to audit, cite, or verify individual
+  assertions — a synthesis across sources, a summary whose claims must be
+  traceable. Source count is not the rule; traceability is.
+- **The return shape is fixed per class.** `output_type` is identity, welded
+  to the class. A vocabulary that varies per call (say, classification
+  labels the caller picks) belongs on the *input*, where per-call values are
+  expected.
+
 **Specimen:** `src/vibrantine/examples/recursive_research/types.py` does exactly
 this and nothing more.
 
@@ -690,6 +720,30 @@ A parent owns its children and depends on them only through the contract:
 - **No sibling channels.** Children never talk to each other; everything a
   child needs arrives in its typed input from the parent.
 
+`capabilities` gates the LLM loop's tool menu, not your code: a Python
+coordinator's child calls are written directly in `invoke`, already chosen
+by the author, so they never consult the allow-list. To narrow what a
+*child's* model may reach, hand the child a narrower context (the `replace`
+above).
+
+Most compositions start as one of three shapes:
+
+- **Pipeline** — one child feeds the next (`fetch -> summarize -> report`).
+  Use it when each step depends on the previous step's output.
+- **Fan out, then gather** — many children do similar work and the parent
+  combines them (`plan -> workers -> review`). Use it when the task splits
+  into independent parts.
+- **Loop until done** — the parent repeats a small cycle with an explicit
+  stop: a round cap, the budget, a deadline, or a typed "done" signal from a
+  child.
+
+These are authoring patterns, not framework types; write the plain Python
+shape first and extract a template only when a second real coordinator
+repeats it. And when a job grows, go **wide, not deep**: many siblings under
+one coordinator beats many nested LLM levels, because siblings don't
+compound each other's errors or stack each other's latency
+(`design.md § Shallow trees`).
+
 ## Where the accumulating state goes
 
 There is no framework memory or artifact slot to write into, deliberately:
@@ -700,6 +754,14 @@ threads it back in through a typed input field (for example
 `prior_claims: list[Claim[str]]`). The framework's persistence layer stores
 run *records* for observability; assembling records into resumable state is
 the caller's job, not the Commission's.
+
+Not all state threads by value. Heavy read-only state (a corpus, a whole
+codebase) passes by **handle**: the caller hands the run a path and the run
+reads what it needs from the world; re-reading the world on the next run is
+not hidden memory, it is re-reading. The rule of thumb is *reads look,
+writes carry*: any number of runs may read shared state in place, but writes
+to state a fan shares serialize through a single owner — workers draft the
+change as a typed value, one owner applies it.
 
 ## Seeing a run
 
@@ -969,6 +1031,41 @@ counterpart, read `src/vibrantine/examples/recursive_research/` end to end
 ---
 
 # Part III: Reference
+
+## The five surfaces
+
+Before the field tables, the ownership map they all hang off. A Commission
+separates five concerns, each with a different owner:
+
+| # | Surface | Answers | Owner | Fixed when |
+|---|---|---|---|---|
+| 1 | **Identity** (declaration) | What the Commission *is* | Commission author | Written into the class |
+| 2 | **Capacity** (construction) | What this instance *can do*, and its built-in limits | Builder | Built into the instance, immutable |
+| 3 | **Permission** (call-time context) | What this run is *allowed* to do | Caller | Per run |
+| 4 | **Task** (payload) | What this run is *asked* to solve | Caller | Per run |
+| 5 | **Result** (envelope) | What came *back*, and how to trust it | Framework + Commission | Returned by the call |
+
+Read it as a sentence of ownership: the author owns what it is, the builder
+owns what it can do, the caller owns both what it may do and what it must
+solve, and the framework guarantees the shape of what comes back. Two
+surfaces never bend — the declared boundary (identity's input and output
+types) and the result envelope — and those two promises are the contract.
+Every dial lives on the middle three surfaces.
+
+The map sorts the tables below: the identity ClassVars are surface 1, the
+behavior slots and constructor kwargs are surface 2, `CallContext` is
+surface 3, your `InputT` value is surface 4, and the result envelope is
+surface 5.
+
+The trickiest split is money, because budgeting touches two surfaces:
+`budget_usd` is **permission**, the caller's per-run grant ("this invocation
+may spend $0.20"). The capacity-side ceilings (`max_iterations`,
+`max_input_tokens`, `max_output_tokens`) are the builder's, wired at
+construction. A run obeys the tightest bound, whoever set it.
+
+Task and permission blur easily because both are caller-owned and per-run.
+Keeping them apart is the point: the input says *solve this*; the context
+says *and you may spend this much, touch these tools, and stop when I say*.
 
 ## The public surface
 
