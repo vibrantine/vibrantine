@@ -61,7 +61,8 @@ Repeat these passes before sharing the repository more widely.
 - [ ] Confirm destructive or externally powerful tools describe that gating and
   confirmation are application policy.
 - [ ] Confirm `FilesystemBackend` rejects path-like `run_id` values that escape
-  its root.
+  its root, and `SqliteBackend` binds `run_id` as a query parameter rather
+  than interpolating it.
 
 Suggested local searches:
 
@@ -332,29 +333,23 @@ candidate eval cases:
 
 ## Examples Folder
 
-Add examples before wider sharing. Keep them small, runnable, and honest about
-credentials.
+Satisfied, but not by the repo-root `examples/` directory this section
+originally planned: runnable examples shipped inside `vibrantine.examples`
+instead, as the demo runner (`python -m vibrantine.examples`) and the
+learning ladder (`vibrantine.examples.learning_ladder`, four runnable
+rungs of one idea each), importable and colocated with the worked
+Commissions.
 
-Suggested first examples:
-
-```text
-examples/
-  ask_file.py
-  summarize_text.py
-  synthesize_sources.py
-  tools_read_write.py
-```
-
-Checklist:
-
-- [ ] At least one deterministic tool example that needs no API key.
-- [ ] At least one LLM-backed example that clearly requires
-  `OPENROUTER_API_KEY`.
-- [ ] Examples use `invoke_sync` or `run_one`, not direct `invoke`.
-- [ ] Examples handle `success`, `partial`, and `failure` results explicitly
-  enough to teach the result envelope.
-- [ ] Examples avoid protected helpers and frozen-internal assumptions.
-- [ ] README links to the examples once they exist.
+- [x] Deterministic tool example that needs no API key (authoring.md
+  Step 0 runs `ReadTool` as proof of life).
+- [x] LLM-backed examples that clearly require `OPENROUTER_API_KEY`
+  (the ladder rungs; the demo runner checks for the key up front).
+- [x] Examples use `invoke_sync` / `run_one` / `dispatch`, not direct
+  `invoke`.
+- [x] Examples handle `success`, `partial`, and `failure` results
+  explicitly enough to teach the result envelope.
+- [x] Examples avoid protected helpers and frozen-internal assumptions.
+- [x] README and authoring.md link to the demo runner and the ladder.
 
 ## External Consumer Repo
 

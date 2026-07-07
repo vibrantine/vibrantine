@@ -715,7 +715,11 @@ never installs handlers or writes files on its own.
 Beyond watching: `on_progress` on the `CallContext` streams typed
 `ProgressEvent`s to a callback for building live UIs, and the persistence
 layer stores full structured records (input, result, cost, the LLM
-transcript) for programmatic autopsy. Switching records on is also one
+transcript) for programmatic autopsy. The transcript lands automatically
+on the default loop; a custom `invoke` that runs its own LLM calls
+deposits each message history via `deposit_llm_trace` (from
+`vibrantine.dispatch`), or its records carry no trace. `SynthesizeCommission`
+is the worked example of depositing from a custom interior. Switching records on is also one
 line: `run_one(..., backend=FilesystemBackend(root), record="always")`
 reaches every node in the call tree, including children spawned mid-run.
 Three tiers, all optional: log lines to watch, events to react, records
@@ -1054,6 +1058,7 @@ provisional until the authoring-surface freeze (see
 | `self._resolved_client` | The lazily-built LLM client |
 | `self.fits(estimated_tokens)` | Size-gate check |
 | `estimate_tokens(text)` | Module-level chars/4 heuristic; import from `vibrantine.contract` |
+| `deposit_llm_trace(messages)` | Module-level; import from `vibrantine.dispatch`. A custom invoke that runs its own LLM calls deposits each message history so it lands in the run's persisted record; without a deposit, the record's `llm_trace` stays empty. The default loop deposits automatically |
 
 ## The result envelope
 
@@ -1228,7 +1233,8 @@ Before you ship a Commission, confirm:
   framework fills these for you.)
 - [ ] **Custom `invoke`**: check `ctx.cancel.is_cancelled` at breakpoints;
   call children via `dispatch(child, input, ctx)`, never `.invoke`; sum
-  children's `cost.estimated_usd`.
+  children's `cost.estimated_usd`; if you call the model yourself,
+  deposit each transcript via `deposit_llm_trace` so records carry it.
 - [ ] **Compose through constructors**: inject sub-Commissions and the model
   at construction; never reach into another Commission's internals.
 - [ ] **State stays outside**: no memory held inside the Commission between

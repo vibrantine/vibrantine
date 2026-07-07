@@ -291,9 +291,12 @@ src/vibrantine/examples/morning_briefing/
   construction.
 - `_render_markdown` stays in `commission.py`: a helper, not a Commission.
 
-Audit: a human opens BRIEF.md. A prompt change points *outside* the
-package: the only prompt in this tree belongs to `synthesize`, which owns
-it (prompts are internal). A new input field goes in `types.py`. A new
+Audit: a human opens BRIEF.md. A prompt change lands with the prompt's
+owner, because prompts are internal to their Commission: Weather's inline
+constant lives inside this package; the prompts of the injected public
+Commissions (Summarize behind the executive summary, Synthesize inside
+NewsDigest) live outside it, with those Commissions. A new input field
+goes in `types.py`. A new
 subcommission or private tool is declared in `commission.py`'s `__init__`
 (import, kwarg, toolbox entry) and lives under `subcommissions/` or
 `tools/` only if private. A known failure is recorded in BRIEF.md.

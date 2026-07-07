@@ -37,7 +37,7 @@ The whole model is:
 
 ```text
 caller
-  -> parent commission
+  -> parent Commission
        -> child A -> CommissionResult
        -> child B -> CommissionResult
        -> child C -> CommissionResult
