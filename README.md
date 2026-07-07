@@ -343,8 +343,8 @@ Start here:
   Commissions: a verified step-by-step tutorial, the composition patterns,
   and the full contract reference.
 
-Working concept drafts live in [docs/working/concepts/](docs/working/concepts/);
-they promote into the live docs or retire.
+Working notes live in [docs/working/](docs/working/); they promote into the
+live docs or retire.
 
 ## Development
 

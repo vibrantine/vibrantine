@@ -250,9 +250,12 @@ What the invoker holds.
   overflow policy, enforced at dispatch: at the boundary, not inside the
   unit. Four policies: `reject` fails the result; `partial` keeps the
   output and flags it on the envelope (the default);
-  `truncate_with_reference` chops the output and persists the full
-  version (planned); `flag` keeps the output and emits only a progress
-  event, an explicit opt-out for callers that watch progress.
+  `truncate_with_reference` chops the output via the Commission's own
+  `truncate_output` hook and force-persists the full version, reachable
+  by the run_id named on the envelope (degrading to `partial`, never
+  silently, when there is no backend, no hook, or a failed store); `flag`
+  keeps the output and emits only a progress event, an explicit opt-out
+  for callers that watch progress.
 - **Why.** An oversized child result poisons an LLM-loop parent's context,
   and the parent cannot defend itself after the fact. The budget lives in
   the contract because the victim is upstream of the offender.
@@ -400,15 +403,22 @@ wishes do not belong in the design record.
   settled; section shape, ordering, and cache discipline still open.
   Built when the first application above the library needs to speak to a
   whole tree.
-- **`truncate_with_reference`.** The overflow policy that chops an
-  oversized output and persists the full version, reachable by run id.
-  Stubbed today, degrading safely to `partial`. Built when the first
-  Commission arrives whose overflow is expected rather than exceptional.
 - **Honest local-model accounting.** Cost is USD-only today, so a free
   local worker rolls up as $0 while consuming real compute. Per-model
   budgets and token/time accounting are the settled direction. Built
   with the first genuinely tiered workload: frontier judgment above,
   local fan workers below.
+- **Model ownership: catalog, profile, grant.** The settled ownership
+  spine for model access: the application owns the inventory of model
+  profiles (a catalog, living above the library where state belongs), a
+  Commission owns its default model and capacity, the caller grants a run
+  its permitted subset, and a crafted Commission picks by key from within
+  the grant — it never freely discovers or invents model access. A
+  builder-side static spend cap ("this worker may never exceed $0.01",
+  the capacity half of budgeting, taking the minimum with the caller's
+  grant) rides the same direction. Built with autonomous Commission
+  crafting, or with the first application that must hand different
+  callers different model menus.
 - **Adapters.** Small wrappers that expose any Commission as a tool to
   external agent systems, MCP first. Built when the first external
   consumer wants one.
