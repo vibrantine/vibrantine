@@ -5,7 +5,12 @@ from pathlib import Path
 
 from vibrantine.contract import CallContext
 from vibrantine.dispatch import dispatch
-from vibrantine.tools.sample import SampleInput, SampleTool
+from vibrantine.tools.sample import (
+    LINE_CAP_CHARS,
+    SampleInput,
+    SampleTool,
+    _sample_file,  # pyright: ignore[reportPrivateUsage]
+)
 
 
 class _AlwaysCancelled:
@@ -160,3 +165,61 @@ async def test_sample_cancelled_returns_cancelled(tmp_path: Path) -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
+
+
+# --- streaming sampler: line cap and chunk-boundary fidelity ----------------
+
+
+async def test_sample_long_line_is_capped_with_marker(tmp_path: Path) -> None:
+    # The single-line pathology (minified JS, JSONL): the returned payload
+    # stays cheap, the count stays exact, and the cut is visibly marked.
+    long_line = "x" * (LINE_CAP_CHARS * 3)
+    path = _make(tmp_path, "minified.js", f"{long_line}\nshort\n")
+
+    result = await dispatch(SampleTool(), SampleInput(path=path), CallContext())
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.line_count == 2
+    assert result.output.head[0] == "x" * LINE_CAP_CHARS + "... [line truncated]"
+    assert result.output.head[1] == "short"
+
+
+async def test_sample_line_at_exact_cap_is_untouched(tmp_path: Path) -> None:
+    exact = "y" * LINE_CAP_CHARS
+    path = _make(tmp_path, "exact.txt", f"{exact}\n")
+
+    result = await dispatch(SampleTool(), SampleInput(path=path), CallContext())
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.head == [exact]
+
+
+def test_sample_file_matches_splitlines_across_chunk_boundaries(tmp_path: Path) -> None:
+    # A CRLF pair and a multibyte character straddling read chunks must not
+    # change the result: tiny chunk sizes force every straddle to happen.
+    content = "alpha\r\nbé\rgamma delta\nomega"
+    path = tmp_path / "endings.txt"
+    path.write_bytes(content.encode("utf-8"))
+    expected = content.splitlines()
+
+    for chunk_bytes in (1, 2, 3, 7, 64 * 1024):
+        head, tail, count = _sample_file(path, 10, 10, chunk_bytes=chunk_bytes)
+        assert head == expected, f"chunk_bytes={chunk_bytes}"
+        assert tail == expected, f"chunk_bytes={chunk_bytes}"
+        assert count == len(expected), f"chunk_bytes={chunk_bytes}"
+
+
+def test_sample_file_caps_memory_mid_line(tmp_path: Path) -> None:
+    # A long line arriving in many small chunks is trimmed while it
+    # accumulates (not only at the end), and still counts as one line.
+    long_line = "z" * (LINE_CAP_CHARS * 5)
+    path = tmp_path / "one-line.txt"
+    path.write_bytes(long_line.encode("utf-8"))
+
+    head, tail, count = _sample_file(path, 10, 10, chunk_bytes=512)
+
+    assert count == 1
+    assert head == ["z" * LINE_CAP_CHARS + "... [line truncated]"]
+    assert tail == head
