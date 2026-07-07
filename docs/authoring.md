@@ -411,7 +411,11 @@ bounds are already on your Commission; this step is about knowing them.
   not an exception and not a surprise bill. The loop also declines a turn
   up front when the turn's input cost alone would already break the
   ceiling, so a run over a huge transcript fails before that money is
-  spent, not after.
+  spent, not after. Size the grant to the work: budget behavior only
+  degrades gracefully when the grant is several multiples of a single
+  turn's cost, and a turn re-reads everything fetched so far, so a
+  transcript holding a few 50k-char pages can cost more per turn than a
+  tight grant leaves for wrapping up.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.

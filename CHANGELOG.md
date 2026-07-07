@@ -8,6 +8,16 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Fixed
+
+- RecursiveResearch's system prompt now shows a concrete example claim
+  (an object with `value`, `source_urls`, `confidence`). Live runs on
+  the default model repeatedly emitted claims as bare strings, and each
+  failed `conclude` re-sends the whole transcript, which at tight
+  budgets cost the run its graceful wind-down. With the example, a
+  grant that previously died `budget_exceeded` completes with a full
+  cited answer.
+
 ### Added
 
 - Pre-turn budget gate in the default LLM loop: before each provider
