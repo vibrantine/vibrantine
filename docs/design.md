@@ -449,6 +449,13 @@ wishes do not belong in the design record.
 - **Multimodal input and output.** The message shapes already leave room
   (typed parts rather than bare strings). Built when the first
   image-bearing consumer fixes the real fields.
+- **Abstract intermediate Commissions.** The definition-time identity
+  check requires all four ClassVars on every subclass, so a shared
+  template base class cannot defer identity to its children; shared
+  plumbing is shared as plain functions instead, which has covered every
+  real case so far. Any fix softens the fail-fast check, so the shape of
+  the softening is not guessed in advance. Built when the first real
+  Commission family hurts without it.
 - **Sibling streaming and a tree-wide concurrency cap.** Both
   consciously deferred, per the trades. Built when a real workload hurts
   without them.
