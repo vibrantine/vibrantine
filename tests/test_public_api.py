@@ -1,9 +1,22 @@
-"""The package's public boundary.
+"""The package's public boundary, locked exactly.
 
 `vibrantine.__all__` is the SemVer-protected surface: the frozen contract
 bones plus the entry points. Example Commissions and tools stay importable
 from their submodules but are deliberately *not* part of the frozen surface.
+
+The tests here are LOCKS, not floors. The public surface is minimized
+mercilessly (design.md § The public surface is minimized mercilessly):
+every exported name, constructor kwarg, and context field is permanent
+user-facing cognitive load, so each grows only under pressure from a real,
+named consumer. If you are here because a lock failed: the failure is the
+moment to justify the growth (bring the consumer that demands it and grow
+the lock in the same commit), not an obstacle to silence.
 """
+
+import inspect
+from collections.abc import Callable
+from dataclasses import fields
+from typing import cast
 
 import vibrantine
 
@@ -13,19 +26,34 @@ def test_every_exported_name_resolves() -> None:
         assert getattr(vibrantine, name, None) is not None, name
 
 
-def test_core_contract_and_entry_points_are_exported() -> None:
+def test_the_exported_surface_is_locked_exactly() -> None:
     expected = {
+        # Contract: the Commission and its result envelope
         "Commission",
         "CommissionResult",
+        "CommissionStatus",
+        # Runtime conditions
         "CallContext",
+        "CapabilitySet",
+        "CancelToken",
+        "NEVER_CANCELLED",
+        "ProgressEvent",
+        # Provenance, claims, cost
         "Provenance",
-        "ErrorState",
-        "CostMetrics",
+        "ConfidenceLevel",
         "Claim",
+        "CostMetrics",
+        # Failure model
+        "ErrorState",
+        "ErrorKind",
+        # Policy vocabularies
+        "OverflowPolicy",
+        "PersistenceMode",
+        # Persistence
+        "PersistedRecord",
         "PersistenceBackend",
-        "run_one",
-        "invoke_sync",
-        "dispatch",
+        "FilesystemBackend",
+        "SqliteBackend",
         # Model vocabulary: callers are told to register models and build
         # Model targets, so the names they need are part of the surface.
         "Model",
@@ -33,6 +61,10 @@ def test_core_contract_and_entry_points_are_exported() -> None:
         "DEFAULT_MODEL",
         "openai_compatible",
         "ollama",
+        # Entry points
+        "run_one",
+        "invoke_sync",
+        "dispatch",
         # Authoring factory: the supported fast path to a basic Commission.
         "create_commission",
         # Authoring edge: the names authoring.md teaches authors to use.
@@ -43,7 +75,42 @@ def test_core_contract_and_entry_points_are_exported() -> None:
         "estimate_tokens",
         "deposit_llm_trace",
     }
-    assert expected <= set(vibrantine.__all__)
+    assert set(vibrantine.__all__) == expected
+
+
+def test_commission_constructor_surface_is_locked() -> None:
+    # Every kwarg here is a decision an author may have to make; the list
+    # is part of the surface a user's head must hold.
+    init = cast("Callable[..., None]", vibrantine.Commission.__init__)
+    params = list(inspect.signature(init).parameters)
+    assert params == [
+        "self",
+        "model",
+        "client",
+        "max_iterations",
+        "toolbox",
+        "max_input_tokens",
+        "target_input_fraction",
+        "persistence_mode",
+        "max_output_tokens",
+        "overflow_policy",
+    ]
+
+
+def test_call_context_surface_is_locked() -> None:
+    # CallContext is the extend-here seam for new orchestration concerns,
+    # so it will legitimately grow; the lock makes each growth deliberate.
+    names = [f.name for f in fields(vibrantine.CallContext)]
+    assert names == [
+        "budget_usd",
+        "capabilities",
+        "cancel",
+        "on_progress",
+        "concurrency",
+        "parent_run_id",
+        "backend",
+        "record",
+    ]
 
 
 def test_provisional_commissions_are_not_in_the_frozen_surface() -> None:

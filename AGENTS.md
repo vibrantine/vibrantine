@@ -27,6 +27,16 @@ Structural invariants. Breaking one is an architectural decision, not a quick fi
 
 **Vocabulary-append rule.** The closed `Literal` vocabularies (`ErrorKind`, `CommissionStatus`, `ConfidenceLevel`, `PersistenceMode`, `OverflowPolicy`) are part of the frozen contract. Adding or removing a member is a **major version bump**: downstream `match`/dispatch code is written against the exact set. `tests/test_contract.py` locks each vocabulary to its documented members, so a change can't land without updating the lock test (and, by that signal, the docs and the version).
 
+## Surface vs. interior: minimize the boundary mercilessly
+
+Complexity is judged at the public boundary, not in the interior. A Commission's interior can be forty careful lines where five sloppy ones would do; that is never a contract question. But every name in `vibrantine.__all__`, every `Commission.__init__` kwarg, and every `CallContext` field is permanent user-facing cognitive load and a SemVer commitment. The default answer to any new surface element is **no**.
+
+- A surface addition needs a real, named consumer and a statement of what the user must now hold in their head. Convenience, symmetry, and anticipation do not qualify. When a fix can be built as interior complexity or as new surface, the interior wins every time (worked examples: the shell tool's encoding fallback and the sample tool's streaming pass each added real interior code and zero surface).
+- The three surfaces above are pinned by exact lock tests in `tests/test_public_api.py`. Growing one fails the suite until the lock is edited in the same commit; that failure is the moment to justify the growth, not an obstacle to silence. Same mechanism as the vocabulary-append rule.
+- This guards against a known failure mode of LLM-driven development specifically: each added knob, field, or helper reads as simple in isolation, and the sum is an unholdable surface. If you are an agent reading this while about to add one: the burden of proof is on the addition.
+
+See `docs/design.md § The public surface is minimized mercilessly` for the decision record.
+
 ## Commission vs. tool
 
 When the question is "should this be a Commission?", apply the LLM-anywhere rule:

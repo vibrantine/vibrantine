@@ -282,6 +282,30 @@ What the invoker holds.
   - Backends wired at construction; the backend is a runtime concern, so
     it travels in the call context.
 
+#### The public surface is minimized mercilessly
+
+- **Decision.** Complexity is judged at the boundary, not in the interior.
+  The surfaces a user's head must hold (`vibrantine.__all__`, the
+  `Commission` constructor, `CallContext`) grow only under pressure from a
+  real, named consumer, never from convenience, symmetry, or anticipation.
+  Each is pinned by an exact lock test in `tests/test_public_api.py`, so
+  growing one is a deliberate act: the lock is edited in the same commit,
+  and the justification travels with it. When a fix or feature can be
+  built as interior complexity or as new surface, the interior wins every
+  time.
+- **Why.** Every exported name, constructor kwarg, and context field is a
+  permanent claim on the user's memory and a SemVer commitment; interiors
+  are invisible and refactorable. LLM-driven development pulls hard toward
+  plausible additions (a knob, a field, a helper export) that each read as
+  simple in isolation and compound into an unholdable surface. Prose
+  guidance gets rationalized past in the moment; the lock makes the pull
+  visible and deliberate at the exact commit where it happens.
+- **Rules out.**
+  - Convenience exports ("it was already public in spirit").
+  - Speculative kwargs and fields ahead of a demonstrated consumer.
+  - Options as a substitute for a decision: adding a flag where the
+    framework should pick one behavior.
+
 ## What the library refuses to do
 
 The sections above say what a Commission is. This one says what Vibrantine
