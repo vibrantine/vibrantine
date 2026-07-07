@@ -95,6 +95,36 @@ class _Stub(Commission[_Input, _Output]):
         return self._scripted
 
 
+class _Chopper(_Stub):
+    """A stub that knows how to chop its own output (truncate_output)."""
+
+    def __init__(self, *, chop_to: str, **kwargs: object) -> None:
+        super().__init__(**kwargs)  # type: ignore[arg-type]
+        self._chop_to = chop_to
+
+    def truncate_output(self, output: _Output, max_tokens: int) -> _Output | None:
+        return _Output(a=self._chop_to)
+
+
+class _FailingBackend:
+    """A PersistenceBackend whose store always raises."""
+
+    async def store(self, record: object) -> None:
+        raise OSError("disk full")
+
+    async def load(self, run_id: str) -> None:
+        return None
+
+    async def list_references(self, *, parent_run_id: str | None = None) -> list[str]:
+        return []
+
+    async def delete(self, run_id: str) -> None:
+        return None
+
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        return 0
+
+
 class _Raiser(Commission[_Input, _Output]):
     """Raises from invoke: a Commission that breaks the errors-as-values rule."""
 
@@ -410,24 +440,115 @@ async def test_dispatch_overflow_flag_emits_progress_event_unchanged() -> None:
     assert any(e.phase == "output_overflow" for e in events)
 
 
-async def test_dispatch_overflow_truncate_stub_degrades_to_partial() -> None:
-    # truncate_with_reference is a frozen-vocabulary policy whose real mechanic
-    # (chop + persist-reference) is a near-term TODO. The stub must be
-    # non-breaking: degrade to partial, preserve the output, flag it in the
-    # jacket.
+async def test_dispatch_truncate_chops_and_persists_full_output(tmp_path: Path) -> None:
+    # The real mechanic: the envelope carries the chopped output as partial
+    # with the run_id reference in the detail; the persisted record carries
+    # the full pre-chop result, forced on (mode "always") even though neither
+    # the node nor the caller asked for recording.
+    backend = FilesystemBackend(tmp_path)
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="short",
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    result = await dispatch(chopper, _Input(q="?"), CallContext(backend=backend))
+
+    assert result.status == "partial"
+    assert result.output is not None and result.output.a == "short"
+    assert result.error is not None
+    assert result.error.kind == "output_too_large"
+    assert result.run_id is not None and result.run_id in result.error.detail
+
+    record = await backend.load(result.run_id)
+    assert record is not None
+    assert record.mode == "always"
+    assert record.result["status"] == "success"  # the run as it actually went
+    assert record.result["output"]["a"] == big  # full version, reachable
+
+
+async def test_dispatch_truncate_without_backend_degrades_to_partial() -> None:
+    # No backend means the full version cannot be persisted, so a reference
+    # would point at nothing. Degrade: full output as partial, never silent.
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="short",
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    result = await dispatch(chopper, _Input(q="?"), CallContext())
+
+    assert result.status == "partial"
+    assert result.output is not None and result.output.a == big  # output preserved
+    assert result.error is not None
+    assert result.error.kind == "output_too_large"
+    assert "backend" in result.error.detail
+
+
+async def test_dispatch_truncate_without_hook_degrades_to_partial(tmp_path: Path) -> None:
+    # The base truncate_output declines (returns None): only the author knows
+    # how to shrink a typed output without invalidating it. Degrade as above.
+    backend = FilesystemBackend(tmp_path)
     big = "x" * 4000
     stub = _Stub(
         result=_success_result(answer=big),
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
 
     assert result.status == "partial"
-    assert result.output is not None and result.output.a == big  # output preserved
+    assert result.output is not None and result.output.a == big
     assert result.error is not None
     assert result.error.kind == "output_too_large"
-    assert "stubbed" in result.error.detail
+    assert "truncate_output" in result.error.detail
+
+
+async def test_dispatch_truncate_oversized_chop_degrades_to_partial(tmp_path: Path) -> None:
+    # A chop that still exceeds the cap is an authoring bug; trust the cap,
+    # not the chop, and degrade rather than return an oversized "truncation".
+    backend = FilesystemBackend(tmp_path)
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="y" * 2000,  # ~500 tokens, still over the cap of 10
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    result = await dispatch(chopper, _Input(q="?"), CallContext(backend=backend))
+
+    assert result.status == "partial"
+    assert result.output is not None and result.output.a == big
+    assert result.error is not None
+    assert result.error.kind == "output_too_large"
+    assert "still above the cap" in result.error.detail
+
+
+async def test_dispatch_truncate_store_failure_falls_back_to_full_output() -> None:
+    # If the forced store fails, the chopped envelope's reference dangles;
+    # returning it would silently lose data. Fall back to the full output.
+    events: list[ProgressEvent] = []
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="short",
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    result = await dispatch(
+        chopper,
+        _Input(q="?"),
+        CallContext(backend=_FailingBackend(), on_progress=events.append),
+    )
+
+    assert result.status == "partial"
+    assert result.output is not None and result.output.a == big  # nothing lost
+    assert result.error is not None
+    assert result.error.kind == "output_too_large"
+    assert "persistence backend failed" in result.error.detail
+    assert any(e.phase == "persist_failed" for e in events)
 
 
 # --- exception-to-failure tests --------------------------------------------

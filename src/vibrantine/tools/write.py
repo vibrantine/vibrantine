@@ -4,6 +4,10 @@ Completes the `C` in text CRUD. Prefer `edit` when only a small portion
 of an existing file needs to change; `write` is the right tool when the
 new content bears no resemblance to the old. Parent directories are
 created automatically (matches Claude Code's Write behavior).
+Overwriting an existing file is destructive; as with `delete`, gating
+and confirmation are the caller's policy (capabilities, or the
+application layer above), and `create_only=True` is the tool-level
+refusal to overwrite.
 """
 
 from pathlib import Path

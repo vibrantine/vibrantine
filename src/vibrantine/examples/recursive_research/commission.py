@@ -24,6 +24,7 @@ from vibrantine.contract import (
     CallContext,
     Commission,
     OverflowPolicy,
+    estimate_tokens,
 )
 from vibrantine.examples.recursive_research.models import RecursiveResearchModelMenu
 from vibrantine.examples.recursive_research.types import ResearchInput, ResearchOutput
@@ -62,13 +63,15 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     output_type: ClassVar[type] = ResearchOutput
     system_prompt: ClassVar[str | None] = load_prompt(_PACKAGE)
 
-    # Sub-answers are rendered whole into the parent loop's context. This cap
-    # does not trim them: `partial` keeps the full output and flags the
-    # overflow through the result jacket, so the parent's LLM sees the size
-    # warning alongside the answer. It is a warning light, not a guard rail;
-    # real context protection arrives when `truncate_with_reference` lands.
+    # Sub-answers are rendered whole into the parent loop's context, so an
+    # oversized one is chopped at the boundary: `truncate_output` below keeps
+    # claims over prose, the full version is persisted under the run_id named
+    # in the jacket, and the parent's LLM sees the chop plus the size warning.
+    # Without a persistence backend the policy degrades to `partial` (full
+    # output, flagged, never silent), which is a warning light rather than a
+    # guard rail.
     max_output_tokens: int | None = 4000
-    overflow_policy: OverflowPolicy = "partial"
+    overflow_policy: OverflowPolicy = "truncate_with_reference"
 
     def __init__(
         self,
@@ -118,3 +121,30 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
             seeds = "\n".join(input.seed_urls)
             message += f"\n\nSeed sources you may fetch:\n{seeds}"
         return message
+
+    def truncate_output(self, output: ResearchOutput, max_tokens: int) -> ResearchOutput | None:
+        """Chop an oversized sub-answer, keeping claims over prose.
+
+        Claims are the receipts a parent researcher cites; the answer prose
+        gets re-synthesized upstream anyway. So the answer is halved until
+        the whole output fits, and trailing claims are dropped only once the
+        answer is gone. Deterministic throughout: no LLM in the overflow
+        path (design.md rules out LLM-summarized fallbacks).
+        """
+        marker = " …[truncated]"
+        claims = list(output.claims)
+        length = len(output.answer)
+        while True:
+            if length >= len(output.answer):
+                answer = output.answer
+            else:
+                answer = output.answer[:length].rstrip() + marker
+            candidate = ResearchOutput(answer=answer, claims=claims)
+            if estimate_tokens(candidate.model_dump_json()) <= max_tokens:
+                return candidate
+            if length > 0:
+                length //= 2
+            elif claims:
+                claims.pop()
+            else:
+                return None  # cap too small for even an empty output; degrade
