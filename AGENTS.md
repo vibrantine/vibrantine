@@ -103,7 +103,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 - **Validation**: `pydantic >= 2`
 - **HTTP**: `httpx` (async)
 - **Tests**: `pytest`, `pytest-asyncio`
-- **LLM**: OpenRouter via the `openai` SDK with `base_url="https://openrouter.ai/api/v1"`. Single provider surface; LLM-using Commissions accept `model` as a constructor argument and are immutable post-construction. `max_input_tokens` derives from the model's context window via a small known-models table; `target_input_fraction` defaults to 0.75.
+- **LLM**: any OpenAI-compatible endpoint via the `openai` SDK with `base_url` swapped. A `Model` bundles identity, endpoint, and pricing facts (`models.py`); a bare id string resolves to the OpenRouter endpoint, `ollama()` targets a local server, and `openai_compatible()` covers any other provider. LLM-using Commissions accept `model` as a constructor argument and are immutable post-construction. `max_input_tokens` derives from the model's context window via `KNOWN_MODELS`; `target_input_fraction` defaults to 0.75.
 - **Lint + format**: `ruff` (replaces black, isort, flake8)
 - **Types**: `basedpyright` in strict mode
 
@@ -111,7 +111,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 
 `OPENROUTER_API_KEY` is the only secret. Stored in `.env` (gitignored). A committed `.env.example` lists required variable names with empty values as the public template.
 
-- **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading `OPENROUTER_API_KEY` from the environment at that point; tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first `invoke`, not at construction. The library never reads `.env` itself; that's a dev/application concern.
+- **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading the resolved model's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first `invoke` with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
 - **Dev + tests**: `uv run --env-file .env <cmd>`, or export in your shell. Both pick it up the same way.
 - **Test policy**: unit tests mock the OpenAI client and require no key. Integration tests are marked `@pytest.mark.integration` and skip when the key is absent. Never commit fixtures containing real API responses with embedded keys.
   LLM-driven Commissions should also grow heuristic evaluation cases with
@@ -134,26 +134,27 @@ uv run basedpyright             # type-check
 ```
 src/
   vibrantine/
-    contract.py                       # core contract types (Phase 0)
+    __init__.py                       # public boundary: __all__ is the SemVer surface
+    contract.py                       # core contract types, the Commission ABC, PersistenceBackend Protocol
     orchestrator.py                   # run_one + invoke_sync entry points
-    dispatch.py                       # wraps invoke: run_id + parent_run_id + overflow + persist
-    persistence.py                    # PersistenceBackend Protocol + FilesystemBackend default
-    models.py                         # KNOWN_MODELS: context window + pricing
-    llm_tools.py                      # LLM-tool wrapper + LLM dispatch loop
-    examples/                         # worked example Commissions (was commissions/)
-      synthesize.py                   # Phase 3
+    dispatch.py                       # wraps invoke: run_id + parent_run_id + overflow + record + raise backstop
+    llm_tools.py                      # LLM-tool wrapper + the default LLM loop
+    factory.py                        # create_commission authoring factory
+    models.py                         # Model objects (identity + endpoint + pricing); KNOWN_MODELS + DEFAULT_MODEL
+    persistence.py                    # shipped backends: FilesystemBackend + SqliteBackend
+    testing.py                        # supported test doubles for the client= seam
+    _prompts.py                       # package-resource prompt loading
+    examples/                         # worked example Commissions (importable, provisional)
+      ask.py summarize.py synthesize.py
+      email_handler.py                # provisional validator (LLM-loop routing probe)
       morning_briefing/               # heterogeneous coordinator tree (folder standard)
-      ask.py                          # Phase 13: first LLM-loop Commission
-      recursive_research/                  # recursive LLM-loop worked example
-      email_handler.py                # provisional validator (unexported)
-    tools/                            # std-lib tools layer (Phases 5–12)
+      recursive_research/             # recursive LLM-loop worked example
+      learning_ladder/                # four runnable rungs, one idea each
+      demo/                           # python -m vibrantine.examples: menu + chat runner
+    tools/                            # std-lib deterministic tools (provisional)
       _helpers.py                     # shared provenance + failure builders
-      read.py write.py edit.py        # Phases 5–6: text CRUD
-      glob.py list_dir.py             # Phase 7: discovery
-      fetch.py                        # Phase 8: HTTP (migrated from commissions/)
-      grep.py sample.py               # Phases 9–10: search + structural sample
-      move.py delete.py               # Phase 11: destructive ops
-      shell.py                        # Phase 12: subprocess
+      read.py write.py edit.py glob.py list_dir.py fetch.py
+      grep.py sample.py move.py delete.py shell.py
 tests/
 ```
 
@@ -173,15 +174,13 @@ Application-specific result types live alongside the Commission or function that
 
 5. **Refactor over patch.** When the spec evolves, edit affected code coherently. No compat shims (no released users), no feature flags for half-built behavior, no "old code, remove later" blocks. Clean refactor is always cheaper than the patch debt.
 
-6. **Minimum dependencies.** New dependencies (runtime or dev) need an explicit case tied to a concrete unmet need. Reach order: standard library, then what's already in the stack, then consider adding. Default to refusing. Re-evaluate periodically: a dependency that earned its slot in Phase 1 may be redundant by Phase 4, and the refactor cost beats carrying the drag.
+6. **Minimum dependencies.** New dependencies (runtime or dev) need an explicit case tied to a concrete unmet need. Reach order: standard library, then what's already in the stack, then consider adding. Default to refusing. Re-evaluate periodically: a dependency that earned its slot early in the build may be redundant later, and the refactor cost beats carrying the drag.
 
 **Style:** American spelling throughout; it matches Python's identifier convention (`SynthesizeCommission`), so no prose/code split to maintain.
 
-## Build phase discipline
+## Deferred work
 
-The Build Manual is a ladder, not a menu. Don't skip ahead. After Phase 4, stop and run the Reassess checklist before choosing the next rung.
-
-Deferred (do not start in v0): authoring kit, evaluation utilities, LLM-tool wrapper, framework adapters, the rest of the standard library, anything above the library boundary.
+What is deliberately not built, each item with the trigger that builds it, lives in [`docs/design.md § Not built yet`](docs/design.md). Don't start an item on that list before its trigger arrives, and don't add machinery the list doesn't name without recording the decision there first. Anything above the library boundary stays out permanently (see § Library scope).
 
 ## Git commits
 
