@@ -10,6 +10,10 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Fixed
 
+- `GrepTool` no longer aborts a whole directory walk when a listed file
+  vanishes before it is read (a race or broken entry); the file is
+  skipped like any other unreadable entry, and a missing file still
+  surfaces as `validation` on a direct path.
 - `FetchTool` now validates the URL up front (absolute, http or https)
   and classifies non-2xx responses by the caller's retry decision: 429
   fails as `rate_limit` (retryable), 5xx as `internal` (retryable), and

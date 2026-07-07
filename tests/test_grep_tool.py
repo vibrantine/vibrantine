@@ -1,10 +1,15 @@
 """Tests for the Grep tool."""
 
+import re
 from pathlib import Path
 
 from vibrantine.contract import CallContext
 from vibrantine.dispatch import dispatch
-from vibrantine.tools.grep import GrepInput, GrepTool
+from vibrantine.tools.grep import (
+    GrepInput,
+    GrepTool,
+    _grep_file,  # pyright: ignore[reportPrivateUsage]
+)
 
 
 class _AlwaysCancelled:
@@ -143,6 +148,25 @@ async def test_grep_binary_file_in_directory_walk_is_skipped(tmp_path: Path) -> 
     assert result.output is not None
     assert len(result.output.matches) == 1
     assert result.output.matches[0].line == "match me"
+
+
+def test_grep_file_vanished_mid_walk_is_skipped(tmp_path: Path) -> None:
+    # A file can vanish between the walk listing it and the read (a race);
+    # the walk must skip it like any other unreadable entry, not abort the
+    # whole grep. The race can't be reproduced deterministically through
+    # the public surface, so the read-and-classify helper is tested directly.
+    ghost = tmp_path / "vanished.txt"
+    matches, err = _grep_file(ghost, re.compile("x"), surface_read_errors=False)
+    assert matches == []
+    assert err is None
+
+
+def test_grep_file_missing_as_direct_path_surfaces_validation(tmp_path: Path) -> None:
+    ghost = tmp_path / "vanished.txt"
+    matches, err = _grep_file(ghost, re.compile("x"), surface_read_errors=True)
+    assert matches == []
+    assert err is not None
+    assert err[0] == "validation"
 
 
 async def test_grep_binary_file_as_direct_path_returns_internal(tmp_path: Path) -> None:
