@@ -20,7 +20,10 @@ Repository = "https://github.com/vibrantine/vibrantine"
 dev = [
     "pytest",
     "pytest-asyncio",
-    "ruff",
+    # Pinned exactly: the formatter's style can shift between releases, and
+    # a silent upgrade would re-flag clean files in CI. Upgrading is a
+    # deliberate act: bump the pin, run `ruff format .`, commit both.
+    "ruff==0.15.13",
     "basedpyright",
 ]
 
