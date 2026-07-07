@@ -115,7 +115,17 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
         # The description promises an absolute http(s) URL; checking it here
         # keeps a caller mistake classified as validation (non-retryable),
         # like every sibling tool, instead of surfacing as a transport error.
-        parsed = urlparse(input.url)
+        try:
+            parsed = urlparse(input.url)
+        except ValueError as exc:
+            # urlparse itself raises on some malformed URLs (e.g. an
+            # unclosed IPv6 bracket host); same caller mistake, same kind.
+            return failure(
+                "validation",
+                f"url could not be parsed: {input.url!r} ({exc}).",
+                retryable=False,
+                provenance=prov,
+            )
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             return failure(
                 "validation",
@@ -138,6 +148,15 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
                 "timeout",
                 f"Request to {input.url} exceeded {input.timeout_seconds}s.",
                 retryable=True,
+                provenance=prov,
+            )
+        except httpx.TooManyRedirects as exc:
+            # A redirect loop is deterministic: retrying the same URL
+            # unchanged can never succeed, unlike a transport blip.
+            return failure(
+                "internal",
+                f"Redirect loop fetching {input.url}: {exc}",
+                retryable=False,
                 provenance=prov,
             )
         except httpx.HTTPError as exc:

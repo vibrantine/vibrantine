@@ -107,6 +107,15 @@ class WriteTool(Commission[WriteInput, WriteOutput]):
         try:
             input.path.parent.mkdir(parents=True, exist_ok=True)
             input.path.write_bytes(encoded)
+        except (FileExistsError, NotADirectoryError) as exc:
+            # A parent component of `path` is an existing file: a caller
+            # path mistake, not a filesystem malfunction.
+            return failure(
+                "validation",
+                f"A parent of {input.path!s} is not a directory: {exc}.",
+                retryable=False,
+                provenance=prov,
+            )
         except PermissionError as exc:
             return failure(
                 "internal",

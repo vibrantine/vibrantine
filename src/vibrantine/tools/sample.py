@@ -1,10 +1,11 @@
-"""Sample tool: file metadata + head/tail without loading the whole file.
+"""Sample tool: file metadata + head/tail instead of the whole file.
 
 Structural-discovery primitive load-bearing for the doc-management
 use case: an agent learning corpus shape by sampling files cheaply
 before committing context budget to a full Read. The agent runs many
 Sample calls during exploration; Read is reserved for files that
-warrant full content load.
+warrant full content load. "Cheap" is about the returned payload
+(context cost), not disk I/O; the file is read in full internally.
 """
 
 from datetime import UTC, datetime
@@ -14,7 +15,13 @@ from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import CallContext, Commission, CommissionResult
-from vibrantine.tools._helpers import ZERO_COST, failure, provenance
+from vibrantine.tools._helpers import (
+    ZERO_COST,
+    ReadFailure,
+    failure,
+    provenance,
+    read_text_utf8,
+)
 
 
 class SampleInput(BaseModel):
@@ -49,8 +56,8 @@ class SampleTool(Commission[SampleInput, SampleOutput]):
 
     name: ClassVar[str] = "sample"
     description: ClassVar[str] = (
-        "Returns file metadata and head/tail content without loading the\n"
-        "full file. Use for understanding corpus shape before committing\n"
+        "Returns file metadata and head/tail content instead of the full\n"
+        "body. Use for understanding corpus shape before committing\n"
         "context budget to a full read.\n"
         "\n"
         "Usage:\n"
@@ -117,22 +124,13 @@ class SampleTool(Commission[SampleInput, SampleOutput]):
                 provenance=prov,
             )
 
+        # The shared helper carries the standard classification, including
+        # a file deleted between the stat above and this read (validation,
+        # like every sibling tool's missing file).
         try:
-            text = input.path.read_text(encoding="utf-8")
-        except PermissionError as exc:
-            return failure(
-                "internal",
-                f"Permission denied reading {input.path!s}: {exc}.",
-                retryable=False,
-                provenance=prov,
-            )
-        except UnicodeDecodeError as exc:
-            return failure(
-                "internal",
-                f"Could not decode {input.path!s} as UTF-8: {exc}.",
-                retryable=False,
-                provenance=prov,
-            )
+            text = read_text_utf8(input.path)
+        except ReadFailure as exc:
+            return failure(exc.kind, exc.detail, retryable=False, provenance=prov)
 
         lines = text.splitlines()
         head = lines[: input.head_lines] if input.head_lines > 0 else []

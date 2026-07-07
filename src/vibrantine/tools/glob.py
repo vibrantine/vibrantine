@@ -118,6 +118,16 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
             # Sorting needs the full match list anyway, so the cap bounds the
             # returned payload (the context-budget concern), not the walk.
             matched = sorted(p for p in base.glob(input.pattern) if p.is_file())
+        except (ValueError, NotImplementedError) as exc:
+            # pathlib raises ValueError for an empty pattern and
+            # NotImplementedError for an absolute one; both are caller
+            # mistakes, so classify as validation like every sibling tool.
+            return failure(
+                "validation",
+                f"Invalid glob pattern {input.pattern!r}: {exc}.",
+                retryable=False,
+                provenance=prov,
+            )
         except PermissionError as exc:
             return failure(
                 "internal",

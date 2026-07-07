@@ -54,6 +54,11 @@ def read_text_utf8(path: Path) -> str:
         raise ReadFailure("internal", f"Permission denied reading {path!s}: {exc}.") from exc
     except UnicodeDecodeError as exc:
         raise ReadFailure("internal", f"Could not decode {path!s} as UTF-8: {exc}.") from exc
+    except OSError as exc:
+        # Catch-all for I/O trouble (device errors, cloud-placeholder
+        # reads): still a classified failure, so grep's directory walk
+        # skips the bad entry instead of aborting the whole search.
+        raise ReadFailure("internal", f"Filesystem error reading {path!s}: {exc}.") from exc
 
 
 def provenance(source: str) -> Provenance:
