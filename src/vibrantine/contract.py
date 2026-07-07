@@ -677,10 +677,12 @@ class Commission[InputT, OutputT](ABC):
             return None
         return self._fail(
             "validation",
-            f"budget_usd was set but model {self._model!r} is unpriced (not in "
-            f"KNOWN_MODELS and not built with pricing), so its cost can't be "
-            f"priced and the budget can't be enforced. Register it in "
-            f"models.KNOWN_MODELS or invoke without a budget.",
+            f"budget_usd was set but model {self._model!r} is unpriced (not "
+            f"built with pricing and not in KNOWN_MODELS), so its cost can't "
+            f"be tracked and the budget can't be enforced. Pass a Model that "
+            f"carries prices (openai_compatible(...) with USD rates, or "
+            f"ollama() for a free local model), register the id in "
+            f"models.KNOWN_MODELS, or invoke without a budget.",
             retryable=False,
             provenance=provenance,
             cost=CostMetrics(estimated_usd=0.0),
