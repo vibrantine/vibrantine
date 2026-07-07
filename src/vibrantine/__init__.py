@@ -6,8 +6,16 @@ are the SemVer-protected surface a third party may import and depend on:
     from vibrantine import Commission, run_one, CommissionResult
 
 The frozen surface is the *bones*: the contract envelope, the closed
-`Literal` vocabularies, and the `run_one` / `invoke_sync` / `dispatch`
-entry points. The `vibrantine.testing` module is also supported surface:
+`Literal` vocabularies, the `run_one` / `invoke_sync` / `dispatch`
+entry points, and the authoring-edge names a Commission author is taught
+to use (`estimate_tokens`, `deposit_llm_trace`, `DEFAULT_MAX_ITERATIONS`,
+and the `ContentPart` message vocabulary). Two honesty notes on that
+promise. The model vocabulary's *shapes* are protected, but the *contents*
+of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are catalog data:
+they change as models come and go, without a major version. And
+`ImagePart`'s exact fields are provisional until the first image-bearing
+consumer fixes them (its name and role in `ContentPart` are stable).
+The `vibrantine.testing` module is also supported surface:
 the test doubles for the `client=` injection seam, kept at its own import
 path so test tooling never ships into production namespaces. Everything
 else not in `__all__` (including the example Commissions in
@@ -20,6 +28,7 @@ enforcement, and persistence happen uniformly.
 """
 
 from vibrantine.contract import (
+    DEFAULT_MAX_ITERATIONS,
     NEVER_CANCELLED,
     CallContext,
     CancelToken,
@@ -29,17 +38,21 @@ from vibrantine.contract import (
     CommissionResult,
     CommissionStatus,
     ConfidenceLevel,
+    ContentPart,
     CostMetrics,
     ErrorKind,
     ErrorState,
+    ImagePart,
     OverflowPolicy,
     PersistedRecord,
     PersistenceBackend,
     PersistenceMode,
     ProgressEvent,
     Provenance,
+    TextPart,
+    estimate_tokens,
 )
-from vibrantine.dispatch import dispatch
+from vibrantine.dispatch import deposit_llm_trace, dispatch
 from vibrantine.factory import create_commission
 from vibrantine.models import (
     DEFAULT_MODEL,
@@ -90,4 +103,11 @@ __all__ = [
     "dispatch",
     # Authoring
     "create_commission",
+    # Authoring edge: names custom and basic Commissions build against
+    "ContentPart",
+    "TextPart",
+    "ImagePart",
+    "DEFAULT_MAX_ITERATIONS",
+    "estimate_tokens",
+    "deposit_llm_trace",
 ]

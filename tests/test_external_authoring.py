@@ -223,11 +223,15 @@ def test_protected_helper_signatures() -> None:
     assert params("fits") == ["estimated_tokens"]
 
 
-# --- §3.5 / §4: estimate_tokens lives in the submodule, not __all__ ---
-def test_estimate_tokens_import_path() -> None:
+# --- §3.5 / §4: the authoring-edge helpers are top-level exports ---
+def test_authoring_edge_helpers_are_exported() -> None:
     import vibrantine
+
+    assert callable(vibrantine.estimate_tokens)
+    assert callable(vibrantine.deposit_llm_trace)
+    assert "estimate_tokens" in vibrantine.__all__
+    assert "deposit_llm_trace" in vibrantine.__all__
+    # The submodule path keeps working; the top level is the taught one.
     from vibrantine.contract import estimate_tokens
 
-    assert callable(estimate_tokens)
-    assert "estimate_tokens" not in vibrantine.__all__
-    assert not hasattr(vibrantine, "estimate_tokens")
+    assert estimate_tokens is vibrantine.estimate_tokens

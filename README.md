@@ -326,7 +326,10 @@ Still settling:
 The SemVer promise is deliberately tight: the public contract exported from
 `vibrantine.__all__` is the dependency surface. The worked example Commissions
 under `vibrantine.examples`, the tools, and authoring helpers are useful, but
-may remain provisional until more real consumers exercise them.
+may remain provisional until more real consumers exercise them. One honest
+caveat inside the frozen surface: the model catalog's *shapes* are protected,
+but the *contents* of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are
+catalog data that changes as models come and go, without a major version.
 
 ## What Vibrantine Is Not
 

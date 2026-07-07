@@ -35,6 +35,13 @@ def test_core_contract_and_entry_points_are_exported() -> None:
         "ollama",
         # Authoring factory: the supported fast path to a basic Commission.
         "create_commission",
+        # Authoring edge: the names authoring.md teaches authors to use.
+        "ContentPart",
+        "TextPart",
+        "ImagePart",
+        "DEFAULT_MAX_ITERATIONS",
+        "estimate_tokens",
+        "deposit_llm_trace",
     }
     assert expected <= set(vibrantine.__all__)
 
