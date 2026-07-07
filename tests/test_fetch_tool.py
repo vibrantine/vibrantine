@@ -56,7 +56,9 @@ async def test_fetch_success_populates_output_and_provenance() -> None:
     assert result.cost.estimated_usd == 0.0
 
 
-async def test_fetch_404_returns_internal_failure() -> None:
+async def test_fetch_404_returns_validation_failure() -> None:
+    # The URL as given yields no document; retrying it unchanged can't help.
+    # The filesystem analog is ReadTool's missing file, also "validation".
     transport = httpx.MockTransport(_handler_404)
     tool = FetchTool(transport=transport)
 
@@ -69,9 +71,85 @@ async def test_fetch_404_returns_internal_failure() -> None:
     assert result.status == "failure"
     assert result.output is None
     assert result.error is not None
-    assert result.error.kind == "internal"
+    assert result.error.kind == "validation"
     assert result.error.retryable is False
     assert result.cost.estimated_usd == 0.0
+
+
+def _handler_429(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(429, text="slow down")
+
+
+async def test_fetch_429_returns_rate_limit_failure() -> None:
+    transport = httpx.MockTransport(_handler_429)
+    tool = FetchTool(transport=transport)
+
+    result = await dispatch(
+        tool,
+        FetchInput(url="https://example.test/busy"),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "rate_limit"
+    assert result.error.retryable is True
+
+
+def _handler_500(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(500, text="server error")
+
+
+async def test_fetch_500_returns_internal_retryable_failure() -> None:
+    transport = httpx.MockTransport(_handler_500)
+    tool = FetchTool(transport=transport)
+
+    result = await dispatch(
+        tool,
+        FetchInput(url="https://example.test/broken"),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert result.error.retryable is True
+
+
+async def test_fetch_rejects_url_without_scheme_before_any_request() -> None:
+    # The description promises an absolute http(s) URL; a caller mistake is
+    # validation (non-retryable), not a transport error. The mock transport
+    # would fail loudly if a request were issued.
+    transport = httpx.MockTransport(_handler_ok)
+    tool = FetchTool(transport=transport)
+
+    result = await dispatch(
+        tool,
+        FetchInput(url="example.test/no-scheme"),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert result.error.retryable is False
+    assert "http(s) scheme" in result.error.detail
+
+
+async def test_fetch_rejects_non_http_scheme() -> None:
+    transport = httpx.MockTransport(_handler_ok)
+    tool = FetchTool(transport=transport)
+
+    result = await dispatch(
+        tool,
+        FetchInput(url="ftp://example.test/file"),
+        CallContext(),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert result.error.retryable is False
 
 
 async def test_fetch_timeout_returns_timeout_failure() -> None:
@@ -192,7 +270,10 @@ async def test_fetch_non_2xx_final_response_is_a_failure() -> None:
     assert result.status == "failure"
     assert result.output is None
     assert result.error is not None
-    assert result.error.kind == "internal"
+    # An unresolved 3xx means the URL as given yields no document; like a
+    # 4xx, retrying it unchanged can't help.
+    assert result.error.kind == "validation"
+    assert result.error.retryable is False
     assert "304" in result.error.detail
 
 

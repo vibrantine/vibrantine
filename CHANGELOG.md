@@ -10,6 +10,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Fixed
 
+- `FetchTool` now validates the URL up front (absolute, http or https)
+  and classifies non-2xx responses by the caller's retry decision: 429
+  fails as `rate_limit` (retryable), 5xx as `internal` (retryable), and
+  any other non-2xx as `validation` (non-retryable, the URL as given
+  yields no document). Previously every non-2xx surfaced as `internal`
+  and a malformed URL surfaced as a retryable transport error, against
+  the pattern every sibling tool follows for caller mistakes.
 - The default LLM loop now dispatches each child with the remaining budget
   (the grant minus everything already spent on own turns and prior
   children), never an unchanged copy of the caller's grant. Previously,
