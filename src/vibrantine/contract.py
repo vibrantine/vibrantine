@@ -477,6 +477,24 @@ class Commission[InputT, OutputT](ABC):
             f"{type(self).__name__} must define build_user_message(), or override invoke()."
         )
 
+    def truncate_output(self, output: OutputT, max_tokens: int) -> OutputT | None:
+        """Chop an oversized output for the `truncate_with_reference` policy.
+
+        Dispatch calls this when the output exceeds `max_output_tokens` under
+        the `truncate_with_reference` overflow policy. Return a smaller,
+        still-valid OutputT that fits within `max_tokens` (measured by the
+        contract's `estimate_tokens` heuristic over the JSON serialization).
+        Dispatch then persists the full result under this run's `run_id`,
+        returns the chopped output as `partial`, and names the run_id in the
+        error detail so the caller can load the full version.
+
+        The default declines by returning None: shrinking a typed output
+        without making it invalid or self-contradicting (fewer list items? a
+        shortened text field?) is knowledge only the author has. On None,
+        the policy degrades to `partial` with the full output preserved.
+        """
+        return None
+
     async def invoke(
         self,
         input: InputT,

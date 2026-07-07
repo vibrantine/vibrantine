@@ -184,9 +184,10 @@ Summarize call) behind one contract boundary, living at
 - [x] Check leaf toolboxes omit `recursive_research` and include only fetch.
 - [x] Check recursive child costs roll up through the default LLM loop.
 - [x] Check output cap / overflow policy is appropriate for sub-answer
-  rendering. Decision: `partial` flags oversized sub-answers without trimming
-  them (a warning light, not a guard rail); accepted until
-  `truncate_with_reference` lands. Covered by
+  rendering. Decision: `truncate_with_reference` chops oversized sub-answers
+  (claims kept over prose) and persists the full version when a backend is
+  wired; without one it degrades to `partial` (full output, flagged). Covered
+  by `test_oversized_sub_answer_chopped_when_backend_wired` and
   `test_oversized_sub_answer_reaches_parent_flagged_partial`.
 - [x] Check prompt guidance discourages unsupported claims.
 - [x] Check tests cover delegation, leaf behavior, cost rollup, and tool menu

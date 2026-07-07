@@ -11,19 +11,22 @@ conclude directly.
 """
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from openai import AsyncOpenAI
 
-from vibrantine.contract import CallContext
+from vibrantine.contract import CallContext, estimate_tokens
 from vibrantine.dispatch import dispatch
 from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
     RecursiveResearchModelMenu,
     ResearchInput,
 )
+from vibrantine.examples.recursive_research.types import ResearchClaim, ResearchOutput
+from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import ScriptedLLM, llm_response
 
 # One LLM turn at the fixture model (google/gemini-3-flash-preview):
@@ -155,9 +158,10 @@ def test_model_and_menu_together_rejected() -> None:
 
 
 async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
-    # The child's conclude blows past its 4000-token output cap. The `partial`
-    # overflow policy does not trim: the parent's next turn receives the full
-    # answer wrapped as partial_output with an output_too_large error, so the
+    # The child's conclude blows past its 4000-token output cap. Without a
+    # persistence backend, truncate_with_reference degrades to `partial`
+    # without trimming: the parent's next turn receives the full answer
+    # wrapped as partial_output with an output_too_large error, so the
     # parent's LLM sees the size warning without losing the child's work.
     long_answer = "x" * 20_000  # ~5000 estimated tokens, over the 4000 cap
     agent, fake = _agent(
@@ -179,6 +183,85 @@ async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
     payload = json.loads(tool_messages[0]["content"])
     assert payload["error"]["kind"] == "output_too_large"
     assert payload["partial_output"]["answer"] == long_answer
+
+
+async def test_oversized_sub_answer_chopped_when_backend_wired(tmp_path: Path) -> None:
+    # With a persistence backend, truncate_with_reference does its real work:
+    # the parent's context receives a chopped sub-answer instead of the full
+    # 20k characters, and the full version is persisted, reachable by the
+    # run_id the error detail names.
+    backend = FilesystemBackend(tmp_path)
+    long_answer = "x" * 20_000  # ~5000 estimated tokens, over the 4000 cap
+    agent, fake = _agent(
+        [
+            llm_response(tool_calls=_delegate("r1", "sub")),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": long_answer, "claims": []})]),
+            llm_response(tool_calls=_conclude("r2")),
+        ],
+        max_depth=1,
+    )
+
+    result = await dispatch(agent, ResearchInput(question="q"), CallContext(backend=backend))
+
+    assert result.status == "success", result.error
+    tool_messages = [m for m in fake.calls[2]["messages"] if m.get("role") == "tool"]
+    payload = json.loads(tool_messages[0]["content"])
+    assert payload["error"]["kind"] == "output_too_large"
+    chopped = payload["partial_output"]["answer"]
+    assert len(chopped) < len(long_answer)
+    assert chopped.endswith("…[truncated]")
+
+    # Only the forced record exists (nobody asked for recording): the child's
+    # full result, under the run_id the parent's error detail names.
+    refs = await backend.list_references(parent_run_id=result.run_id)
+    assert len(refs) == 1
+    assert refs[0] in payload["error"]["detail"]
+    record = await backend.load(refs[0])
+    assert record is not None
+    assert record.result["output"]["answer"] == long_answer
+
+
+def _claims(count: int) -> list[ResearchClaim]:
+    return [
+        ResearchClaim(
+            value=f"claim {index}",
+            source_urls=["https://example.com/src"],
+            confidence="grounded",
+        )
+        for index in range(count)
+    ]
+
+
+def test_truncate_output_keeps_claims_over_prose() -> None:
+    agent, _ = _agent([], max_depth=0)
+    output = ResearchOutput(answer="a" * 20_000, claims=_claims(3))
+
+    chopped = agent.truncate_output(output, 500)
+
+    assert chopped is not None
+    assert estimate_tokens(chopped.model_dump_json()) <= 500
+    assert chopped.claims == output.claims  # the receipts survive
+    assert chopped.answer.endswith("…[truncated]")
+
+
+def test_truncate_output_drops_claims_once_answer_is_gone() -> None:
+    agent, _ = _agent([], max_depth=0)
+    output = ResearchOutput(answer="short", claims=_claims(40))
+
+    chopped = agent.truncate_output(output, 100)
+
+    assert chopped is not None
+    assert estimate_tokens(chopped.model_dump_json()) <= 100
+    assert 0 < len(chopped.claims) < 40  # trailing claims dropped, not all
+
+
+def test_truncate_output_declines_an_absurd_cap() -> None:
+    # A cap below even an empty output: the hook returns None and the policy
+    # degrades to partial at the dispatch layer.
+    agent, _ = _agent([], max_depth=0)
+    output = ResearchOutput(answer="anything", claims=[])
+
+    assert agent.truncate_output(output, 1) is None
 
 
 async def test_budget_ceiling_counts_children() -> None:
