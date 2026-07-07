@@ -1,17 +1,18 @@
-"""Fetch tool: issue an HTTP GET and return the response.
+"""Fetch tool: issue an HTTP GET and return the response body.
 
-The HTTP primitive for the std-lib tools layer. Migrated in Phase 8
-from `src/vibrantine/examples/fetch.py` where it lived as
-`FetchCommission`, a tool dressed in the Commission contract during
-v0 for composition convenience. Now properly a tool.
+The HTTP primitive of the std-lib tools layer. The deliverable is the
+document, so a non-2xx final response is a structured failure rather
+than a smaller success (unlike ShellTool, whose deliverable *is* the
+exchange report); the error kind carries the caller's retry signal.
 """
 
 from typing import ClassVar
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission, CommissionResult
+from vibrantine.contract import CallContext, Commission, CommissionResult, ErrorKind
 from vibrantine.tools._helpers import ZERO_COST, failure, provenance
 
 DEFAULT_TIMEOUT_SECONDS: float = 30.0
@@ -73,7 +74,10 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
         "- `timeout_seconds` defaults to 30; raise it for slow endpoints.\n"
         "- Redirects are followed automatically. Non-2xx final responses\n"
         "  and transport failures return ErrorState; only 2xx responses\n"
-        "  populate `output`.\n"
+        "  populate `output`. HTTP 429 fails as rate_limit (retry later),\n"
+        "  5xx as internal (retrying may succeed), any other non-2xx as\n"
+        "  validation (the URL as given yields no document; do not retry\n"
+        "  it unchanged).\n"
         "- The body is returned from `offset` (default 0) up to `max_chars`\n"
         "  (default 50000) characters. If `truncated` is true, more remains;\n"
         "  re-fetch with a higher `offset` to page through a large response.\n"
@@ -108,6 +112,18 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
                 provenance=prov,
             )
 
+        # The description promises an absolute http(s) URL; checking it here
+        # keeps a caller mistake classified as validation (non-retryable),
+        # like every sibling tool, instead of surfacing as a transport error.
+        parsed = urlparse(input.url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return failure(
+                "validation",
+                f"url must be absolute with an http(s) scheme; got {input.url!r}.",
+                retryable=False,
+                provenance=prov,
+            )
+
         try:
             async with httpx.AsyncClient(
                 transport=self._transport,
@@ -135,11 +151,23 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
         # Anything non-2xx fails; the description promises "only 2xx
         # responses populate output". Redirects are followed above, so a
         # 3xx here means redirection didn't resolve to a final document.
+        # The kind is the caller's retry signal: 429 is the vocabulary's
+        # own rate_limit; 5xx is the server malfunctioning, so retrying may
+        # succeed; any other non-2xx means the URL as given yields no
+        # document (ReadTool's missing file is the filesystem analog).
         if not response.is_success:
+            status = response.status_code
+            kind: ErrorKind
+            if status == 429:
+                kind, retryable = "rate_limit", True
+            elif status >= 500:
+                kind, retryable = "internal", True
+            else:
+                kind, retryable = "validation", False
             return failure(
-                "internal",
-                f"HTTP {response.status_code} from {input.url}.",
-                retryable=response.status_code >= 500,
+                kind,
+                f"HTTP {status} from {input.url}.",
+                retryable=retryable,
                 provenance=prov,
             )
 
