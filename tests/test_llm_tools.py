@@ -8,6 +8,7 @@ so the messages it was sent can be inspected.
 """
 
 import json
+import math
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
@@ -148,6 +149,148 @@ async def test_partial_child_result_renders_output_and_error() -> None:
     rendered = json.loads(tool_msg["content"])
     assert rendered["partial_output"] == {"text": "the usable half"}
     assert rendered["error"]["kind"] == "output_too_large"
+
+
+# --- Children receive the remaining budget, never the full grant ------------
+
+
+class _BudgetProbeIn(BaseModel):
+    query: str = Field(description="Probe input.")
+
+
+class _BudgetProbeOut(BaseModel):
+    text: str = Field(description="Probe output.")
+
+
+class _BudgetProbe(Commission[_BudgetProbeIn, _BudgetProbeOut]):
+    """Records the budget each dispatch hands it and reports a fixed cost."""
+
+    name: ClassVar[str] = "budget_probe"
+    description: ClassVar[str] = "Test probe recording the budget it is given."
+    input_type: ClassVar[type] = _BudgetProbeIn
+    output_type: ClassVar[type] = _BudgetProbeOut
+
+    def __init__(self, *, cost_usd: float) -> None:
+        super().__init__()
+        self.seen_budgets: list[float | None] = []
+        self._cost_usd = cost_usd
+
+    async def invoke(
+        self,
+        input: _BudgetProbeIn,
+        ctx: CallContext,
+    ) -> CommissionResult[_BudgetProbeOut]:
+        self.seen_budgets.append(ctx.budget_usd)
+        return CommissionResult[_BudgetProbeOut](
+            status="success",
+            output=_BudgetProbeOut(text="ok"),
+            provenance=Provenance(
+                source="budget_probe:test",
+                fetched_at=datetime.now(UTC),
+                confidence="grounded",
+            ),
+            cost=CostMetrics(estimated_usd=self._cost_usd),
+        )
+
+
+def _close(value: float | None, expected: float) -> bool:
+    """Float-tolerant equality for a recorded budget; None never matches."""
+    return value is not None and math.isclose(value, expected, abs_tol=1e-9)
+
+
+async def test_children_are_dispatched_with_the_remaining_budget() -> None:
+    # Two children in one turn: the second's ceiling must reflect the first's
+    # spend plus the loop's own turn cost, not a full copy of the grant.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[
+                    ("t1", "budget_probe", {"query": "a"}),
+                    ("t2", "budget_probe", {"query": "b"}),
+                ],
+                in_tokens=100,
+                out_tokens=50,
+            ),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=1.0),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert outcome.error is None
+    # Own turn cost: (100 * 10 + 50 * 20) / 1e6 = 0.002.
+    assert len(probe.seen_budgets) == 2
+    assert _close(probe.seen_budgets[0], 0.998)
+    assert _close(probe.seen_budgets[1], 0.748)
+
+
+async def test_exhausted_grant_starves_later_children_at_zero() -> None:
+    # The first child overspends the grant; the second's ceiling clamps at
+    # 0.0 rather than going negative, and the loop's own post-turn check
+    # then ends the run as budget_exceeded.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[
+                    ("t1", "budget_probe", {"query": "a"}),
+                    ("t2", "budget_probe", {"query": "b"}),
+                ],
+                in_tokens=100,
+                out_tokens=50,
+            ),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=0.2),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert len(probe.seen_budgets) == 2
+    assert _close(probe.seen_budgets[0], 0.198)
+    assert probe.seen_budgets[1] == 0.0
+    assert outcome.error is not None
+    assert outcome.error.kind == "budget_exceeded"
+
+
+async def test_no_budget_passes_none_through_to_children() -> None:
+    # No grant means nothing to allocate: children see None, not 0.0.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("t1", "budget_probe", {"query": "a"})]),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(0.0, 0.0),
+    )
+    assert outcome.error is None
+    assert probe.seen_budgets == [None]
 
 
 # --- Free-text replies: nudge once, fail on repeat --------------------------

@@ -1093,7 +1093,7 @@ with `dataclasses.replace` to hand a child a modified one.
 
 | Field | Default | Enforced? |
 |---|---|---|
-| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns |
+| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns, and dispatches each child with the remaining budget, never the full grant |
 | `capabilities` | `CapabilitySet()` | Yes: the LLM's tool menu is `toolbox` intersected with `capabilities.tools` (`None` = unrestricted) |
 | `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled` |
 | `on_progress` | `None` | Observability callback (`ProgressEvent`) |
@@ -1144,7 +1144,9 @@ What a basic Commission rides:
   Calling `conclude` is the model's only structured exit; you never parse
   free text.
 - Dispatches tool calls through `dispatch`, feeds results back, and rolls
-  child cost up into your result.
+  child cost up into your result. Each child is dispatched with the
+  remaining budget (the grant minus everything already spent), so ceilings
+  only shrink down the tree.
 - Stops on: `conclude`, budget exceeded, `max_iterations`, cancellation, or
   the model returning no tool call.
 

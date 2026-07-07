@@ -24,7 +24,7 @@ do the model-specific pricing lookup.
 import json
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import openai
@@ -125,6 +125,11 @@ async def run_llm_loop[OutputT: BaseModel](
     Stop conditions: conclude tool called, budget exceeded, max_iterations
     hit, cancellation, no tool call returned by the LLM (treated as a
     failure; the loop disallows free-form completion).
+
+    Budget flows down as allocation: each dispatched child receives the
+    grant minus everything already spent (own turns plus prior children),
+    so ceilings only shrink down the tree and a delegating Commission
+    cannot spend a multiple of its grant through same-turn children.
 
     Tool errors are fed back to the LLM as tool results, not raised as
     Commission failures; the LLM gets to decide whether to retry or
@@ -368,7 +373,19 @@ async def run_llm_loop[OutputT: BaseModel](
                     )
                     continue
 
-                result: CommissionResult[Any] = await dispatch(tool, tool_input, ctx)
+                # Allocation, not inheritance: a child's ceiling is what is
+                # left of this call's grant, not a full copy of it. Passing
+                # ctx unchanged would hand every child dispatched between
+                # budget checks the whole grant, letting a delegating tree
+                # spend a multiple of it. Recomputed per dispatch so
+                # sequential children see each other's spend; clamped at 0.0
+                # so an exhausted grant starves the child rather than going
+                # negative. No budget means nothing to allocate.
+                child_ctx: CallContext = ctx
+                if ctx.budget_usd is not None:
+                    remaining = max(ctx.budget_usd - own_cost - children_cost, 0.0)
+                    child_ctx = replace(ctx, budget_usd=remaining)
+                result: CommissionResult[Any] = await dispatch(tool, tool_input, child_ctx)
                 children_cost += result.cost.estimated_usd
                 messages.append(
                     {
