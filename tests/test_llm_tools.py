@@ -151,6 +151,26 @@ async def test_partial_child_result_renders_output_and_error() -> None:
     assert rendered["error"]["kind"] == "output_too_large"
 
 
+async def test_empty_system_prompt_sends_no_system_message() -> None:
+    # A promptless Commission (system_prompt None arrives here as "") must
+    # not send an empty system message; some providers reject it.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="",
+        user_message="go",
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(0.0, 0.0),
+    )
+    roles = [m["role"] for m in fake.calls[0]["messages"]]
+    assert "system" not in roles
+    assert roles[0] == "user"
+
+
 # --- Children receive the remaining budget, never the full grant ------------
 
 

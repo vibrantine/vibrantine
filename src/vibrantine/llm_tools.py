@@ -149,10 +149,13 @@ async def run_llm_loop[OutputT: BaseModel](
     ]
     by_name: dict[str, Commission[Any, Any]] = {c.name: c for c in permitted}
 
-    messages: list[ChatCompletionMessageParam] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": _to_provider_content(user_message)},
-    ]
+    # A Commission with no system prompt sends no system message at all;
+    # some providers reject empty system content, and an empty message
+    # carries nothing worth a cache slot.
+    messages: list[ChatCompletionMessageParam] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": _to_provider_content(user_message)})
 
     # The transcript escapes via the trace mailbox on every exit path
     # (conclude, budget stop, iteration cap, cancellation, a raise), so
