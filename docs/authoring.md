@@ -1210,7 +1210,7 @@ with `dataclasses.replace` to hand a child a modified one.
 
 | Field | Default | Enforced? |
 |---|---|---|
-| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns, and dispatches each child with the remaining budget, never the full grant |
+| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns, dispatches each child with the remaining budget (never the full grant), and shows the model a `[budget]` spend line after each turn's tool results so it can wind down before the stop |
 | `capabilities` | `CapabilitySet()` | Yes: the LLM's tool menu is `toolbox` intersected with `capabilities.tools` (`None` = unrestricted) |
 | `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled` |
 | `on_progress` | `None` | Observability callback (`ProgressEvent`) |
@@ -1264,6 +1264,11 @@ What a basic Commission rides:
   child cost up into your result. Each child is dispatched with the
   remaining budget (the grant minus everything already spent), so ceilings
   only shrink down the tree.
+- Under a budget, appends a one-line `[budget]` status (spent, grant,
+  remaining) after each turn's tool results. Your system prompt can build
+  on it: tell the model to keep a wrap-up reserve and conclude with what it
+  has as the remainder approaches it, instead of running into the hard
+  stop. Without a budget, no line is emitted.
 - Stops on: `conclude`, budget exceeded, `max_iterations`, cancellation, or
   the model returning no tool call.
 

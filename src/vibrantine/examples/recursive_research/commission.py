@@ -38,11 +38,13 @@ if TYPE_CHECKING:
 _PACKAGE = "vibrantine.examples.recursive_research"
 
 
-# TODO: Recursion Redesign. Budget exhaustion here is an emergency stop
-# (`budget_exceeded` failure); the settled principle is a graceful wind-down:
-# reserve a wrap-up slice of the grant, stop delegating as spend approaches
-# it, and conclude with a partial result plus receipts. Needs mid-run cost
-# visibility for the LLM.
+# Budget wind-down is prompt-driven: the loop's `[budget]` status line gives
+# the LLM mid-run spend visibility, and the system prompt reserves a wrap-up
+# slice of the grant (stop delegating near the reserve, conclude with the
+# claims in hand). The hard `budget_exceeded` stop remains the backstop. If
+# the prompt-only wind-down proves unreliable in practice, the structural
+# follow-up is the loop narrowing the tool menu to `conclude` inside the
+# reserve.
 class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     """Answer a research question recursively, grounding leaf answers in fetches."""
 

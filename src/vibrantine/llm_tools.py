@@ -131,6 +131,11 @@ async def run_llm_loop[OutputT: BaseModel](
     so ceilings only shrink down the tree and a delegating Commission
     cannot spend a multiple of its grant through same-turn children.
 
+    Budget is also visible mid-run: when a budget is set, a one-line
+    `[budget]` status follows each turn's tool results, so the LLM can
+    wind down (stop delegating, conclude with what it has) instead of
+    running blind into the hard stop.
+
     Tool errors are fed back to the LLM as tool results, not raised as
     Commission failures; the LLM gets to decide whether to retry or
     conclude with an apologetic answer.
@@ -398,6 +403,18 @@ async def run_llm_loop[OutputT: BaseModel](
                     }
                 )
 
+            # Mid-run cost visibility: the same ledger the hard stop above
+            # checks, shown to the LLM after the turn's tool results so it
+            # can wind down before the stop fires. Emitted only under a
+            # budget; an unbudgeted loop's transcript is unchanged.
+            if ctx.budget_usd is not None:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": _budget_status(own_cost + children_cost, ctx.budget_usd),
+                    }
+                )
+
         if conclude_failures:
             detail = (
                 f"Exceeded iteration cap of {max_iterations}: conclude was called "
@@ -436,6 +453,19 @@ def _to_provider_content(
         else:
             parts.append({"type": "image_url", "image_url": {"url": part.image_url}})
     return parts
+
+
+def _budget_status(spent_usd: float, grant_usd: float) -> str:
+    """The one-line spend report a budgeted loop shows its LLM each turn.
+
+    Reports the same spent-vs-grant numbers the loop's hard stop checks, so
+    the figure the LLM plans around and the figure that can end the run never
+    disagree. Remaining is clamped at zero: children dispatched since the
+    last check can overspend the grant, and a negative allowance reads as
+    nonsense to the model (the next turn's hard stop handles the overrun).
+    """
+    remaining = max(grant_usd - spent_usd, 0.0)
+    return f"[budget] spent ${spent_usd:.4f} of ${grant_usd:.4f} grant; ${remaining:.4f} remaining."
 
 
 def _render_tool_result(result: CommissionResult[Any]) -> str:

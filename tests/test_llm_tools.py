@@ -313,6 +313,107 @@ async def test_no_budget_passes_none_through_to_children() -> None:
     assert probe.seen_budgets == [None]
 
 
+# --- Budget status line: mid-run cost visibility for the LLM ----------------
+
+
+def _budget_lines(messages: list[dict[str, Any]]) -> list[str]:
+    """The `[budget]` status lines in a recorded call's message list."""
+    return [
+        str(m["content"])
+        for m in messages
+        if m["role"] == "user" and str(m["content"]).startswith("[budget]")
+    ]
+
+
+async def test_budget_status_line_follows_the_turns_tool_results() -> None:
+    # A budgeted loop shows its LLM the spend after each turn's tools: the
+    # same own-turns-plus-children ledger the hard stop checks.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[("t1", "budget_probe", {"query": "a"})],
+                in_tokens=100,
+                out_tokens=50,
+            ),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=1.0),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert outcome.error is None
+    # Own turn cost 0.002 + one probe child 0.25 = 0.252 spent of the 1.0 grant.
+    lines = _budget_lines(fake.calls[1]["messages"])
+    assert lines == ["[budget] spent $0.2520 of $1.0000 grant; $0.7480 remaining."]
+
+
+async def test_overspent_grant_reports_zero_remaining_not_negative() -> None:
+    # Children dispatched since the last check can overspend the grant; the
+    # status line clamps remaining at zero and the next turn's hard stop
+    # handles the overrun.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[
+                    ("t1", "budget_probe", {"query": "a"}),
+                    ("t2", "budget_probe", {"query": "b"}),
+                ],
+                in_tokens=100,
+                out_tokens=50,
+            ),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=0.2),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert outcome.error is not None and outcome.error.kind == "budget_exceeded"
+    lines = _budget_lines(fake.calls[1]["messages"])
+    assert lines == ["[budget] spent $0.5020 of $0.2000 grant; $0.0000 remaining."]
+
+
+async def test_unbudgeted_loop_emits_no_budget_line() -> None:
+    # No budget, no status line: today's unbudgeted transcripts are unchanged.
+    probe = _BudgetProbe(cost_usd=0.25)
+    fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("t1", "budget_probe", {"query": "a"})]),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="go",
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert outcome.error is None
+    assert _budget_lines(fake.calls[1]["messages"]) == []
+
+
 # --- Free-text replies: nudge once, fail on repeat --------------------------
 
 

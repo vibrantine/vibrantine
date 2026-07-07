@@ -6,6 +6,18 @@ All notable changes to Vibrantine are recorded here. The format follows
 public contract exported from `vibrantine.__all__`, plus the supported side
 doors its boundary docstring names (such as `vibrantine.testing`).
 
+## [Unreleased]
+
+### Added
+
+- Mid-run budget visibility for the default LLM loop: when `budget_usd`
+  is set, a one-line `[budget]` status (spent, grant, remaining) follows
+  each turn's tool results, using the same ledger the `budget_exceeded`
+  hard stop checks. This lets a system prompt instruct a graceful
+  wind-down (keep a wrap-up reserve, conclude with partial results)
+  instead of the run being killed blind; RecursiveResearch's prompt now
+  does exactly that. Unbudgeted runs see no new messages.
+
 ## [0.3.0] - 2026-07-07
 
 ### Fixed
