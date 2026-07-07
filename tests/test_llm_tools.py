@@ -386,7 +386,11 @@ async def test_overspent_grant_reports_zero_remaining_not_negative() -> None:
         prices_per_million=(10.0, 20.0),
     )
     assert outcome.error is not None and outcome.error.kind == "budget_exceeded"
-    lines = _budget_lines(fake.calls[1]["messages"])
+    # The overspend means the pre-turn gate declines a second provider call,
+    # so only one call is recorded; the fake holds a live reference to the
+    # loop's message list, which by then carries the clamped status line.
+    assert len(fake.calls) == 1
+    lines = _budget_lines(fake.calls[0]["messages"])
     assert lines == ["[budget] spent $0.5020 of $0.2000 grant; $0.0000 remaining."]
 
 
@@ -412,6 +416,88 @@ async def test_unbudgeted_loop_emits_no_budget_line() -> None:
     )
     assert outcome.error is None
     assert _budget_lines(fake.calls[1]["messages"]) == []
+
+
+# --- Pre-turn gate: decline a call whose input floor breaks the grant -------
+
+
+async def test_preflight_gate_declines_before_the_first_call() -> None:
+    # The opening message alone prices above the grant: the loop must fail
+    # before any provider call, with zero spend.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        # 4000 chars -> ~1000 tokens -> $0.01 input floor at $10/M.
+        user_message="x" * 4000,
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=0.005),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert fake.calls == []
+    assert outcome.error is not None
+    assert outcome.error.kind == "budget_exceeded"
+    assert "pre-flight" in outcome.error.detail
+    assert outcome.in_tokens == 0 and outcome.out_tokens == 0
+    assert outcome.children_cost == 0.0
+
+
+async def test_preflight_gate_declines_a_later_turn_after_spend_accumulates() -> None:
+    # Turn one passes the gate and spends most of the grant (own turn plus a
+    # child); the second turn's input floor then projects past the grant and
+    # is declined without another provider call.
+    probe = _BudgetProbe(cost_usd=0.001)
+    fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[("t1", "budget_probe", {"query": "a"})],
+                in_tokens=100,
+                out_tokens=50,
+            ),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        # 400 chars -> ~100 tokens -> $0.001 input floor: under the grant, so
+        # turn one proceeds. After it, spend is 0.002 (own) + 0.001 (child)
+        # = 0.003, and the grown transcript's floor pushes past 0.0035.
+        user_message="x" * 400,
+        toolbox=(probe,),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=0.0035),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert len(fake.calls) == 1
+    assert outcome.error is not None
+    assert outcome.error.kind == "budget_exceeded"
+    assert "pre-flight" in outcome.error.detail
+    assert outcome.in_tokens == 100 and outcome.out_tokens == 50
+    assert math.isclose(outcome.children_cost, 0.001, abs_tol=1e-12)
+
+
+async def test_unbudgeted_loop_never_gates_pre_flight() -> None:
+    # No budget means no estimation and no gate, however large the message.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model="google/gemini-3-flash-preview",
+        system_prompt="sys",
+        user_message="x" * 400_000,
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(10.0, 20.0),
+    )
+    assert outcome.error is None
+    assert len(fake.calls) == 1
 
 
 # --- Free-text replies: nudge once, fail on repeat --------------------------

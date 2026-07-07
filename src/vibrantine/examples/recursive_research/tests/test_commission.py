@@ -265,9 +265,13 @@ def test_truncate_output_declines_an_absurd_cap() -> None:
 
 
 async def test_budget_ceiling_counts_children() -> None:
-    # Budget $0.0005 = 2.5 turns. The child succeeds (one turn, $0.0002), but
-    # its cost rolled into the parent pushes the parent over after its second
-    # turn: own $0.0004 + child $0.0002 = $0.0006 > $0.0005.
+    # Budget $0.0005 = 2.5 turns. The child succeeds (one turn, $0.0002) and
+    # its cost rolls into the parent: own $0.0002 + child $0.0002 = $0.0004
+    # spent. The parent's wrap-up turn is then declined by the pre-flight
+    # gate (the transcript's input floor projects past the grant; the system
+    # prompt alone is comfortably over the ~200 tokens that takes), so the
+    # run fails budget_exceeded without paying for a third call. The scripted
+    # third response stays unconsumed by design.
     agent, fake = _agent(
         [
             llm_response(tool_calls=_delegate("r1", "sub")),
@@ -282,5 +286,6 @@ async def test_budget_ceiling_counts_children() -> None:
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "budget_exceeded"
-    assert len(fake.calls) == 3
-    assert abs(result.cost.estimated_usd - 3 * CALL_COST) < 1e-9
+    assert "pre-flight" in result.error.detail
+    assert len(fake.calls) == 2
+    assert abs(result.cost.estimated_usd - 2 * CALL_COST) < 1e-9

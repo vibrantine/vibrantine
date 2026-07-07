@@ -10,6 +10,17 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Added
 
+- Pre-turn budget gate in the default LLM loop: before each provider
+  call, the loop prices a floor for the turn's input (message text and
+  tool-call arguments through the `estimate_tokens` heuristic; images
+  and tool schemas excluded so the estimate only undercounts) and
+  declines the call with `budget_exceeded` when spend so far plus that
+  floor already exceeds the grant. Previously the budget was only
+  checked after a turn returned, so one more turn over a large
+  transcript on an expensively priced model could overshoot the grant
+  by whole dollars before enforcement fired. The post-turn check
+  remains; unbudgeted runs are unaffected.
+
 - Mid-run budget visibility for the default LLM loop: when `budget_usd`
   is set, a one-line `[budget]` status (spent, grant, remaining) follows
   each turn's tool results, using the same ledger the `budget_exceeded`

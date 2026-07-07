@@ -408,7 +408,10 @@ bounds are already on your Commission; this step is about knowing them.
 - **Budget.** The `budget_usd=0.10` you passed above is a hard ceiling. If
   the loop's spending reaches it, you get `status="failure"` with
   `error.kind == "budget_exceeded"` and the true cost of what was spent,
-  not an exception and not a surprise bill.
+  not an exception and not a surprise bill. The loop also declines a turn
+  up front when the turn's input cost alone would already break the
+  ceiling, so a run over a huge transcript fails before that money is
+  spent, not after.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
@@ -1210,7 +1213,7 @@ with `dataclasses.replace` to hand a child a modified one.
 
 | Field | Default | Enforced? |
 |---|---|---|
-| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns, dispatches each child with the remaining budget (never the full grant), and shows the model a `[budget]` spend line after each turn's tool results so it can wind down before the stop |
+| `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns (and pre-flight, before a turn whose input cost alone would break the grant), dispatches each child with the remaining budget (never the full grant), and shows the model a `[budget]` spend line after each turn's tool results so it can wind down before the stop |
 | `capabilities` | `CapabilitySet()` | Yes: the LLM's tool menu is `toolbox` intersected with `capabilities.tools` (`None` = unrestricted) |
 | `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled` |
 | `on_progress` | `None` | Observability callback (`ProgressEvent`) |
@@ -1269,8 +1272,10 @@ What a basic Commission rides:
   on it: tell the model to keep a wrap-up reserve and conclude with what it
   has as the remainder approaches it, instead of running into the hard
   stop. Without a budget, no line is emitted.
-- Stops on: `conclude`, budget exceeded, `max_iterations`, cancellation, or
-  the model returning no tool call.
+- Stops on: `conclude`, budget exceeded (after an overrunning turn, or
+  pre-flight when the next turn's estimated input cost alone would break
+  the grant), `max_iterations`, cancellation, or the model returning no
+  tool call.
 
 Any Commission placed in another Commission's toolbox is exposed to that
 model with your `description` verbatim, which is why the description is

@@ -46,6 +46,7 @@ from vibrantine.contract import (
     ErrorKind,
     ErrorState,
     TextPart,
+    estimate_tokens,
 )
 from vibrantine.dispatch import deposit_llm_trace, dispatch
 
@@ -122,9 +123,11 @@ async def run_llm_loop[OutputT: BaseModel](
 ) -> LoopOutcome[OutputT]:
     """Run the LLM call-dispatch-feed cycle until conclude or a stop condition.
 
-    Stop conditions: conclude tool called, budget exceeded, max_iterations
-    hit, cancellation, no tool call returned by the LLM (treated as a
-    failure; the loop disallows free-form completion).
+    Stop conditions: conclude tool called, budget exceeded (checked after
+    each turn, and pre-flight before each turn when the next call's input
+    floor alone would break the grant), max_iterations hit, cancellation,
+    no tool call returned by the LLM (treated as a failure; the loop
+    disallows free-form completion).
 
     Budget flows down as allocation: each dispatched child receives the
     grant minus everything already spent (own turns plus prior children),
@@ -198,6 +201,29 @@ async def run_llm_loop[OutputT: BaseModel](
                     children_cost=children_cost,
                 )
 
+            # Pre-turn gate: decline the next LLM call when the floor of its
+            # input cost alone already breaks the grant, instead of spending
+            # past the budget and failing on the post-turn check below. The
+            # failure case is a big accumulated transcript on an expensively
+            # priced model, where one more turn overshoots by whole dollars,
+            # not pennies. Floor means underestimate: the gate never kills a
+            # turn the post-turn check might have allowed.
+            if ctx.budget_usd is not None:
+                spent = (in_tokens * in_price + out_tokens * out_price) / 1_000_000 + children_cost
+                input_floor = _estimate_transcript_tokens(messages) * in_price / 1_000_000
+                if spent + input_floor > ctx.budget_usd:
+                    return _loop_error(
+                        "budget_exceeded",
+                        f"Declined the next LLM turn pre-flight: spend so far "
+                        f"${spent:.6f} plus the next turn's estimated input "
+                        f"floor of ${input_floor:.6f} exceeds the "
+                        f"${ctx.budget_usd:.6f} grant.",
+                        retryable=False,
+                        in_tokens=in_tokens,
+                        out_tokens=out_tokens,
+                        children_cost=children_cost,
+                    )
+
             try:
                 response: ChatCompletion = await client.chat.completions.create(
                     model=model,
@@ -237,7 +263,9 @@ async def run_llm_loop[OutputT: BaseModel](
 
             # Own token cost plus everything dispatched children spent, so a
             # recursive or sub-Commission-bearing loop enforces the budget against
-            # its whole subtree, not just its own turns (may overshoot by one turn).
+            # its whole subtree, not just its own turns. May still overshoot by
+            # one turn: the pre-turn gate above declines only calls whose input
+            # floor alone breaks the grant, and output tokens are unguessable.
             own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
             cost_so_far = own_cost + children_cost
             if ctx.budget_usd is not None and cost_so_far > ctx.budget_usd:
@@ -453,6 +481,34 @@ def _to_provider_content(
         else:
             parts.append({"type": "image_url", "image_url": {"url": part.image_url}})
     return parts
+
+
+def _estimate_transcript_tokens(messages: Sequence[ChatCompletionMessageParam]) -> int:
+    """Floor estimate of the input tokens the next LLM turn will send.
+
+    Counts message text and tool-call names/arguments through the contract's
+    `estimate_tokens` heuristic. Image parts and the tool schemas are left
+    out: their token costs are not proportional to their text length, and
+    the pre-turn gate needs a floor, an estimate that only *under*counts, so
+    it never declines a turn the post-turn check might have allowed.
+    """
+    total = 0
+    for message in cast("Sequence[dict[str, Any]]", messages):
+        content = message.get("content")
+        if isinstance(content, str):
+            total += estimate_tokens(content)
+        elif isinstance(content, list):
+            # Parts lists are built by _to_provider_content above, so every
+            # entry is a typed content-part dict.
+            for part in cast("list[dict[str, Any]]", content):
+                if part.get("type") == "text":
+                    total += estimate_tokens(str(part.get("text", "")))
+        for tool_call in message.get("tool_calls") or ():
+            function = tool_call.get("function", {})
+            total += estimate_tokens(
+                str(function.get("name", "")) + str(function.get("arguments", ""))
+            )
+    return total
 
 
 def _budget_status(spent_usd: float, grant_usd: float) -> str:
