@@ -52,7 +52,8 @@ async def test_delete_directory_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_delete_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(DeleteTool(), 
+    result = await dispatch(
+        DeleteTool(),
         DeleteInput(path=Path("relative.txt")),
         CallContext(),
     )
@@ -66,7 +67,8 @@ async def test_delete_cancelled_returns_cancelled(tmp_path: Path) -> None:
     target = tmp_path / "still-here.txt"
     target.write_text("preserved", encoding="utf-8")
 
-    result = await dispatch(DeleteTool(), 
+    result = await dispatch(
+        DeleteTool(),
         DeleteInput(path=target),
         CallContext(cancel=_AlwaysCancelled()),
     )

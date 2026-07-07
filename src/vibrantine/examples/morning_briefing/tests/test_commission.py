@@ -231,7 +231,8 @@ async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) 
 async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) -> None:
     briefing, fakes = _briefing()
 
-    result = await dispatch(briefing, 
+    result = await dispatch(
+        briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -246,7 +247,8 @@ async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:
     briefing, _ = _briefing()
     events: list[ProgressEvent] = []
 
-    result = await dispatch(briefing, 
+    result = await dispatch(
+        briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         CallContext(budget_usd=0.50, on_progress=events.append),
     )

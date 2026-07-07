@@ -233,9 +233,7 @@ async def test_sqlite_columns_answer_sql_directly(tmp_path: Path) -> None:
     # the database file itself answers questions in plain SQL.
     db = tmp_path / "runs.db"
     backend = SqliteBackend(db)
-    await backend.store(
-        _record(run_id="cheap-ok", mode="always", status="success", cost_usd=0.001)
-    )
+    await backend.store(_record(run_id="cheap-ok", mode="always", status="success", cost_usd=0.001))
     await backend.store(
         _record(run_id="pricey-fail", mode="always", status="failure", cost_usd=0.09)
     )

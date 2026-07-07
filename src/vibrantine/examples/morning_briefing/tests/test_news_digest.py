@@ -101,7 +101,8 @@ async def test_synthesize_failure_propagates_its_error_kind() -> None:
 async def test_cancellation_before_fetches_returns_cancelled() -> None:
     digest, fake = make_digest(field="world", pages=PAGES, claims=[])
 
-    result = await dispatch(digest, 
+    result = await dispatch(
+        digest,
         NewsDigestInput(briefing_date=DATE),
         CallContext(cancel=AlwaysCancelled()),
     )

@@ -89,9 +89,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     commission_name = name
     commission_description = description
     prompt = (
-        system_prompt
-        if system_prompt is not None
-        else _default_system_prompt(description, input)
+        system_prompt if system_prompt is not None else _default_system_prompt(description, input)
     )
 
     class _FromFactory(Commission[InputT, OutputT]):
@@ -101,9 +99,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
         output_type = output
         system_prompt = prompt
 
-        def build_user_message(
-            self, input: InputT, ctx: CallContext
-        ) -> "str | list[ContentPart]":
+        def build_user_message(self, input: InputT, ctx: CallContext) -> "str | list[ContentPart]":
             return input.model_dump_json(indent=2)
 
     # The class name surfaces in reprs and debuggers; the placeholder

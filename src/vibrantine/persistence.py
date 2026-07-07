@@ -185,9 +185,7 @@ class SqliteBackend:
                 )
                 """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_records_parent ON records(parent_run_id)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_records_parent ON records(parent_run_id)")
 
     async def store(self, record: PersistedRecord) -> None:
         await asyncio.to_thread(self._store_sync, record)
@@ -236,9 +234,7 @@ class SqliteBackend:
 
     def _load_sync(self, run_id: str) -> PersistedRecord | None:
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT record FROM records WHERE run_id = ?", (run_id,)
-            ).fetchone()
+            row = conn.execute("SELECT record FROM records WHERE run_id = ?", (run_id,)).fetchone()
         if row is None:
             return None
         return PersistedRecord.model_validate_json(cast("str", row[0]))

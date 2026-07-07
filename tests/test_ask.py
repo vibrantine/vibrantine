@@ -46,7 +46,8 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="What is the capital of France?", file_path=file),
         CallContext(),
     )
@@ -74,7 +75,8 @@ async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> Non
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="How many lines?", file_path=file),
         CallContext(),
     )
@@ -96,7 +98,8 @@ async def test_ask_exceeds_iteration_cap_returns_internal_failure(tmp_path: Path
     ]
     commission, _fake = _commission(responses, max_iterations=3)
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(),
     )
@@ -120,7 +123,8 @@ async def test_ask_no_tool_call_returns_internal_failure(tmp_path: Path) -> None
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(),
     )
@@ -148,7 +152,8 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(budget_usd=0.001),
     )
@@ -166,7 +171,8 @@ async def test_ask_cancellation_at_entry_makes_no_llm_call(tmp_path: Path) -> No
 
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(cancel=AlwaysCancelled()),
     )
@@ -191,7 +197,8 @@ async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) ->
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(),
     )
@@ -212,7 +219,8 @@ async def test_ask_emits_loop_start_progress_event(tmp_path: Path) -> None:
 
     commission, _fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(commission, 
+    await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(on_progress=events.append),
     )
@@ -238,7 +246,8 @@ async def test_ask_unrestricted_capabilities_offer_read(tmp_path: Path) -> None:
     # Default ctx → capabilities.tools is None → unrestricted.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(commission, 
+    await dispatch(
+        commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         CallContext(),
     )
@@ -252,7 +261,8 @@ async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
     # Empty allow-list = deny all; read drops off the menu, conclude stays.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(commission, 
+    await dispatch(
+        commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         CallContext(capabilities=CapabilitySet(tools=frozenset())),
     )
@@ -272,7 +282,8 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
         ]
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         CallContext(capabilities=CapabilitySet(tools=frozenset())),
     )
@@ -298,7 +309,8 @@ async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
         model="unregistered/model",
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(budget_usd=1.0),
     )
@@ -321,7 +333,8 @@ async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> N
         model="unregistered/model",
     )
 
-    result = await dispatch(commission, 
+    result = await dispatch(
+        commission,
         AskInput(question="?", file_path=file),
         CallContext(),
     )

@@ -36,7 +36,8 @@ async def test_fetch_success_populates_output_and_provenance() -> None:
     tool = FetchTool(transport=transport)
     before = datetime.now(UTC)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/hello"),
         CallContext(),
     )
@@ -59,7 +60,8 @@ async def test_fetch_404_returns_internal_failure() -> None:
     transport = httpx.MockTransport(_handler_404)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/missing"),
         CallContext(),
     )
@@ -76,7 +78,8 @@ async def test_fetch_timeout_returns_timeout_failure() -> None:
     transport = httpx.MockTransport(_handler_timeout)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/slow", timeout_seconds=0.1),
         CallContext(),
     )
@@ -93,7 +96,8 @@ async def test_fetch_cancelled_before_request_returns_cancelled() -> None:
     tool = FetchTool(transport=transport)
     ctx = CallContext(cancel=_AlwaysCancelled())
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/anything"),
         ctx,
     )
@@ -117,7 +121,8 @@ async def test_fetch_bounds_body_and_signals_truncation() -> None:
     transport = httpx.MockTransport(_handler_big)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/big", max_chars=50),
         CallContext(),
     )
@@ -133,7 +138,8 @@ async def test_fetch_offset_paginates_the_body() -> None:
     transport = httpx.MockTransport(_handler_big)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/big", offset=180, max_chars=50),
         CallContext(),
     )
@@ -155,7 +161,8 @@ async def test_fetch_follows_redirects_to_the_final_document() -> None:
     transport = httpx.MockTransport(_handler_redirect)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/old"),
         CallContext(),
     )
@@ -176,7 +183,8 @@ async def test_fetch_non_2xx_final_response_is_a_failure() -> None:
     transport = httpx.MockTransport(_handler_bare_redirect)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/cached"),
         CallContext(),
     )
@@ -192,7 +200,8 @@ async def test_fetch_small_body_not_truncated() -> None:
     transport = httpx.MockTransport(_handler_ok)  # returns "hello world" (11 chars)
     tool = FetchTool(transport=transport)
 
-    result = await dispatch(tool, 
+    result = await dispatch(
+        tool,
         FetchInput(url="https://example.test/hello"),
         CallContext(),
     )
