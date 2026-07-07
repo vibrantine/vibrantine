@@ -240,7 +240,8 @@ class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
         model: str | Model | None = None,
     ) -> None:
         # client/model forwarded to the base so the default loop is injectable
-        # for DI and tests (the constructor-injection convention; see AGENTS.md).
+        # for DI and tests (the constructor-injection convention; see
+        # docs/authoring.md, Step 4: The Toolbox).
         super().__init__(
             toolbox=(draft or DraftReplyCommission(), notify or NotifyUserTool()),
             client=client,
