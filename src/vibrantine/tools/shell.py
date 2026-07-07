@@ -4,7 +4,9 @@ The escape-hatch tool: anything the std lib doesn't have a dedicated
 tool for, an LLM can fall back to via Shell. The most powerful and
 most side-effectful tool in the std lib; placed last in the build
 order so the protocol's failure surface was well-exercised on simpler
-tools first.
+tools first. Gating and confirmation are the caller's policy
+(capabilities, or the application layer above); the tool runs what it
+is told.
 
 Captures stdout, stderr, exit code, and wall-clock runtime. Honors a
 timeout; exceeding it terminates the process and returns

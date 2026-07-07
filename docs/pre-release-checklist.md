@@ -10,59 +10,73 @@ provisional, or future work.
 
 ## Release Posture
 
-- [ ] Keep `pyproject.toml` at a pre-release version unless a package release is
+Last pass: 2026-07-07.
+
+- [x] Keep `pyproject.toml` at a pre-release version unless a package release is
+  intentional. (0.2.0, matching the intentional v0.2.0 tag.)
+- [x] Keep README installation guidance git-based until PyPI publishing is
   intentional.
-- [ ] Keep README installation guidance git-based until PyPI publishing is
-  intentional.
-- [ ] Make the README maturity language match the repo's real state: early,
+- [x] Make the README maturity language match the repo's real state: early,
   referenceable, not fully launched.
-- [ ] Keep `contact@vibrantine.com` marked as a placeholder until the address
+- [x] Keep `contact@vibrantine.com` marked as a placeholder until the address
   exists.
-- [ ] Confirm the package metadata has no personal contact email unless that is
-  deliberate.
-- [ ] Confirm the GitHub repository description and visibility match the README
-  posture.
+- [x] Confirm the package metadata has no personal contact email unless that is
+  deliberate. (`authors` carries a name only.)
+- [x] Confirm the GitHub repository description and visibility match the README
+  posture. (Private; description matches the pyproject one-liner. Note for
+  the sharing step: while the repo is private, the README's git-install
+  command only works for collaborators.)
 
 ## Security And Privacy Passes
 
-Repeat these passes before sharing the repository more widely.
+Repeat these passes before sharing the repository more widely. Last pass:
+2026-07-07, all clean; details noted per item.
 
-- [ ] Search tracked files for secrets:
+- [x] Search tracked files for secrets:
   - API keys, bearer tokens, passwords, provider tokens, private URLs.
   - `.env` values accidentally copied into docs, tests, or fixtures.
-- [ ] Search tracked files for personal identifiers:
+  - (Every hit is an env-var name, a doc placeholder like `sk-or-...`, or
+    the fake `sk-test` in tests.)
+- [x] Search tracked files for personal identifiers:
   - private email addresses,
   - local absolute paths,
   - machine usernames,
   - private repo names.
-- [ ] Confirm `.env` is ignored and `.env.example` contains only empty public
+- [x] Confirm `.env` is ignored and `.env.example` contains only empty public
   variable names.
-- [ ] Confirm no committed fixtures contain real provider responses with
-  embedded credentials or private payloads.
-- [ ] Review docs for private/process material:
+- [x] Confirm no committed fixtures contain real provider responses with
+  embedded credentials or private payloads. (The only fixture module is
+  `recursive_research/tests/fixture_pages.py`, fictional by construction.)
+- [x] Review docs for private/process material:
   - internal handoff notes,
   - scratch planning that should remain outside the repo,
   - references to private projects that are not needed to understand
     Vibrantine.
-- [ ] Review GitHub-visible branches and tags for pre-cleanup history that
-  should not be public.
-- [ ] Review generated artifacts:
+  - (The concept drafts promoted into `authoring.md` and retired on
+    2026-07-07; `docs/working/` holds one deliberate decision record.)
+- [x] Review GitHub-visible branches and tags for pre-cleanup history that
+  should not be public. (Remote holds `main`, the current work branch, and
+  the `v0.1.0`/`v0.2.0` tags; nothing else.)
+- [x] Review generated artifacts:
   - no `dist/`,
   - no caches,
   - no accidental persisted run records,
   - no test output directories.
-- [ ] Review filesystem and process tools for clear authority language:
+  - (None tracked; `.gitignore` covers each class.)
+- [x] Review filesystem and process tools for clear authority language:
   - `ShellTool`,
   - `WriteTool`,
   - `EditTool`,
   - `DeleteTool`,
   - `MoveTool`,
   - `FetchTool`.
-- [ ] Confirm destructive or externally powerful tools describe that gating and
-  confirmation are application policy.
-- [ ] Confirm `FilesystemBackend` rejects path-like `run_id` values that escape
+- [x] Confirm destructive or externally powerful tools describe that gating and
+  confirmation are application policy. (Delete already said it; the same
+  statement added to Shell and Write on 2026-07-07.)
+- [x] Confirm `FilesystemBackend` rejects path-like `run_id` values that escape
   its root, and `SqliteBackend` binds `run_id` as a query parameter rather
-  than interpolating it.
+  than interpolating it. (Both hold; escape rejection is pinned by
+  `tests/test_persistence.py::test_*_rejects_run_id_that_escapes_root`.)
 
 Suggested local searches:
 
@@ -74,13 +88,20 @@ git status -sb
 
 ## Validation Gates
 
-- [ ] `uv run pytest`
-- [ ] `uv run ruff check .`
-- [ ] `uv run ruff format --check .`
-- [ ] `uv run basedpyright`
-- [ ] `uv build`
+Last pass: 2026-07-07, all green.
+
+- [x] `uv run pytest` (359 passed, 6 skipped)
+- [x] `uv run ruff check .`
+- [x] `uv run ruff format --check .`
+- [x] `uv run basedpyright`
+- [x] `uv build` (wheel excludes colocated `tests/`, carries `prompts/*.md`)
 - [ ] Optional before package release: `uv build --no-sources`
-- [ ] Fresh git dependency smoke test from a separate temporary project.
+- [x] Fresh git dependency smoke test from a separate temporary project.
+  (A `uv init` project added vibrantine as a git dependency, imported the
+  frozen surface, ran `ReadTool` through `invoke_sync` with no API key, and
+  imported the prompt-bearing `RecursiveResearchCommission` from the built
+  package. Note: `uv add git+...@<branch>` chokes on branch names containing
+  slashes; pin a commit SHA or tag instead.)
 
 The fresh-install smoke test should prove that a consumer can import
 Vibrantine without relying on the checkout layout.
@@ -409,14 +430,15 @@ Potential future tasks:
 
 ## Final Wrap Checklist
 
-- [ ] Security/privacy passes complete.
+- [x] Security/privacy passes complete. (Latest pass 2026-07-07; repeat at
+  the actual sharing moment.)
 - [ ] Commission-by-Commission audit complete or consciously deferred.
 - [x] Examples folder exists or is explicitly deferred. `vibrantine.examples`
   landed 2026-07-05; all shipped Commissions live there, importable but not
   part of the frozen surface.
 - [ ] External consumer repo smoke test complete or explicitly deferred.
 - [ ] README reflects current maturity.
-- [ ] Docs index points to this checklist.
+- [x] Docs index points to this checklist.
 - [ ] CI green after final push.
 - [ ] Local validation gates green.
 - [ ] Worktree clean.
