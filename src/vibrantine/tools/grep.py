@@ -10,10 +10,10 @@ tool that surfaces the tool-result-budgeting design question
 concretely (see `docs/design.md § Oversized output is a policy the
 caller picks`).
 
-Binary files (any read that raises UnicodeDecodeError) are skipped
-silently during directory walks; on a direct file path, the same error
-surfaces as an `internal` failure so the caller knows the requested
-file was unreadable.
+Unreadable files (binary content, permission denied, vanished mid-walk)
+are skipped silently during directory walks so one bad entry never
+aborts the rest; on a direct file path, the same failures surface as
+errors so the caller knows the requested file was unreadable.
 """
 
 import os
@@ -82,8 +82,8 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
         "Usage:\n"
         "- `pattern` uses Python `re` syntax.\n"
         "- `path` must be absolute. Files are searched directly; directories\n"
-        "  are walked recursively. Binary files are skipped silently during\n"
-        "  directory walks.\n"
+        "  are walked recursively. Unreadable files (binary content,\n"
+        "  permission denied) are skipped silently during directory walks.\n"
         "- `max_matches` (default 100) bounds output size. Check the\n"
         "  `truncated` flag: if true, narrow your pattern or raise the cap\n"
         "  (mind the context budget).\n"
@@ -202,25 +202,29 @@ def _iter_target_files(path: Path) -> Iterator[Path]:
 def _grep_file(
     file: Path,
     pattern: re.Pattern[str],
-    raise_on_decode_error: bool,
+    surface_read_errors: bool,
 ) -> tuple[list[GrepMatch], tuple[ErrorKind, str] | None]:
     """Search one file. Returns (matches, error-tuple).
 
-    `raise_on_decode_error=True` surfaces the encoding failure as an
-    error tuple (kind, detail); False skips the file silently (the
-    directory-walk case).
+    `surface_read_errors=True` (the direct-file case) returns any read
+    failure as an error tuple (kind, detail); False (the directory-walk
+    case) skips the unreadable file silently, so one bad entry never
+    aborts the rest of the walk.
     """
     try:
         text = file.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return [], ("validation", f"File not found: {file!s}.")
+        # During a walk this is a race: the file vanished between listing
+        # and reading. Skip it like any other unreadable entry.
+        if surface_read_errors:
+            return [], ("validation", f"File not found: {file!s}.")
+        return [], None
     except PermissionError:
-        # Skip unreadable files during directory walks; surface on direct paths.
-        if raise_on_decode_error:
+        if surface_read_errors:
             return [], ("internal", f"Permission denied reading {file!s}.")
         return [], None
     except UnicodeDecodeError as exc:
-        if raise_on_decode_error:
+        if surface_read_errors:
             return [], ("internal", f"Could not decode {file!s} as UTF-8: {exc}.")
         return [], None
     matches = [
