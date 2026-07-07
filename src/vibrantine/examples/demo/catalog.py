@@ -4,6 +4,11 @@ The demo is the caller, so everything caller-owned lives here: which weather
 source and news feeds the briefing gets (capacity), what question the ask
 run poses (task), and the fictional texts synthesize merges. The example
 modules themselves stay pure worked examples, free of demo scaffolding.
+
+The split mirrors the capacity/task split: `make_*` builds the
+demo-configured Commission instance (capacity; what the chat agent's
+toolbox needs), and `build_*` pairs it with the canned input (task; what a
+menu run needs).
 """
 
 from datetime import UTC, datetime
@@ -34,6 +39,10 @@ from vibrantine.models import Model
 _ASK_SOURCE = Path(str(_ask_module.__file__))
 
 
+def make_ask(model: str | Model | None = None) -> AskCommission:
+    return AskCommission(model=model)
+
+
 def build_ask(model: str | Model | None = None) -> tuple[AskCommission, AskInput]:
     """Proof-of-life run: ask the example module about its own source file.
 
@@ -41,7 +50,7 @@ def build_ask(model: str | Model | None = None) -> tuple[AskCommission, AskInput
     so a fresh install can run it with nothing but an API key.
     """
     return (
-        AskCommission(model=model),
+        make_ask(model),
         AskInput(
             question=(
                 "What tools does this Commission hand its LLM, and how does "
@@ -50,6 +59,10 @@ def build_ask(model: str | Model | None = None) -> tuple[AskCommission, AskInput
             file_path=_ASK_SOURCE,
         ),
     )
+
+
+def make_synthesize(model: str | Model | None = None) -> SynthesizeCommission:
+    return SynthesizeCommission(model=model)
 
 
 def build_synthesize(
@@ -89,21 +102,19 @@ def build_synthesize(
         ),
     ]
     return (
-        SynthesizeCommission(model=model),
+        make_synthesize(model),
         SynthesizeInput(sources=sources, focus="What was decided, and who dissented?"),
     )
 
 
-def build_morning_briefing(
-    model: str | Model | None = None,
-) -> tuple[MorningBriefingCommission, MorningBriefingInput]:
-    """One weather leaf plus two single-source digests, written to cwd.
+def make_morning_briefing(model: str | Model | None = None) -> MorningBriefingCommission:
+    """One weather leaf plus two single-source digests.
 
     The sources are live public URLs (wttr.in, BBC World RSS, Hacker News
     RSS), so a failed fetch shows up as a partial briefing: that degradation
     path is part of what the example demonstrates.
     """
-    briefing = MorningBriefingCommission(
+    return MorningBriefingCommission(
         # j1 = JSON with current conditions plus a 3-day forecast, so the
         # weather LLM has a real outlook to report, not just a one-liner.
         weather=WeatherCommission(source_url="https://wttr.in/?format=j1", model=model),
@@ -121,7 +132,21 @@ def build_morning_briefing(
         ),
         summarize=SummarizeCommission(model=model),
     )
-    return briefing, MorningBriefingInput(output_path=Path("morning-briefing-demo.md"))
+
+
+def build_morning_briefing(
+    model: str | Model | None = None,
+) -> tuple[MorningBriefingCommission, MorningBriefingInput]:
+    """The canned run writes today's edition to the working directory."""
+    return (
+        make_morning_briefing(model),
+        MorningBriefingInput(output_path=Path("morning-briefing-demo.md")),
+    )
+
+
+def make_recursive_research(model: str | Model | None = None) -> RecursiveResearchCommission:
+    """Depth and iterations stay low so a demo run finishes inside budget."""
+    return RecursiveResearchCommission(max_depth=1, model=model, max_iterations=8)
 
 
 def build_recursive_research(
@@ -132,10 +157,10 @@ def build_recursive_research(
     The question spans two projects with separate seed pages, so the root
     researcher can't answer from one fetch; the natural move is to delegate
     one sub-question per project, which makes the recursion visible in the
-    trace. Depth and iterations stay low so the run finishes inside budget.
+    trace.
     """
     return (
-        RecursiveResearchCommission(max_depth=1, model=model, max_iterations=8),
+        make_recursive_research(model),
         ResearchInput(
             question=(
                 "How do the Python and Rust projects differ in governance and "

@@ -68,9 +68,7 @@ def _record_line(record: PersistedRecord) -> str:
     line = f"{record.commission_name}  {record_status(record)}  ${record_cost(record):.4f}"
     error: dict[str, Any] | None = record.result.get("error")
     if error is not None:
-        detail = str(error.get("detail", ""))
-        if len(detail) > 100:
-            detail = detail[:97] + "..."
+        detail = _clip(str(error.get("detail", "")), limit=100)
         line += f"  ({error.get('kind', 'unknown')}: {detail})"
     return line
 
@@ -142,6 +140,7 @@ def render_trace(records: list[PersistedRecord]) -> str:
 
 
 def _clip(text: str, limit: int = 160) -> str:
+    """Flatten whitespace and truncate: every trace line stays one line."""
     flat = " ".join(text.split())
     return flat if len(flat) <= limit else flat[: limit - 3] + "..."
 

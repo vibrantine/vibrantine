@@ -3,7 +3,14 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from vibrantine.contract import PersistedRecord
+from vibrantine.contract import (
+    CommissionResult,
+    CommissionStatus,
+    CostMetrics,
+    ErrorState,
+    PersistedRecord,
+    Provenance,
+)
 from vibrantine.examples.demo.trace import (
     RecordingBackend,
     record_cost,
@@ -19,12 +26,25 @@ def make_record(
     *,
     parent: str | None = None,
     name: str = "worker",
-    status: str = "success",
+    status: CommissionStatus = "success",
     cost: float = 0.01,
-    error: dict[str, Any] | None = None,
+    error: ErrorState | None = None,
     created_at: datetime | None = None,
     llm_trace: list[dict[str, Any]] | None = None,
 ) -> PersistedRecord:
+    # The result dict is a real CommissionResult dump, exactly what dispatch
+    # persists, so these tests break loudly if the envelope's serialized
+    # shape ever drifts from what the renderers assume.
+    result = CommissionResult[Any](
+        status=status,
+        error=error,
+        provenance=Provenance(
+            source=name,
+            fetched_at=created_at or datetime.now(UTC),
+            confidence="grounded",
+        ),
+        cost=CostMetrics(estimated_usd=cost),
+    )
     return PersistedRecord(
         run_id=run_id,
         parent_run_id=parent,
@@ -32,7 +52,7 @@ def make_record(
         mode="always",
         created_at=created_at or datetime.now(UTC),
         input={},
-        result={"status": status, "cost": {"estimated_usd": cost}, "error": error},
+        result=result.model_dump(),
         ctx_snapshot={},
         llm_trace=llm_trace,
     )
@@ -75,7 +95,7 @@ def test_render_trace_nests_children_and_totals_roots_only() -> None:
             name="digest",
             status="failure",
             cost=0.002,
-            error={"kind": "internal", "detail": "all sources failed"},
+            error=ErrorState(kind="internal", detail="all sources failed", retryable=True),
         ),
         make_record("root", name="briefing", status="partial", cost=0.0413),
     ]
