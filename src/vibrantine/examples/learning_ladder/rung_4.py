@@ -82,15 +82,23 @@ def main() -> None:
         print(f"tonight: {result.output.dish}\n")
 
     print(f"tree cost: ${result.cost.estimated_usd:.6f} (children included)")
-    print(
-        f"planner's own turns: {result.cost.in_tokens} tokens in, "
-        f"{result.cost.out_tokens} out (child tokens live on the child's record)\n"
-    )
+    # Token counts are None when the run failed before any LLM turn
+    # (missing API key, budget declined pre-flight).
+    if result.cost.in_tokens is not None:
+        print(
+            f"planner's own turns: {result.cost.in_tokens} tokens in, "
+            f"{result.cost.out_tokens} out (child tokens live on the child's record)\n"
+        )
 
     print(f"every node left a record in {db}; ask it anything in SQL:")
     with closing(sqlite3.connect(db)) as conn:
         rows = conn.execute(
-            "SELECT commission_name, status, cost_usd FROM records ORDER BY created_at"
+            # The db accumulates across runs, so scope to this run's tree:
+            # the planner's own record plus its direct children (the whole
+            # tree here is two levels).
+            "SELECT commission_name, status, cost_usd FROM records "
+            "WHERE run_id = ? OR parent_run_id = ? ORDER BY created_at",
+            (result.run_id, result.run_id),
         ).fetchall()
     for name, status, cost_usd in rows:
         print(f"  {name:<15} {status:<8} ${cost_usd:.6f}")

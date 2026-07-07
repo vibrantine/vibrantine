@@ -45,7 +45,8 @@ _SYSTEM_PROMPT = (
     "draft_reply result.\n"
     "- `notify`: the user must see this. Call `notify_user` with a short "
     "reason, then call `conclude` with route='notify' and notification_sent=true.\n"
-    "Call at most one handler. Produce output only through `conclude`."
+    "Call at most one handler. Produce output only through `conclude`, and "
+    "always include a one-sentence `rationale` for the route you chose."
 )
 
 

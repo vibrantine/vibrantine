@@ -236,6 +236,20 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         in_tokens += second_in
         out_tokens += second_out
 
+        # Post-second-call check, mirroring the framework loop's post-turn
+        # rule: overshoot is reported as budget_exceeded, never returned as
+        # a quiet success costing more than the grant.
+        cost_after_structured = self._cost(in_tokens, out_tokens)
+        if ctx.budget_usd is not None and cost_after_structured.estimated_usd > ctx.budget_usd:
+            return self._fail(
+                "budget_exceeded",
+                f"Cost ${cost_after_structured.estimated_usd:.6f} after "
+                f"structured pass exceeds budget ${ctx.budget_usd:.6f}.",
+                retryable=False,
+                provenance=provenance,
+                cost=cost_after_structured,
+            )
+
         try:
             raw = _SynthesizeRaw.model_validate_json(second_text)
         except (json.JSONDecodeError, ValidationError) as exc:
