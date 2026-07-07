@@ -132,6 +132,36 @@ async def test_edit_preserves_exact_bytes_around_match(tmp_path: Path) -> None:
     assert path.read_bytes() == b"line1\n  changed  \nline3\n"
 
 
+async def test_edit_preserves_crlf_line_endings(tmp_path: Path) -> None:
+    # Editing one word in a CRLF file must not rewrite the file's endings.
+    path = tmp_path / "doc.txt"
+    path.write_bytes(b"alpha\r\nbeta\r\ngamma\r\n")
+
+    result = await dispatch(
+        EditTool(),
+        EditInput(path=path, old_string="beta", new_string="BETA"),
+        CallContext(),
+    )
+
+    assert result.status == "success"
+    assert path.read_bytes() == b"alpha\r\nBETA\r\ngamma\r\n"
+
+
+async def test_edit_old_string_containing_crlf_matches(tmp_path: Path) -> None:
+    # A multi-line old_string with CRLF endings must match a CRLF file.
+    path = tmp_path / "doc.txt"
+    path.write_bytes(b"alpha\r\nbeta\r\ngamma\r\n")
+
+    result = await dispatch(
+        EditTool(),
+        EditInput(path=path, old_string="beta\r\ngamma", new_string="merged"),
+        CallContext(),
+    )
+
+    assert result.status == "success"
+    assert path.read_bytes() == b"alpha\r\nmerged\r\n"
+
+
 async def test_edit_relative_path_returns_validation(tmp_path: Path) -> None:
     result = await dispatch(
         EditTool(),

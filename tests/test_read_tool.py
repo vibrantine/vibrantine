@@ -20,7 +20,10 @@ class _AlwaysCancelled:
 
 def _make_file(tmp_path: Path, name: str, content: str) -> Path:
     p = tmp_path / name
-    p.write_text(content, encoding="utf-8")
+    # newline="" so the fixture holds exactly these bytes on every
+    # platform; the tool's reads are byte-faithful and would surface
+    # the CRLF that plain write_text inserts on Windows.
+    p.write_text(content, encoding="utf-8", newline="")
     return p
 
 
@@ -46,6 +49,20 @@ async def test_read_success_returns_content_and_metadata(tmp_path: Path) -> None
     # None, not 0: no LLM was involved in a deterministic tool run.
     assert result.cost.in_tokens is None
     assert result.cost.out_tokens is None
+
+
+async def test_read_preserves_crlf_line_endings(tmp_path: Path) -> None:
+    # The description promises content faithful to the file's bytes,
+    # so CRLF endings must survive the read untranslated.
+    path = tmp_path / "crlf.txt"
+    path.write_bytes(b"alpha\r\nbeta\r\n")
+
+    result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.content == "alpha\r\nbeta\r\n"
+    assert result.output.total_lines == 2
 
 
 async def test_read_empty_file_returns_zero_lines(tmp_path: Path) -> None:

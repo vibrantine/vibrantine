@@ -41,9 +41,13 @@ def read_text_utf8(path: Path) -> str:
     One shared classification (a missing file is the caller's mistake, so
     `validation`; permission and decode trouble is environment, so `internal`)
     so the file-reading tools can't silently diverge on equivalent failures.
+
+    Decodes raw bytes rather than using `read_text`, whose universal-newline
+    mode would silently rewrite CRLF/CR to LF; the returned text must stay
+    faithful to the file's actual line endings.
     """
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_bytes().decode("utf-8")
     except FileNotFoundError:
         raise ReadFailure("validation", f"File not found: {path!s}.") from None
     except PermissionError as exc:
