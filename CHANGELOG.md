@@ -10,6 +10,9 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Fixed
 
+- The default LLM loop no longer sends an empty system message for a
+  Commission with no `system_prompt`; some providers reject empty system
+  content, and it carried nothing.
 - `GrepTool` no longer aborts a whole directory walk when a listed file
   vanishes before it is read (a race or broken entry); the file is
   skipped like any other unreadable entry, and a missing file still
