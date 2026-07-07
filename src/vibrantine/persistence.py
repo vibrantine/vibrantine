@@ -13,6 +13,7 @@ on_failure → time TTL, always → never).
 """
 
 import asyncio
+import os
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
@@ -69,7 +70,13 @@ class FilesystemBackend:
 
     def _write_sync(self, record: PersistedRecord) -> None:
         path = self._path_for(record.run_id)
-        path.write_text(record.model_dump_json(), encoding="utf-8")
+        # Write-then-rename so no reader (a concurrent list_references, or
+        # anything after a crash mid-write) can ever observe a half-written
+        # record; os.replace is atomic on the same volume, and the .tmp
+        # name keeps the in-progress file out of the *.json globs.
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(record.model_dump_json(), encoding="utf-8")
+        os.replace(tmp, path)
 
     def _read_sync(self, run_id: str) -> PersistedRecord | None:
         path = self._path_for(run_id)
