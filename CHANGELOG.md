@@ -74,7 +74,7 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   mode `always`), and returns the chopped output as `partial` with the
   run_id named in the error detail. Without a backend, without a hook
   override (the base declines), or on a failed store, the policy degrades
-  to `partial` with the full output preserved — never silent.
+  to `partial` with the full output preserved, never silent.
   `RecursiveResearchCommission` is the first consumer: it implements the
   hook (keeping cited claims over answer prose) and now defaults to
   `truncate_with_reference`.

@@ -413,7 +413,7 @@ wishes do not belong in the design record.
   profiles (a catalog, living above the library where state belongs), a
   Commission owns its default model and capacity, the caller grants a run
   its permitted subset, and a crafted Commission picks by key from within
-  the grant — it never freely discovers or invents model access. A
+  the grant; it never freely discovers or invents model access. A
   builder-side static spend cap ("this worker may never exceed $0.01",
   the capacity half of budgeting, taking the minimum with the caller's
   grant) rides the same direction. Built with autonomous Commission

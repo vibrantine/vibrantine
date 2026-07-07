@@ -267,7 +267,7 @@ Releases are git tags (`vX.Y.Z`; see `CHANGELOG.md`). Pin a tag rather than
 `main`, so your dependency stays fixed while `main` moves:
 
 ```bash
-uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.2.0"
+uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.4.0"
 ```
 
 Or from a local checkout:
@@ -283,17 +283,27 @@ the environment before running them. Deterministic tools do not need a key.
 
 ## Current Status
 
-Vibrantine is early-stage software. The current release is v0.2.0, tagged in
+Vibrantine is early-stage software. The current release is v0.4.0, tagged in
 this repository and recorded in `CHANGELOG.md`; the project is not yet on
 PyPI.
 
-Available in v0.2.0:
+Available in v0.4.0:
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
 - Typed input/output discipline with Pydantic v2.
 - `run_one`, `invoke_sync`, and `dispatch` entry points.
+- `create_commission`: a deterministic authoring factory that builds a basic
+  LLM-loop Commission from the crafted decisions (name, description, typed
+  input/output, tools).
 - LLM-loop support with a synthetic `conclude` tool.
+- Budget enforcement end to end: children are dispatched with the remaining
+  grant, a pre-turn gate declines unaffordable turns up front, and a
+  `[budget]` status line gives the model mid-run spend visibility so a
+  prompt can instruct a graceful wind-down.
+- A working `truncate_with_reference` overflow policy: the author's typed
+  `truncate_output` hook shrinks the output, and the full result is
+  persisted under the run_id named in the error detail.
 - Deterministic tools for file, shell, fetch, search, and filesystem work.
 - Cost and provenance on results, with child cost rollup and raw token
   counts.
@@ -303,13 +313,15 @@ Available in v0.2.0:
   react, persisted records to query.
 - A public testing seam: `client=` injection plus `vibrantine.testing`.
 - Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
-  `MorningBriefing`, `RecursiveResearch`, and an interactive demo runner
+  `MorningBriefing`, `RecursiveResearch`, the learning ladder
+  (`vibrantine.examples.learning_ladder`: four runnable rungs, each the
+  previous plus one idea), and an interactive demo runner
   (`python -m vibrantine.examples`).
 
 Still settling:
 
 - Authoring surface ergonomics.
-- Budget handoff and richer resource accounting for broad/deep workloads.
+- Richer resource accounting for broad/deep workloads.
 
 The SemVer promise is deliberately tight: the public contract exported from
 `vibrantine.__all__` is the dependency surface. The worked example Commissions

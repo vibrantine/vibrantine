@@ -206,7 +206,7 @@ Two things to notice:
 Designing the two types is its own small craft. For the input:
 
 - **Substance first.** Split the fields into the substance (the thing the
-  run exists to process — there is usually exactly one) and the steering
+  run exists to process; there is usually exactly one) and the steering
   (the knobs that shape *how*: a target length, an optional focus). Steering
   fields carry defaults.
 - **Preconditions live in the type.** `Field(min_length=1)`, numeric bounds,
@@ -226,7 +226,7 @@ For the output:
 - **If the result asserts facts, return the trail.** Reach for `Claim[T]`
   (an asserted value carried with the `Provenance` records that back it)
   when a caller should be able to audit, cite, or verify individual
-  assertions — a synthesis across sources, a summary whose claims must be
+  assertions: a synthesis across sources, a summary whose claims must be
   traceable. Source count is not the rule; traceability is.
 - **The return shape is fixed per class.** `output_type` is identity, welded
   to the class. A vocabulary that varies per call (say, classification
@@ -427,7 +427,7 @@ bounds are already on your Commission; this step is about knowing them.
   `truncate_output` override (only the author knows how to shrink a typed
   output without invalidating it) and a persistence backend on the run, so
   the full version stays reachable by the run_id named in the jacket.
-  Missing either, it degrades to `"partial"` — full output, flagged, never
+  Missing either, it degrades to `"partial"`: full output, flagged, never
   silent.
 - **Cancellation.** The `CallContext` carries a cancel token that
   well-behaved Commissions check before expensive work.
@@ -735,12 +735,12 @@ above).
 
 Most compositions start as one of three shapes:
 
-- **Pipeline** — one child feeds the next (`fetch -> summarize -> report`).
+- **Pipeline**: one child feeds the next (`fetch -> summarize -> report`).
   Use it when each step depends on the previous step's output.
-- **Fan out, then gather** — many children do similar work and the parent
+- **Fan out, then gather**: many children do similar work and the parent
   combines them (`plan -> workers -> review`). Use it when the task splits
   into independent parts.
-- **Loop until done** — the parent repeats a small cycle with an explicit
+- **Loop until done**: the parent repeats a small cycle with an explicit
   stop: a round cap, the budget, a deadline, or a typed "done" signal from a
   child.
 
@@ -767,7 +767,7 @@ codebase) passes by **handle**: the caller hands the run a path and the run
 reads what it needs from the world; re-reading the world on the next run is
 not hidden memory, it is re-reading. The rule of thumb is *reads look,
 writes carry*: any number of runs may read shared state in place, but writes
-to state a fan shares serialize through a single owner — workers draft the
+to state a fan shares serialize through a single owner: workers draft the
 change as a typed value, one owner applies it.
 
 ## Seeing a run
@@ -1055,8 +1055,8 @@ separates five concerns, each with a different owner:
 Read it as a sentence of ownership: the author owns what it is, the builder
 owns what it can do, the caller owns both what it may do and what it must
 solve, and the framework guarantees the shape of what comes back. Two
-surfaces never bend — the declared boundary (identity's input and output
-types) and the result envelope — and those two promises are the contract.
+surfaces never bend: the declared boundary (identity's input and output
+types) and the result envelope. Those two promises are the contract.
 Every dial lives on the middle three surfaces.
 
 The map sorts the tables below: the identity ClassVars are surface 1, the
