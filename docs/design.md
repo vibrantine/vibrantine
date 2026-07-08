@@ -143,6 +143,23 @@ What one Commission is.
   - Regex-parsing model output, or accepting a plausible-looking text
     answer as completion.
 
+#### One result envelope, one class
+
+- **Decision.** `CommissionResult` stays a single class across all three
+  statuses. The population invariants (output on success and partial,
+  error on failure and partial) are runtime facts and documentation, not
+  a tagged union a type checker narrows.
+- **Why.** The envelope is the most-taught name in the library; splitting
+  it into success/partial/failure types would triple the first vocabulary
+  every consumer learns, for a guarantee the runtime already provides.
+  The named price, accepted with eyes open: every call site pays a
+  two-condition check (`status == "success" and output is not None`),
+  and nothing in the types forces the partial branch to be handled.
+- **Rules out.**
+  - A discriminated `SuccessResult | PartialResult | FailureResult` union.
+  - Accessors that raise (`unwrap()`), which would put exceptions back on
+    the caller's path.
+
 ### The joints
 
 How units meet.
