@@ -6,7 +6,7 @@ All notable changes to Vibrantine are recorded here. The format follows
 public contract exported from `vibrantine.__all__`, plus the supported side
 doors its boundary docstring names (such as `vibrantine.testing`).
 
-## [Unreleased]
+## [0.5.0] - 2026-07-09
 
 ### Changed
 
@@ -176,7 +176,7 @@ First tagged release: the first fixed point a consumer can pin.
   Synthesize, MorningBriefing, RecursiveResearch) and the interactive demo
   runner: `python -m vibrantine.examples`.
 
-[Unreleased]: https://github.com/vibrantine/vibrantine/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/vibrantine/vibrantine/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/vibrantine/vibrantine/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/vibrantine/vibrantine/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vibrantine/vibrantine/compare/v0.1.0...v0.2.0

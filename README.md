@@ -328,7 +328,7 @@ Releases are git tags (`vX.Y.Z`; see `CHANGELOG.md`). Pin a tag rather than
 `main`, so your dependency stays fixed while `main` moves:
 
 ```bash
-uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.4.0"
+uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.5.0"
 ```
 
 Or from a local checkout:
@@ -344,11 +344,11 @@ the environment before running them. Deterministic tools do not need a key.
 
 ## Current Status
 
-Vibrantine is early-stage software. The current release is v0.4.0, tagged in
+Vibrantine is early-stage software. The current release is v0.5.0, tagged in
 this repository and recorded in `CHANGELOG.md`; the project is not yet on
 PyPI.
 
-Available in v0.4.0:
+Available in v0.5.0:
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
