@@ -616,15 +616,7 @@ class Commission[InputT, OutputT](ABC):
                 cost=cost,
             )
         assert outcome.output is not None
-        return cast(
-            CommissionResult[OutputT],
-            CommissionResult(
-                status="success",
-                output=outcome.output,
-                provenance=provenance,
-                cost=cost,
-            ),
-        )
+        return self._succeed(cast(OutputT, outcome.output), provenance=provenance, cost=cost)
 
     @property
     def _resolved_client(self) -> "AsyncOpenAI":
@@ -675,6 +667,28 @@ class Commission[InputT, OutputT](ABC):
         in_price, out_price = self._prices()
         usd = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
         return CostMetrics(estimated_usd=usd, in_tokens=in_tokens, out_tokens=out_tokens)
+
+    def _succeed(
+        self,
+        output: OutputT,
+        *,
+        provenance: Provenance,
+        cost: CostMetrics,
+    ) -> CommissionResult[OutputT]:
+        """Build a success result: `_fail`'s counterpart for the common return.
+
+        A custom `_run` returns success far more often than failure, and
+        hand-building that envelope (a `CommissionResult` plus a cast) was
+        the most boilerplate-heavy return on the custom path. Same protected
+        tier as `_fail`: supported interior surface for authors, provisional
+        until the authoring-surface freeze.
+        """
+        return CommissionResult(
+            status="success",
+            output=output,
+            provenance=provenance,
+            cost=cost,
+        )
 
     def _fail(
         self,

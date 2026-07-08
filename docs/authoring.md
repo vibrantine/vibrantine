@@ -706,7 +706,10 @@ unused), so treat "pick one" as discipline.
 On the basic path the framework builds the `CommissionResult` for you. On
 the custom path **you** build it, every return, success included: a
 `Provenance`, a `CostMetrics`, and for failures an `ErrorState`. That is the
-price of owning the control flow.
+price of owning the control flow. Two protected helpers assemble the
+envelope from those parts: `self._succeed(output, provenance=..., cost=...)`
+and `self._fail(kind, detail, retryable=..., provenance=..., cost=...)`;
+the full helper table is in Part III.
 
 ## Composition: calling children
 
@@ -1170,6 +1173,7 @@ provisional until the authoring-surface freeze (see
 
 | Helper | Use |
 |---|---|
+| `self._succeed(output, *, provenance, cost)` | Build a success result, the common return |
 | `self._fail(kind, detail, *, retryable, provenance, cost)` | Build a structured failure result |
 | `self._emit(ctx, phase, detail=None)` | Emit a `ProgressEvent` (no-op without a callback) |
 | `self._cost(in_tokens, out_tokens)` | Model-priced `CostMetrics` |
@@ -1355,8 +1359,9 @@ Before you ship a Commission, confirm:
 - [ ] **Errors are returned, not raised**: `status="failure"` plus an
   `ErrorState` whose `kind` is one of the seven allowed values.
 - [ ] **Custom path**: every `CommissionResult` you build carries a
-  `Provenance` (success included) and a `CostMetrics`. (Basic path: the
-  framework fills these for you.)
+  `Provenance` (success included) and a `CostMetrics`; `_succeed` and
+  `_fail` assemble them correctly. (Basic path: the framework fills these
+  for you.)
 - [ ] **Custom `_run`**: check `ctx.cancel.is_cancelled` at breakpoints;
   call children via `dispatch(child, input, ctx)`, never `._run`; sum
   children's `cost.estimated_usd`; if you call the model yourself,

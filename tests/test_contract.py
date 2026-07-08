@@ -207,6 +207,27 @@ class _ToolboxProbe(_BasicProbe):
     toolbox = (_PolicyProbe(),)
 
 
+def test_succeed_builds_the_success_envelope() -> None:
+    # _succeed is _fail's counterpart: the protected helper for the most
+    # common return a custom _run writes. Status, output, and the absence
+    # of an error are the envelope invariants it must uphold.
+    probe = _PolicyProbe()
+    result = probe._succeed(  # pyright: ignore[reportPrivateUsage]
+        _PolicyProbeOutput(),
+        provenance=Provenance(
+            source="policy_probe",
+            fetched_at=datetime.now(UTC),
+            confidence="grounded",
+        ),
+        cost=CostMetrics(estimated_usd=0.0),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.error is None
+    assert result.cost.estimated_usd == 0.0
+
+
 def test_build_user_message_default_raises_not_implemented() -> None:
     # A custom Commission overrides _run and never triggers
     # build_user_message; the inherited base default still raises if a caller

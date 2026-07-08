@@ -75,7 +75,8 @@ Cover the contract surface the Commission exercises:
   no exception crosses the call boundary.
 - Cancellation is checked before expensive or irreversible work.
 - Budget behavior is covered where the Commission spends model money.
-- Cost is reported, and child cost rolls up when children are dispatched.
+- Cost is reported, and child cost rolls up when children are dispatched
+  (the recipe below).
 - Progress events are covered if the Commission emits them.
 - LLM-loop Commissions cover tool menu shape, malformed/no-tool provider
   responses, and conclusion through the `conclude` tool.
@@ -83,6 +84,31 @@ Cover the contract surface the Commission exercises:
   failures, and output assembly.
 - Folder-sized Commissions cover prompt/resource loading if they use
   `prompts/`.
+
+### The cost-rollup recipe
+
+Cost rollup is the one custom-path obligation that breaks silently: nothing
+at runtime notices a coordinator that forgets to sum its children, and every
+ancestor's receipt is wrong from then on. It is also the easiest invariant
+to pin, because scripted responses make costs deterministic:
+
+1. Script each LLM-bearing child with `llm_response(..., in_tokens=...,
+   out_tokens=...)` so every child's cost is a known number, not a live
+   variable.
+2. Run the coordinator through the entry points with the scripted clients
+   injected.
+3. Assert the parent's `result.cost.estimated_usd` equals the sum of the
+   children's known costs, plus the parent's own scripted turns if it runs
+   any.
+
+A coordinator that forgets to sum reports less than the sum of its scripted
+parts, and the assertion catches it in the same suite that proves the
+boundary. Specimens: `test_total_cost_sums_every_child` in
+`src/vibrantine/examples/morning_briefing/tests/test_commission.py` (a
+custom coordinator, the path this recipe exists for) and
+`test_rolls_up_child_cost_across_depth` in
+`src/vibrantine/examples/recursive_research/tests/test_commission.py` (the
+same invariant on the LLM-loop path, across a recursive tree).
 
 Integration tests are optional, marked `@pytest.mark.integration`, and skip
 when credentials are absent. They are smoke tests, not the backbone.
