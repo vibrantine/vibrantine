@@ -227,39 +227,9 @@ messages), the exit ramp is subclassing `Commission`. The boundary the
 caller sees does not change. The same brief, grown up a little:
 
 ```python
-from typing import ClassVar, Literal
+from typing import ClassVar
 
-from pydantic import BaseModel, Field
-
-from vibrantine import CallContext, Commission, invoke_sync
-
-
-class ResearchBriefInput(BaseModel):
-    question: str = Field(
-        min_length=1,
-        description="The question the brief should answer.",
-    )
-    source_notes: list[str] = Field(
-        min_length=1,
-        description="Source notes or excerpts to ground the brief.",
-    )
-    audience: Literal["technical", "executive", "general"] = Field(
-        default="general",
-        description="The intended audience for the brief.",
-    )
-    target_length: Literal["short", "medium", "long"] = Field(
-        default="medium",
-        description="The desired length of the brief.",
-    )
-
-
-class ResearchBriefOutput(BaseModel):
-    answer: str = Field(description="The direct answer to the question.")
-    key_claims: list[str] = Field(description="Important claims made in the answer.")
-    open_questions: list[str] = Field(
-        default_factory=list,
-        description="Questions that remain unresolved or uncertain.",
-    )
+from vibrantine import CallContext, Commission
 
 
 class ResearchBriefCommission(Commission[ResearchBriefInput, ResearchBriefOutput]):
@@ -292,33 +262,15 @@ class ResearchBriefCommission(Commission[ResearchBriefInput, ResearchBriefOutput
             f"Target length: {input.target_length}\n\n"
             f"{notes}"
         )
-
-
-result = invoke_sync(
-    ResearchBriefCommission(),
-    ResearchBriefInput(
-        question="What are the main risks in this proposal?",
-        source_notes=[
-            "The project depends on an unstable third-party API.",
-            "The estimated budget assumes no additional compliance review.",
-            "The team has not yet validated demand with target users.",
-        ],
-        audience="executive",
-        target_length="short",
-    ),
-    budget_usd=0.10,
-)
-
-if result.status == "success" and result.output is not None:
-    print(result.output.answer)
-    print(result.output.key_claims)
-else:
-    print(result.error)
 ```
 
-The calling code is the same shape as the factory version: same entry
-point, same envelope handling. The implementation inside the Commission can
-evolve, and the caller still depends on the same input and output boundary.
+The models and the calling code are the ones from the factory version; the
+input model just grows two defaulted fields (`audience` and `target_length`)
+for the new interior to read. Same `invoke_sync`, same envelope handling.
+The implementation inside the Commission can evolve, and the caller still
+depends on the same input and output boundary. Subclassing and the rest of
+the custom-interior path are covered in
+[docs/authoring.md](docs/authoring.md).
 
 ## Installation
 
