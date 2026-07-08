@@ -12,9 +12,12 @@ to use (`estimate_tokens`, `deposit_llm_trace`, `DEFAULT_MAX_ITERATIONS`,
 and the `ContentPart` message vocabulary). Two honesty notes on that
 promise. The model vocabulary's *shapes* are protected, but the *contents*
 of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are catalog data:
-they change as models come and go, without a major version. And
-`ImagePart`'s exact fields are provisional until the first image-bearing
-consumer fixes them (its name and role in `ContentPart` are stable).
+they change as models come and go, without a major version. And the
+non-text `ContentPart` members are provisional in their fields: `ImagePart`
+today, and any later modality part (an audio or video part) when its consumer
+arrives, keeps its exact fields open until a real consumer fixes them. What is
+stable is the union itself: its name, its role, and that new modality parts
+join it additively. `TextPart`'s fields are settled.
 The `vibrantine.testing` module is also supported surface:
 the test doubles for the `client=` injection seam, kept at its own import
 path so test tooling never ships into production namespaces. Everything

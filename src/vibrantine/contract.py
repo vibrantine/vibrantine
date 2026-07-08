@@ -303,6 +303,11 @@ class ImagePart(BaseModel):
     fields (URL vs base64 data, mime type) are finalized by the first
     image-bearing consumer (shape-via-consumer). Today it carries only a
     URL/data string.
+
+    Later modalities (audio, video) join the union the same way: a new typed
+    part with its own `type` tag, its fields fixed by its first consumer.
+    Widening the union is additive and does not break authors who already
+    return text or image parts.
     """
 
     type: Literal["image"] = "image"
