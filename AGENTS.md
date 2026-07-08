@@ -16,8 +16,8 @@ A publishable library, not an application layer. The boundary and its rationale 
 
 Structural invariants. Breaking one is an architectural decision, not a quick fix.
 
-- **One public method**: `async invoke(input, ctx) -> CommissionResult`. Extend `CallContext` for new orchestration concerns, never the invoke signature.
-- **Errors are values.** No exception crosses the invoke boundary. Failures return `CommissionResult(status="failure"|"partial", error=ErrorState(...))`.
+- **One interior hook**: `async _run(input, ctx) -> CommissionResult`, called only by `dispatch`; invoke through `run_one` / `invoke_sync` / `dispatch`. Extend `CallContext` for new orchestration concerns, never the `_run` signature.
+- **Errors are values.** No exception crosses the call boundary. Failures return `CommissionResult(status="failure"|"partial", error=ErrorState(...))`.
 - **Tree-structured invocations.** A Commission only waits on its own children. No peer messaging, shared state, or back-channels.
 - **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `design.md § Cost and provenance are structural`).
 - **Stateless across invocations.** No cross-invocation memory. The persistence layer stores run *records* for inspection; resumable state stays above the library.
@@ -121,7 +121,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 
 `OPENROUTER_API_KEY` is the only secret. Stored in `.env` (gitignored). A committed `.env.example` lists required variable names with empty values as the public template.
 
-- **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading the resolved model's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first `invoke` with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
+- **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading the resolved model's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first run with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
 - **Dev + tests**: `uv run --env-file .env <cmd>`, or export in your shell. Both pick it up the same way.
 - **Test policy**: unit tests mock the OpenAI client and require no key. Integration tests are marked `@pytest.mark.integration` and skip when the key is absent. Never commit fixtures containing real API responses with embedded keys.
   LLM-driven Commissions should also grow heuristic evaluation cases with
@@ -147,7 +147,7 @@ src/
     __init__.py                       # public boundary: __all__ is the SemVer surface
     contract.py                       # core contract types, the Commission ABC, PersistenceBackend Protocol
     orchestrator.py                   # run_one + invoke_sync entry points
-    dispatch.py                       # wraps invoke: run_id + parent_run_id + overflow + record + raise backstop
+    dispatch.py                       # wraps _run: run_id + parent_run_id + overflow + record + raise backstop
     llm_tools.py                      # LLM-tool wrapper + the default LLM loop
     factory.py                        # create_commission authoring factory
     models.py                         # Model objects (identity + endpoint + pricing); KNOWN_MODELS + DEFAULT_MODEL

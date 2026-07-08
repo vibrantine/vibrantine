@@ -55,9 +55,9 @@ around the scripted response is.
 
 Tests are callers, so they use the caller's API: launch the Commission under
 test through the public entry points (`run_one`, or `dispatch` when the test
-supplies its own `CallContext`), never by calling `invoke` directly. `invoke`
-is the hook authors implement, not the call surface, and a test that calls it
-raw skips the framework wrapping (run_id stamping, overflow enforcement,
+supplies its own `CallContext`), never by calling the `_run` hook directly.
+`_run` is the hook authors implement, not the call surface, and a test that
+calls it raw skips the framework wrapping (run_id stamping, overflow enforcement,
 exception-to-failure conversion, persistence) that every real caller gets.
 The one exemption is a test whose *subject* is that interior machinery
 itself, such as the dispatch wrapper's own tests or direct `run_llm_loop`
@@ -69,10 +69,10 @@ Cover the contract surface the Commission exercises:
 - Constructor injection works for `model`, `client`, child Commissions/tools,
   and test doubles.
 - Typed input is rendered correctly by `build_user_message`, or a custom
-  `invoke` preserves the typed input semantics.
+  `_run` preserves the typed input semantics.
 - Success returns `CommissionResult(status="success")` with validated output.
 - Failures and partials return `CommissionResult(status="failure"|"partial")`;
-  no exception crosses the `invoke` boundary.
+  no exception crosses the call boundary.
 - Cancellation is checked before expensive or irreversible work.
 - Budget behavior is covered where the Commission spends model money.
 - Cost is reported, and child cost rolls up when children are dispatched.

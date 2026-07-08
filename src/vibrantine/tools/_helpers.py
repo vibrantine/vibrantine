@@ -26,7 +26,7 @@ class ReadFailure(Exception):
     """A classified UTF-8 read failure, carrying the standard (kind, detail).
 
     Raised by `read_text_utf8` and caught at each tool's own boundary, where
-    it becomes a failure value; it never crosses invoke.
+    it becomes a failure value; it never crosses the call boundary.
     """
 
     def __init__(self, kind: ErrorKind, detail: str) -> None:
@@ -79,7 +79,7 @@ def failure[OutputT](
 ) -> CommissionResult[OutputT]:
     """Build a failure `CommissionResult[OutputT]` with zero cost.
 
-    Tools never cross the invoke boundary with an exception; this is the
+    Tools never cross the call boundary with an exception; this is the
     one-liner every tool reaches for when something goes wrong.
     """
     return cast(

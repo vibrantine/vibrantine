@@ -130,7 +130,7 @@ def test_override_neither_fails_at_definition_time() -> None:
 
 
 def test_override_both_is_allowed() -> None:
-    # Overriding both must NOT raise: invoke wins, build_user_message is unused.
+    # Overriding both must NOT raise: _run wins, build_user_message is unused.
     class _Both(Commission[_AnswerInput, _AnswerOutput]):
         name: ClassVar[str] = "both"
         description: ClassVar[str] = "d"
@@ -140,12 +140,12 @@ def test_override_both_is_allowed() -> None:
         def build_user_message(self, input: _AnswerInput, ctx: CallContext) -> str:
             return "unused"
 
-        async def invoke(
+        async def _run(
             self, input: _AnswerInput, ctx: CallContext
         ) -> CommissionResult[_AnswerOutput]:
             return CommissionResult(
                 status="success",
-                output=_AnswerOutput(answer="from invoke"),
+                output=_AnswerOutput(answer="from _run"),
                 provenance=Provenance(
                     source=self.name, fetched_at=datetime.now(UTC), confidence="grounded"
                 ),
@@ -154,23 +154,21 @@ def test_override_both_is_allowed() -> None:
 
     res = invoke_sync(_Both(), _AnswerInput(prompt="x"))
     assert res.status == "success"
-    assert res.output is not None and res.output.answer == "from invoke"
+    assert res.output is not None and res.output.answer == "from _run"
 
 
-# --- §4: errors are values; an exception in invoke never crosses the boundary ---
+# --- §4: errors are values; an exception in _run never crosses the boundary ---
 class _Raising(Commission[_AnswerInput, _AnswerOutput]):
     name: ClassVar[str] = "raising"
     description: ClassVar[str] = "d"
     input_type: ClassVar[type] = _AnswerInput
     output_type: ClassVar[type] = _AnswerOutput
 
-    async def invoke(
-        self, input: _AnswerInput, ctx: CallContext
-    ) -> CommissionResult[_AnswerOutput]:
+    async def _run(self, input: _AnswerInput, ctx: CallContext) -> CommissionResult[_AnswerOutput]:
         raise RuntimeError("boom")
 
 
-def test_exception_in_invoke_becomes_a_failure_value() -> None:
+def test_exception_in_run_becomes_a_failure_value() -> None:
     res = invoke_sync(_Raising(), _AnswerInput(prompt="x"))
     assert res.status == "failure"
     assert res.error is not None and res.error.kind == "internal"
@@ -184,9 +182,7 @@ class _CustomSuccess(Commission[_AnswerInput, _AnswerOutput]):
     output_type: ClassVar[type] = _AnswerOutput
     max_input_tokens = None
 
-    async def invoke(
-        self, input: _AnswerInput, ctx: CallContext
-    ) -> CommissionResult[_AnswerOutput]:
+    async def _run(self, input: _AnswerInput, ctx: CallContext) -> CommissionResult[_AnswerOutput]:
         return CommissionResult(
             status="success",
             output=_AnswerOutput(answer=input.prompt.upper()),

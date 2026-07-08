@@ -112,7 +112,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
     input_type: ClassVar[type] = SynthesizeInput
     output_type: ClassVar[type] = SynthesizeOutput
 
-    async def invoke(
+    async def _run(
         self,
         input: SynthesizeInput,
         ctx: CallContext,

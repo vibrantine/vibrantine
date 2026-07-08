@@ -8,7 +8,7 @@ manufacturing so authoring shrinks to the crafting.
 
 The factory is deliberately deterministic: no LLM is involved in building
 the Commission, nothing is fetched, nothing is spent. What comes back is an
-ordinary basic Commission riding the default `invoke` loop; it composes,
+ordinary basic Commission riding the default `_run` loop; it composes,
 records, budgets, and nests exactly like a hand-written subclass, and when
 a Commission outgrows the factory the exit is subclassing `Commission`,
 where nothing learned here changes.

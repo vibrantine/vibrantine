@@ -144,7 +144,7 @@ hooks:
 
 - Override `build_user_message` to use the built-in **LLM loop**, where the
   model chooses steps from a toolbox until it can produce the declared output.
-- Override `invoke` to own the control flow yourself.
+- Override `_run` to own the control flow yourself.
 
 Those hooks are not a limit on patterns. A custom interior can be a pipeline,
 fan-out/gather, review loop, search process, external service call, verifier,

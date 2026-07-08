@@ -1,7 +1,7 @@
 """AskCommission: answer a question about a single file.
 
 A basic LLM-loop Commission: it declares its identity, I/O types, system
-prompt, and a `ReadTool` toolbox, then rides the base's default `invoke`. The
+prompt, and a `ReadTool` toolbox, then rides the base's default `_run`. The
 LLM decides when to call `read` (possibly multiple times for paginated files),
 then signals completion through the framework-injected `conclude` tool.
 

@@ -95,9 +95,9 @@ OPENROUTER_API_KEY=sk-or-...
 and run those steps with `uv run --env-file .env ...`.
 
 > One rule to carry through everything: invoke Commissions through `run_one`
-> / `invoke_sync` (or `dispatch` from inside another Commission), never by
-> calling `.invoke()` directly. The entry points are where the framework
-> stamps run ids and enforces output policy uniformly.
+> / `invoke_sync` (or `dispatch` from inside another Commission). The `_run`
+> hook is the framework's to call; the entry points are where it stamps run
+> ids and enforces output policy uniformly.
 
 ## The Shortcut: create_commission
 
@@ -317,7 +317,7 @@ control flow?**
   when to conclude. You write no control flow at all. This is a *basic*
   Commission: you override `build_user_message` to turn your typed input into
   the loop's opening message, and that's it.
-- **Your code decides.** You override `invoke` and write the control flow
+- **Your code decides.** You override `_run` and write the control flow
   yourself: fan out over a list, call children in a fixed order, whatever the
   job needs. The model is something you call, not something that drives.
   This is a *custom* Commission; Part II is about building these.
@@ -694,13 +694,13 @@ one path:
 
 | | **Basic Commission** | **Custom Commission** |
 |---|---|---|
-| You write | a `build_user_message` method | an `async def invoke` method |
+| You write | a `build_user_message` method | an `async def _run` method |
 | Control flow | the framework's LLM loop: it calls the model, lets it use your toolbox, ends when the model concludes | yours: plain Python, your own sequencing, fan-out, rounds |
 | Use when | "send the model a prompt plus tools, get a typed answer" | the logic is a pipeline or coordinator the model shouldn't drive |
 | You must uphold | nothing extra; the framework does it | errors-as-values, cancellation checks, cost reporting (all shown below) |
 
 Overriding neither fails at class-definition time. Overriding both is
-allowed but pointless (your `invoke` wins and `build_user_message` goes
+allowed but pointless (your `_run` wins and `build_user_message` goes
 unused), so treat "pick one" as discipline.
 
 On the basic path the framework builds the `CommissionResult` for you. On
@@ -715,7 +715,7 @@ A parent owns its children and depends on them only through the contract:
 - **Inject children at construction** with working defaults, exactly like
   the tutorial's `ReadTool`.
 - **Call children through `dispatch(child, child_input, ctx)`**, passing
-  along the `ctx` you received. Never call a child's `.invoke` directly.
+  along the `ctx` you received. Never call a child's `_run` directly.
 - **Fan out with `asyncio.gather`** over dispatches when children are
   independent.
 - **Sum children's costs** into the `CostMetrics` you return. A child's cost
@@ -728,7 +728,7 @@ A parent owns its children and depends on them only through the contract:
   child needs arrives in its typed input from the parent.
 
 `capabilities` gates the LLM loop's tool menu, not your code: a Python
-coordinator's child calls are written directly in `invoke`, already chosen
+coordinator's child calls are written directly in `_run`, already chosen
 by the author, so they never consult the allow-list. To narrow what a
 *child's* model may reach, hand the child a narrower context (the `replace`
 above).
@@ -792,7 +792,7 @@ Beyond watching: `on_progress` on the `CallContext` streams typed
 `ProgressEvent`s to a callback for building live UIs, and the persistence
 layer stores full structured records (input, result, cost, the LLM
 transcript) for programmatic autopsy. The transcript lands automatically
-on the default loop; a custom `invoke` that runs its own LLM calls
+on the default loop; a custom `_run` that runs its own LLM calls
 deposits each message history via `deposit_llm_trace` (a top-level
 `vibrantine` export), or its records carry no trace. `SynthesizeCommission`
 is the worked example of depositing from a custom interior. Switching records on is also one
@@ -927,7 +927,7 @@ class CorpusResearchCommission(Commission[ResearchInput, ResearchReport]):
     def _provenance(self) -> Provenance:
         return Provenance(source=self.name, fetched_at=datetime.now(UTC), confidence="grounded")
 
-    async def invoke(self, input: ResearchInput, ctx: CallContext) -> CommissionResult[ResearchReport]:
+    async def _run(self, input: ResearchInput, ctx: CallContext) -> CommissionResult[ResearchReport]:
         all_claims: list[Claim[str]] = []
         total_cost = 0.0
         question = input.question
@@ -1163,7 +1163,7 @@ Constructor kwargs (all keyword-only):
 | `target_input_fraction` | `0.75` | Fraction of the window the gate allows |
 | `persistence_mode` / `max_output_tokens` / `overflow_policy` | class default | Per-instance policy override (sentinel-based, so omission is not `None`) |
 
-Protected helpers available to a custom `invoke`. The underscore warns
+Protected helpers available to a custom `_run`. The underscore warns
 *callers* off; for authors these are the supported interior surface,
 provisional until the authoring-surface freeze (see
 `design.md § Not built yet`):
@@ -1177,7 +1177,7 @@ provisional until the authoring-surface freeze (see
 | `self._resolved_client` | The lazily-built LLM client |
 | `self.fits(estimated_tokens)` | Size-gate check |
 | `estimate_tokens(text)` | Module-level chars/4 heuristic; `from vibrantine import estimate_tokens`. Unlike the underscore helpers above, this is frozen surface (the heuristic itself may be refined; the name and signature hold) |
-| `deposit_llm_trace(messages)` | Module-level; `from vibrantine import deposit_llm_trace`. Frozen surface, like `estimate_tokens`. A custom invoke that runs its own LLM calls deposits each message history so it lands in the run's persisted record; without a deposit, the record's `llm_trace` stays empty. The default loop deposits automatically |
+| `deposit_llm_trace(messages)` | Module-level; `from vibrantine import deposit_llm_trace`. Frozen surface, like `estimate_tokens`. A custom `_run` that runs its own LLM calls deposits each message history so it lands in the run's persisted record; without a deposit, the record's `llm_trace` stays empty. The default loop deposits automatically |
 
 ## The result envelope
 
@@ -1228,15 +1228,15 @@ with `dataclasses.replace` to hand a child a modified one.
 
 ## Entry points
 
-Always invoke through an entry point, never `commission.invoke(...)`
-directly; the entry points stamp `run_id`, thread `parent_run_id`, enforce
+Always invoke through an entry point, never the `_run` hook directly; the
+entry points stamp `run_id`, thread `parent_run_id`, enforce
 `overflow_policy`, and persist.
 
 | Entry point | Shape | Use |
 |---|---|---|
 | `run_one` | `async run_one(commission, input, *, budget_usd=None, backend=None, record=None)` | The normal async path; builds a default `CallContext` |
 | `invoke_sync` | sync wrapper over `run_one` | Scripts, REPL, tests |
-| `dispatch` | `async dispatch(commission, input, ctx)` | Inside a custom `invoke`, or when you build the `CallContext` yourself (capabilities, cancellation, progress) |
+| `dispatch` | `async dispatch(commission, input, ctx)` | Inside a custom `_run`, or when you build the `CallContext` yourself (capabilities, cancellation, progress) |
 
 ## The authoring factory
 
@@ -1256,7 +1256,7 @@ points like any other.
 - Construction is deterministic: no network, no spend, no LLM involved in
   building the Commission itself.
 - The exit ramp is subclassing `Commission` (Part I); the factory covers
-  the basic path only, never custom `invoke` interiors.
+  the basic path only, never custom `_run` interiors.
 
 ## The default LLM loop
 
@@ -1346,7 +1346,7 @@ Before you ship a Commission, confirm:
 
 - [ ] **Four ClassVars set**: `name`, `description`, `input_type`,
   `output_type`.
-- [ ] **Exactly one path**: `build_user_message` (basic) or `invoke`
+- [ ] **Exactly one path**: `build_user_message` (basic) or `_run`
   (custom).
 - [ ] **Typed I/O**: Pydantic models; every field has `description=`; depth
   at most 3, at most 20 fields.
@@ -1357,8 +1357,8 @@ Before you ship a Commission, confirm:
 - [ ] **Custom path**: every `CommissionResult` you build carries a
   `Provenance` (success included) and a `CostMetrics`. (Basic path: the
   framework fills these for you.)
-- [ ] **Custom `invoke`**: check `ctx.cancel.is_cancelled` at breakpoints;
-  call children via `dispatch(child, input, ctx)`, never `.invoke`; sum
+- [ ] **Custom `_run`**: check `ctx.cancel.is_cancelled` at breakpoints;
+  call children via `dispatch(child, input, ctx)`, never `._run`; sum
   children's `cost.estimated_usd`; if you call the model yourself,
   deposit each transcript via `deposit_llm_trace` so records carry it.
 - [ ] **Compose through constructors**: inject sub-Commissions and the model

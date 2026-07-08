@@ -135,7 +135,7 @@ Release decision:
 
 - [ ] Check that the prompt faithfully describes the target lengths.
 - [ ] Check the output schema is intentionally simple and uncited.
-- [ ] Check size-gate behavior through the base `Commission.invoke`.
+- [ ] Check size-gate behavior through the base `Commission._run`.
 - [ ] Check cancellation before the LLM loop.
 - [ ] Check malformed provider response behavior through the default loop.
 - [ ] Check tests cover success, validation/size limits, budget behavior where
@@ -366,8 +366,8 @@ Commissions.
   Step 0 runs `ReadTool` as proof of life).
 - [x] LLM-backed examples that clearly require `OPENROUTER_API_KEY`
   (the ladder rungs; the demo runner checks for the key up front).
-- [x] Examples use `invoke_sync` / `run_one` / `dispatch`, not direct
-  `invoke`.
+- [x] Examples use `invoke_sync` / `run_one` / `dispatch`, not the
+  `_run` hook.
 - [x] Examples handle `success`, `partial`, and `failure` results
   explicitly enough to teach the result envelope.
 - [x] Examples avoid protected helpers and frozen-internal assumptions.

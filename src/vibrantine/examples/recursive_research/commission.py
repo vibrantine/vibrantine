@@ -2,7 +2,7 @@
 
 Answers a research question by letting its LLM decompose it into narrower
 sub-questions, delegate each to a shallower sub-researcher (recursion), and
-ground leaf answers in fetched sources. It rides the base's default `invoke`
+ground leaf answers in fetched sources. It rides the base's default `_run`
 (the LLM loop); recursion is wired entirely through the toolbox, with no
 custom control flow.
 

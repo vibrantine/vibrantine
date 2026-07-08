@@ -6,6 +6,30 @@ All notable changes to Vibrantine are recorded here. The format follows
 public contract exported from `vibrantine.__all__`, plus the supported side
 doors its boundary docstring names (such as `vibrantine.testing`).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** the Commission override hook `invoke` is renamed `_run`.
+  The old name was the one attribute that looked like the call API but
+  silently skipped the framework wrapping (run_id stamping, overflow
+  enforcement, records) when called directly; the leading underscore now
+  marks the hook as the framework's to call. Migration: rename a custom
+  Commission's `async def invoke` override to `async def _run`; the
+  signature and contract are unchanged. Callers already routing through
+  `run_one` / `invoke_sync` / `dispatch` are unaffected. A subclass still
+  overriding `invoke` fails at class definition with a message naming the
+  rename.
+
+### Added
+
+- Definition-time agreement check between a Commission's generic
+  parameters and its identity ClassVars: a subclass whose
+  `Commission[InputT, OutputT]` parameters disagree with its
+  `input_type` / `output_type` fails when the class is defined, instead
+  of running with type checkers and the runtime seeing different
+  contracts. TypeVars, `Any`, and unparameterized bases are skipped.
+
 ## [0.4.0] - 2026-07-07
 
 ### Fixed

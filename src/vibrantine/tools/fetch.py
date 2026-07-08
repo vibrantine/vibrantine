@@ -97,7 +97,7 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
         super().__init__(max_input_tokens=None)
         self._transport = transport
 
-    async def invoke(
+    async def _run(
         self,
         input: FetchInput,
         ctx: CallContext,

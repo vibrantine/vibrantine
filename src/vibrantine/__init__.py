@@ -21,10 +21,11 @@ path so test tooling never ships into production namespaces. Everything
 else not in `__all__` (including the example Commissions in
 `vibrantine.examples`, the tools in `vibrantine.tools`, and any
 underscore-prefixed name) is internal and provisional: importable,
-but not covered by the stability promise. `commission.invoke` is the
-override hook authors implement, not the call API; invoke a Commission
-through `run_one` / `invoke_sync` / `dispatch` so run_id stamping, overflow
-enforcement, and persistence happen uniformly.
+but not covered by the stability promise. `Commission._run` is the
+override hook a custom Commission implements; the leading underscore marks
+it as the framework's to call. Invoke a Commission through `run_one` /
+`invoke_sync` / `dispatch` so run_id stamping, overflow enforcement, and
+persistence happen uniformly.
 
 This surface is minimized mercilessly. Every name in `__all__` is a
 permanent claim on a user's memory, so the list grows only under pressure

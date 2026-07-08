@@ -95,7 +95,7 @@ class _PolicyProbe(Commission[_PolicyProbeInput, _PolicyProbeOutput]):
     input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
     output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
 
-    async def invoke(
+    async def _run(
         self,
         input: _PolicyProbeInput,
         ctx: CallContext,
@@ -186,14 +186,14 @@ def test_toolbox_does_not_leak_between_instances() -> None:
     assert without.toolbox == ()
 
 
-# Base default-invoke surface --------------------------------------------
+# Base default-_run surface ----------------------------------------------
 
 
 class _BasicProbe(Commission[_PolicyProbeInput, _PolicyProbeOutput]):
-    """A basic Commission: declarations + build_user_message, default invoke."""
+    """A basic Commission: declarations + build_user_message, default _run."""
 
     name: ClassVar[str] = "basic_probe"
-    description: ClassVar[str] = "Test Commission that uses the default invoke."
+    description: ClassVar[str] = "Test Commission that uses the default _run."
     input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
     output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
 
@@ -208,7 +208,7 @@ class _ToolboxProbe(_BasicProbe):
 
 
 def test_build_user_message_default_raises_not_implemented() -> None:
-    # A custom Commission overrides invoke and never triggers
+    # A custom Commission overrides _run and never triggers
     # build_user_message; the inherited base default still raises if a caller
     # pokes it directly.
     with pytest.raises(NotImplementedError, match="build_user_message"):
@@ -242,7 +242,7 @@ def test_client_is_not_constructed_eagerly(monkeypatch: pytest.MonkeyPatch) -> N
     # the default loop actually runs.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     _BasicProbe()
-    _PolicyProbe()  # overrides invoke; must likewise stay client-free
+    _PolicyProbe()  # overrides _run; must likewise stay client-free
 
 
 async def test_missing_key_fails_fast_with_the_env_var_named(
@@ -250,7 +250,7 @@ async def test_missing_key_fails_fast_with_the_env_var_named(
 ) -> None:
     # A keyed endpoint whose key is absent must fail before any network call,
     # naming the env var, instead of surfacing as a raw provider 401 mid-run.
-    # The raise crosses invoke, so dispatch's backstop delivers it as a
+    # The raise crosses _run, so dispatch's backstop delivers it as a
     # failure value through the front door.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     result = await run_one(_BasicProbe(), _PolicyProbeInput())
@@ -296,7 +296,7 @@ def test_capability_set_defaults_to_unrestricted() -> None:
 
 def test_missing_output_type_fails_at_class_definition() -> None:
     # The standard format is enforced when the class is defined, not deferred
-    # to first invoke.
+    # to first run.
     with pytest.raises(TypeError, match="output_type"):
 
         class _MissingOutput(  # pyright: ignore[reportUnusedClass]
@@ -324,7 +324,7 @@ def test_subclass_inherits_required_classvars() -> None:
     assert _CappedProbe.output_type is _PolicyProbeOutput
 
 
-def test_overriding_neither_build_nor_invoke_fails_at_definition() -> None:
+def test_overriding_neither_build_nor_run_fails_at_definition() -> None:
     # The standard format requires exactly one of the two extension points;
     # a Commission that overrides neither could never run.
     with pytest.raises(TypeError, match="overrides neither"):

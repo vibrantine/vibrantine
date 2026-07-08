@@ -173,7 +173,7 @@ def render_transcript(record: PersistedRecord) -> str:
 
     First consumer of the raw `llm_trace` JSON: whatever structure this
     renderer needs and can't reach is what the trace shape should grow next.
-    A record with no trace (a Commission whose invoke never deposited one)
+    A record with no trace (a Commission whose interior never deposited one)
     says so rather than rendering empty.
     """
     if record.llm_trace is None:

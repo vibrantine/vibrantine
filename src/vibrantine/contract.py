@@ -1,6 +1,6 @@
 """Core contract types for Vibrantine Commissions.
 
-A "call" is one execution of `commission.invoke(input, ctx)`. Every type
+A "call" is one execution of `commission._run(input, ctx)`. Every type
 here describes some facet of a call: its typed input/output envelope
 (`CommissionResult`), its runtime conditions (`CallContext`), the origin
 and trust level of the data it produces (`Provenance`, `Claim`), the cost
@@ -103,7 +103,7 @@ class CostMetrics(BaseModel):
 
 
 class ErrorState(BaseModel):
-    """Structured failure value. No exception crosses the invoke boundary."""
+    """Structured failure value. No exception crosses the call boundary."""
 
     kind: ErrorKind = Field(description="Failure category for caller dispatch.")
     detail: str = Field(description="Human-readable, actionable explanation.")
@@ -261,7 +261,7 @@ class CallContext:
     """Runtime conditions for one call.
 
     Carried alongside the typed input. Extend this for new orchestration
-    concerns rather than the invoke signature.
+    concerns rather than the `_run` signature.
     """
 
     budget_usd: float | None = None
@@ -344,8 +344,11 @@ class Commission[InputT, OutputT](ABC):
     One typed input, one typed result, runtime conditions in CallContext.
     A basic Commission sets the identity ClassVars, a `system_prompt`, a
     `toolbox`, and a `build_user_message` hook, then rides the default
-    `invoke` (the full LLM loop below). A custom Commission (one whose
-    control flow is not the standard loop) overrides `invoke` instead.
+    `_run` (the full LLM loop below). A custom Commission (one whose
+    control flow is not the standard loop) overrides `_run` instead. The
+    leading underscore marks ownership, not secrecy: authors implement it,
+    the framework calls it (through `dispatch`), and nothing else touches
+    it. Invoke a Commission through `run_one` / `invoke_sync` / `dispatch`.
     """
 
     # Identity
@@ -382,7 +385,7 @@ class Commission[InputT, OutputT](ABC):
         """Enforce the standard authoring format at class-definition time.
 
         Three checks, so a malformed Commission fails when it's defined rather
-        than at first `invoke`, part of making the contract safe to author
+        than at first run, part of making the contract safe to author
         against (including by non-devs and lesser-model agents):
 
         1. The four identity ClassVars are set (the check follows the MRO, so
@@ -395,7 +398,7 @@ class Commission[InputT, OutputT](ABC):
            TypeVars (a generic intermediate, the factory's function-scoped
            type params), `Any`, and unparameterized bases are skipped.
         3. The override rule: a Commission overrides `build_user_message` (a
-           basic Commission) or `invoke` (a custom one). Overriding neither
+           basic Commission) or `_run` (a custom one). Overriding neither
            means it could never run. An abstract intermediate defers a slot
            with `@abstractmethod`, which counts as overriding it (and ABC
            still blocks instantiation); no opt-out flag needed.
@@ -437,14 +440,15 @@ class Commission[InputT, OutputT](ABC):
             attr
             for klass in cls.__mro__
             if klass is not Commission
-            for attr in ("build_user_message", "invoke")
+            for attr in ("build_user_message", "_run")
             if attr in klass.__dict__
         }
         if not overrides:
             raise TypeError(
                 f"{cls.__name__} overrides neither build_user_message nor "
-                f"invoke, so it could never run. A basic Commission overrides "
-                f"build_user_message; a custom Commission overrides invoke."
+                f"_run, so it could never run. A basic Commission overrides "
+                f"build_user_message; a custom Commission overrides _run "
+                f"(the hook formerly named invoke)."
             )
 
     def __init__(
@@ -470,7 +474,7 @@ class Commission[InputT, OutputT](ABC):
         # a `Model` is taken as-is, enabling local/multi-provider targets. Keep
         # `self._model` as the id string so every id-string site is untouched.
         # Non-LLM Commissions (tools, coordinators) inherit this inertly; they
-        # override `invoke` and never consult it.
+        # override `_run` and never consult it.
         self._model_spec: Model = resolve(model)
         self._model = self._model_spec.id
         self._max_iterations = max_iterations
@@ -505,11 +509,11 @@ class Commission[InputT, OutputT](ABC):
         `TextPart`; return `list[ContentPart]` for multimodal input. It
         receives `ctx` so future per-call information (the planned envelope
         layer, which lands inside `CallContext`) reaches it without a
-        signature change. A custom Commission overrides `invoke` instead and
+        signature change. A custom Commission overrides `_run` instead and
         never triggers this.
         """
         raise NotImplementedError(
-            f"{type(self).__name__} must define build_user_message(), or override invoke()."
+            f"{type(self).__name__} must define build_user_message(), or override _run()."
         )
 
     def truncate_output(self, output: OutputT, max_tokens: int) -> OutputT | None:
@@ -530,7 +534,7 @@ class Commission[InputT, OutputT](ABC):
         """
         return None
 
-    async def invoke(
+    async def _run(
         self,
         input: InputT,
         ctx: CallContext,
@@ -632,7 +636,7 @@ class Commission[InputT, OutputT](ABC):
         call or spend, with the env var named; letting it through would
         surface as a raw provider 401 mid-run, pointing at nothing. A keyless
         endpoint (`api_key_env=None`, e.g. local Ollama) never blocks. The
-        raise crosses invoke, so dispatch's backstop returns it as a failure
+        raise crosses `_run`, so dispatch's backstop returns it as a failure
         value like any other Commission error.
         """
         if self._client is None:
@@ -705,7 +709,7 @@ class Commission[InputT, OutputT](ABC):
         rather than run with a budget it can't keep, the call fails fast here.
         A *free* model (priced at $0.0, e.g. local Ollama) is priced and passes.
         Returns None when enforcement is possible (a priced model, or no budget
-        set), so a budget-checking `invoke` calls this once up front and
+        set), so a budget-checking `_run` calls this once up front and
         proceeds on None.
         """
         if ctx.budget_usd is None or self._model_spec.is_priced:

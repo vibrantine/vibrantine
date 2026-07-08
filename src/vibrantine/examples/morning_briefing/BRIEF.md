@@ -27,7 +27,7 @@ What it demonstrates that nothing else in the examples does:
   a pure judgment call (the executive summary), beside a tool (fetch, one
   level down).
 - **The three-categories rule in one file.** The date header is plain
-  application code inside `invoke`: no judgment, no fetch worth wrapping, so
+  application code inside `_run`: no judgment, no fetch worth wrapping, so
   no contract jacket.
 - **Two-level partial semantics as explicit authorial choices.** A failed
   source makes its section partial; a wholly failed section is skipped and

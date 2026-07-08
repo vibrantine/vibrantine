@@ -116,7 +116,7 @@ What one Commission is.
 - **Decision.** One comprehensive `Commission` base underlies every unit.
   Its default interior is the complete LLM loop, so a basic Commission
   supplies only identity, types, a prompt, and a toolbox. A custom
-  Commission overrides `invoke`, and that override is the only extension
+  Commission overrides `_run`, and that override is the only extension
   point.
 - **Why.** The authoring surface is meant to carry hundreds of Commissions,
   including ones written by novices and by lesser-model agents. Every added
@@ -157,7 +157,7 @@ How units meet.
   single writer.
 - **Why.** A mistake is contained the moment it is born, errors converge
   at the one point that has the context to decide, and the whole data flow
-  of a tree is readable in one place, the parent's `invoke`. This is the
+  of a tree is readable in one place, the parent's `_run`. This is the
   second core sentence as a decision: the maintainability load-bearer.
 - **Rules out.**
   - Sibling channels, blackboards, shared reducers.

@@ -1,6 +1,6 @@
 """Tests for the EmailHandler Commission (provisional route-and-execute validator).
 
-EmailHandler rides the default invoke (the LLM loop) over a sub-Commission
+EmailHandler rides the default _run (the LLM loop) over a sub-Commission
 (DraftReply) and a tool (NotifyUser). Tests inject a fake AsyncOpenAI-shaped
 client returning scripted tool calls, with the real stub handlers, so routing,
 dispatched-child cost rollup, and the heterogeneous-output flattening are all

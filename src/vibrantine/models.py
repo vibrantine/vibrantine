@@ -21,7 +21,7 @@ parents (`design.md § Cost and provenance are structural`), so an *unpriced*
 model anywhere in a
 tree silently under-reports the whole tree's cost; register it for accurate
 accounting. A Commission invoked with a `budget_usd` but an *unpriced* model
-can't have that budget enforced, so it fails fast at invoke; a *free* model
+can't have that budget enforced, so it fails fast before running; a *free* model
 (`0.0`) enforces fine and runs.
 """
 

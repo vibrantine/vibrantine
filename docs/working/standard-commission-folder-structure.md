@@ -89,7 +89,7 @@ varies, the less a human or an AI assistant has to guess.
   class per package.
 - **`commission.py`** holds the `Commission[...]` subclass: identity
   ClassVars, toolbox construction, and either the `build_user_message` hook
-  (basic Commission) or the custom `invoke` (custom Commission). Ordinary
+  (basic Commission) or the custom `_run` (custom Commission). Ordinary
   helper functions live here or beside their single consumer. Helpers are
   not subcommissions.
 - **`types.py`** holds the Pydantic models: the public input/output pair

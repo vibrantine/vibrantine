@@ -103,7 +103,7 @@ class NewsDigestCommission(Commission[NewsDigestInput, NewsDigestOutput]):
         self._fetch = resolved_fetch
         self._synthesize = resolved_synthesize
 
-    async def invoke(
+    async def _run(
         self,
         input: NewsDigestInput,
         ctx: CallContext,

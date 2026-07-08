@@ -103,7 +103,7 @@ class MorningBriefingCommission(Commission[MorningBriefingInput, MorningBriefing
         self._news = news_tuple
         self._summarize = resolved_summarize
 
-    async def invoke(
+    async def _run(
         self,
         input: MorningBriefingInput,
         ctx: CallContext,

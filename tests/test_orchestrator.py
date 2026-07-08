@@ -43,7 +43,7 @@ class _BudgetProbeCommission(Commission[_BudgetProbeInput, _BudgetProbeOutput]):
     input_type: ClassVar[type] = _BudgetProbeInput
     output_type: ClassVar[type] = _BudgetProbeOutput
 
-    async def invoke(
+    async def _run(
         self,
         input: _BudgetProbeInput,
         ctx: CallContext,

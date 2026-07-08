@@ -2,7 +2,7 @@
 
 A basic LLM-loop Commission: it declares its identity, I/O types, a
 `system_prompt`, and a `build_user_message` hook, then rides the base's
-default `invoke`. The toolbox is empty: summarization is pure judgment over
+default `_run`. The toolbox is empty: summarization is pure judgment over
 content already in hand, so there is nothing to fetch. The LLM reads the
 message and signals completion through the framework-injected `conclude`
 tool, whose schema is this Commission's `output_type`.

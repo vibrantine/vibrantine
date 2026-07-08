@@ -62,7 +62,7 @@ class WriteTool(Commission[WriteInput, WriteOutput]):
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)
 
-    async def invoke(
+    async def _run(
         self,
         input: WriteInput,
         ctx: CallContext,

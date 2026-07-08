@@ -14,17 +14,19 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
     caller's `CallContext.record` default, and the record is written
     through `CallContext.backend` if one is wired
   - the LLM loop's transcript is collected: dispatch hangs a context-local
-    trace mailbox before calling `invoke`, `run_llm_loop` deposits its
+    trace mailbox before calling `_run`, `run_llm_loop` deposits its
     message history into it on the way out, and whatever landed is written
     to `PersistedRecord.llm_trace`. Same ContextVar mechanism as the run_id
     chain, so nesting and `asyncio.gather` keep every trace with its own
     run. The trace serves the recorder, never the caller: it lands only in
     the record, and a parent Commission sees nothing but the child's result.
-  - a raised exception from a misbehaving `invoke` is converted to an
+  - a raised exception from a misbehaving `_run` is converted to an
     `internal` failure result, so errors-as-values holds at the boundary
     even when a Commission breaks the contract
 
-Calling `commission.invoke` directly bypasses all of this; don't.
+`Commission._run` is the author's override hook; this module is its one
+sanctioned caller. The underscore is what keeps everyone else routing
+through here.
 """
 
 import contextvars
@@ -94,11 +96,11 @@ async def dispatch[InputT, OutputT](
     my_run_id = str(uuid.uuid4())
 
     # The Commission body sees its parent's run_id via ctx; it does not see
-    # its own (dispatch stamps that onto the result after invoke returns).
-    ctx_for_invoke = replace(ctx, parent_run_id=parent)
+    # its own (dispatch stamps that onto the result after _run returns).
+    ctx_for_run = replace(ctx, parent_run_id=parent)
 
     # A fresh mailbox for this call; whatever the interior deposits (the LLM
-    # loop's transcript, on success or failure) is collected after invoke and
+    # loop's transcript, on success or failure) is collected after _run and
     # written to the record. The finally re-hangs the caller's box, so a
     # deposit from a parent's own loop still lands with the parent.
     box: list[list[dict[str, Any]]] = []
@@ -106,10 +108,12 @@ async def dispatch[InputT, OutputT](
     token = _current_run_id.set(my_run_id)
     logger.debug("%s started run_id=%s parent=%s", commission.name, my_run_id, parent)
     try:
-        result = await commission.invoke(input, ctx_for_invoke)
+        # Dispatch is the hook's one sanctioned caller; the protected access
+        # is the design, not a shortcut.
+        result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
     except Exception as exc:
         # Errors are values: a Commission that *raises* instead of returning a
-        # failure (a custom-invoke bug, a third-party Commission) has broken the
+        # failure (a custom-_run bug, a third-party Commission) has broken the
         # contract. Convert it here so the exception can't escape `run_one`, and
         # so the failure still flows through stamping + persistence below.
         # CancelledError is a BaseException, not an Exception; task
@@ -125,14 +129,14 @@ async def dispatch[InputT, OutputT](
         _current_run_id.reset(token)
         _trace_box.reset(trace_token)
 
-    # A custom invoke may run several LLM loops in sequence; the raw-JSON v1
+    # A custom _run may run several LLM loops in sequence; the raw-JSON v1
     # trace is their message histories concatenated in run order.
     llm_trace = [message for deposit in box for message in deposit] or None
 
     # Stamp before the overflow policy runs, so a truncate_with_reference
     # detail can name the run_id the full output is persisted under.
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
-    result, full_result = _apply_overflow_policy(result, commission, ctx_for_invoke)
+    result, full_result = _apply_overflow_policy(result, commission, ctx_for_run)
     logger.info(
         "%s finished status=%s cost=$%.6f run_id=%s",
         commission.name,
@@ -164,7 +168,7 @@ async def dispatch[InputT, OutputT](
             mode=mode,
             input=input,
             result=full_result if full_result is not None else result,
-            ctx=ctx_for_invoke,
+            ctx=ctx_for_run,
             llm_trace=llm_trace,
         )
         try:
@@ -216,7 +220,7 @@ def _exception_to_failure[OutputT](
     """Convert a raised exception into a structured `internal` failure.
 
     Upholding errors-as-values is the author's job, but dispatch is the seam
-    that *guarantees* it: a raising `invoke` becomes a failure result rather
+    that *guarantees* it: a raising `_run` becomes a failure result rather
     than propagating out of `run_one`. Cost is reported as $0; any spend
     before the raise unwound with the stack and is unrecoverable here; the real
     remedy is Commissions returning failures instead of raising.

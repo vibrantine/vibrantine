@@ -3,7 +3,7 @@
 An incoming email is classified into one of three routes and the route is
 executed in the same loop: file as `non_urgent` (conclude directly), `draft` a
 reply (dispatch the DraftReply sub-Commission), or `notify` the user (dispatch
-the NotifyUser tool). A basic Commission: it rides the default `invoke`, with
+the NotifyUser tool). A basic Commission: it rides the default `_run`, with
 its toolbox holding a *sub-Commission* and a *tool* rather than leaf tools only.
 
 This exists to stress the LLM-loop-routing surface of the contract before the
@@ -122,7 +122,7 @@ class DraftReplyCommission(Commission[DraftReplyInput, DraftReplyOutput]):
     input_type: ClassVar[type] = DraftReplyInput
     output_type: ClassVar[type] = DraftReplyOutput
 
-    async def invoke(
+    async def _run(
         self,
         input: DraftReplyInput,
         ctx: CallContext,
@@ -190,7 +190,7 @@ class NotifyUserTool(Commission[NotifyInput, NotifyOutput]):
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)
 
-    async def invoke(
+    async def _run(
         self,
         input: NotifyInput,
         ctx: CallContext,

@@ -100,7 +100,7 @@ class _PartialTool(Commission[_PartialIn, _PartialOut]):
     input_type: ClassVar[type] = _PartialIn
     output_type: ClassVar[type] = _PartialOut
 
-    async def invoke(
+    async def _run(
         self,
         input: _PartialIn,
         ctx: CallContext,
@@ -195,7 +195,7 @@ class _BudgetProbe(Commission[_BudgetProbeIn, _BudgetProbeOut]):
         self.seen_budgets: list[float | None] = []
         self._cost_usd = cost_usd
 
-    async def invoke(
+    async def _run(
         self,
         input: _BudgetProbeIn,
         ctx: CallContext,

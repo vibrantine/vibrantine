@@ -90,7 +90,7 @@ class _Stub(Commission[_Input, _Output]):
         self._scripted = result or _success_result()
         self.seen_ctx: CallContext | None = None
 
-    async def invoke(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
         self.seen_ctx = ctx
         return self._scripted
 
@@ -126,7 +126,7 @@ class _FailingBackend:
 
 
 class _Raiser(Commission[_Input, _Output]):
-    """Raises from invoke: a Commission that breaks the errors-as-values rule."""
+    """Raises from _run: a Commission that breaks the errors-as-values rule."""
 
     name: ClassVar[str] = "raiser"
     description: ClassVar[str] = "test stub that raises"
@@ -142,7 +142,7 @@ class _Raiser(Commission[_Input, _Output]):
         super().__init__(persistence_mode=persistence_mode)
         self._exc = exc
 
-    async def invoke(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
         raise self._exc
 
 
@@ -158,7 +158,7 @@ class _Parent(Commission[_Input, _Output]):
         super().__init__()
         self._child = child
 
-    async def invoke(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
         await dispatch(self._child, input, ctx)
         return _success_result("from-parent")
 
@@ -180,7 +180,7 @@ class _GatherParent(Commission[_Input, _Output]):
         self._a = child_a
         self._b = child_b
 
-    async def invoke(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
         await asyncio.gather(
             dispatch(self._a, input, ctx),
             dispatch(self._b, input, ctx),
