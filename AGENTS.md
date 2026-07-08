@@ -58,7 +58,7 @@ A `description: ClassVar[str]` is reused **verbatim** by `as_llm_tool` (`src/vib
 Follow the same five-element pattern as mature agent-harness tool prose (opening sentence, when to use, input semantics, return shape, edge/recovery guidance), taking the elements that change the *caller's* decision:
 
 - **Required:** opening sentence (what it does), when-to-call (usage), return-shape (what comes back).
-- **Edge cases / recovery guidance:** only when *caller-actionable*. A Commission's failures already return as a structured `CommissionResult` error jacket (rendered to the calling LLM by `_render_tool_result`), so recovery prose is usually redundant. This is the one place a Commission legitimately carries less than a raw tool, which returns rawer results.
+- **Edge cases / recovery guidance:** only when *caller-actionable*. A Commission's failures already return as a structured `CommissionResult` error envelope (rendered to the calling LLM by `_render_tool_result`), so recovery prose is usually redundant. This is the one place a Commission legitimately carries less than a raw tool, which returns rawer results.
 
 A one-sentence description is the exception, justified only when a Commission genuinely can never be LLM-called. `RecursiveResearchCommission` is the worked example: opening + `Usage:` bullets + return-shape inline, no edge/recovery because none is caller-actionable.
 

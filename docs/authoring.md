@@ -1,7 +1,7 @@
 # Authoring Commissions
 
 A Commission is one typed function with an LLM inside. You hand it a typed
-input, and you always get a typed result jacket back: `success`, `partial`, or
+input, and you always get a typed result envelope back: `success`, `partial`, or
 `failure`, never a raised exception, always with the cost attached. Everything
 in this document exists to make that promise trustworthy: the types make the
 work order precise, the tests make the boundary provable, and the evals make
@@ -48,7 +48,7 @@ model (steps 0 and 8 only; everything else works offline).
 
 ## Step 0: Proof of Life
 
-Before writing anything, prove the install works and see the result jacket
+Before writing anything, prove the install works and see the result envelope
 with your own eyes.
 
 Create a project and add Vibrantine as a git dependency:
@@ -81,7 +81,7 @@ print(result.provenance)      # where the data came from
 uv run python poke.py
 ```
 
-That object is the jacket every Commission returns, LLM or not. Status, typed
+That object is the envelope every Commission returns, LLM or not. Status, typed
 output, cost, provenance: the same envelope you are about to build your own
 Commission around.
 
@@ -337,7 +337,7 @@ shaped like your output type, and keeps going until the model concludes or a
 guard rail stops it.
 
 Whichever way you choose, it is invisible from outside: same input type, same
-result jacket. The choice is never part of your contract, which means you can
+result envelope. The choice is never part of your contract, which means you can
 change your mind later without breaking a single caller.
 
 **Specimen:** RecursiveResearch is also a basic Commission; its entire "recursion"
@@ -368,6 +368,12 @@ This small constructor is a load-bearing convention:
 - **`toolbox` is the single source of truth** for what the model may call.
   There is no other channel; if it's not in the tuple, the model cannot
   touch it.
+- **A class-level `toolbox = (...)` is shared.** Declaring the tuple on the
+  class body (as some worked examples do) means every instance of the
+  Commission shares those same tool objects, so anything placed there must
+  be stateless. A stateful tool (one holding a connection, a rate limiter,
+  a cache) is built per-instance in `__init__` and passed via `toolbox=`,
+  exactly as above.
 - **`model=None` means "the system default".** Don't hardcode a model name in
   the class; let callers (and the one loaded default) decide, and accept a
   `model=` override for when they do.
@@ -422,17 +428,17 @@ bounds are already on your Commission; this step is about knowing them.
 - **Output size.** `max_output_tokens` plus an `overflow_policy` say what
   happens when the deliverable is oversized. DocTag's output is tiny, so the
   defaults are fine; when you do set a policy, know that `"partial"` flags
-  the oversize through the jacket but does not trim it. The one policy that
+  the oversize through the envelope but does not trim it. The one policy that
   does trim, `"truncate_with_reference"`, needs two things from you: a
   `truncate_output` override (only the author knows how to shrink a typed
   output without invalidating it) and a persistence backend on the run, so
-  the full version stays reachable by the run_id named in the jacket.
+  the full version stays reachable by the run_id named on the envelope.
   Missing either, it degrades to `"partial"`: full output, flagged, never
   silent.
 - **Cancellation.** The `CallContext` carries a cancel token that
   well-behaved Commissions check before expensive work.
 
-The other half of trust is on the consuming side: handle the whole jacket,
+The other half of trust is on the consuming side: handle the whole envelope,
 not just the happy path.
 
 ```python
@@ -523,7 +529,7 @@ Notice what happened in that script: the double replaced only the *LLM*. The
 You scripted the model's decisions and everything else was live machinery.
 
 This one test proves import, construction, injection, dispatch, tool
-execution, conclusion, and the jacket. The full coverage bar for a shipped
+execution, conclusion, and the envelope. The full coverage bar for a shipped
 Commission (validation failures, cancellation, malformed model responses,
 budget behavior, tool menu shape) is listed in
 [`commission-testing.md`](commission-testing.md); work through it as your
@@ -1230,6 +1236,31 @@ with `dataclasses.replace` to hand a child a modified one.
 | `backend` | `None` | `PersistenceBackend` to write through |
 | `record` | `None` | Recording default for every node whose `persistence_mode` is `None`; a node's explicit mode wins |
 
+## The meanings of None
+
+The knobs use an unset sentinel so "caller said nothing" and "caller said
+None" stay distinct, which means an explicit `None` keeps a real meaning,
+and that meaning differs per knob. Each is documented where it lives; this
+table is the one consolidated view, for re-entry after time away:
+
+| Knob | `None` means | Leaving it unset means |
+|---|---|---|
+| `model=` | The system default (`DEFAULT_MODEL`) | Same |
+| `max_input_tokens=` | Size gate disabled (the standard tool shape) | Auto-resolve from the model's context window |
+| `max_output_tokens=` | No output cap | The class default (itself `None` unless the class says otherwise) |
+| `persistence_mode=` | No opinion: follow the caller's `record` | The class default (itself `None` unless the class says otherwise) |
+| `system_prompt` | This Commission needs none (tools, coordinators) | n/a: a class attribute, not a kwarg |
+| `CallContext.budget_usd` | No spending ceiling | Same |
+| `CallContext.record` | Recording stays off for nodes with no opinion | Same |
+| `CapabilitySet.tools` | Unrestricted: the whole toolbox is on the menu | Same |
+| `CostMetrics.in_tokens` / `out_tokens` (read side) | No LLM turn ran in this call | n/a; `0` means a turn ran and counted nothing |
+
+Two adjacencies deserve care. `max_input_tokens` and `max_output_tokens`
+sit side by side with different `None` stories: the input gate
+distinguishes unset (auto) from `None` (off), while the output cap does
+not. And `CapabilitySet.tools` inverts the usual polarity: `None` permits
+everything, the empty set permits nothing.
+
 ## Entry points
 
 Always invoke through an entry point, never the `_run` hook directly; the
@@ -1333,7 +1364,7 @@ written as a selection prompt.
 ## Authoring discipline
 
 - **Commission vs tool.** A Commission has an LLM call somewhere in its
-  subtree; a tool has none. Both wear the same jacket; the distinction is
+  subtree; a tool has none. Both wear the same contract; the distinction is
   discipline, not a separate type. Tools use `max_input_tokens=None` and no
   `model`.
 - **Description prose.** Written for the LLM that decides whether to call

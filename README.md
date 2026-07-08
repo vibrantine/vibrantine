@@ -127,7 +127,7 @@ Vibrantine recognizes three categories:
 | Category | Role |
 | --- | --- |
 | **Commission** | Typed input/output plus LLM judgment somewhere in its subtree. |
-| **Tool** | The same contract jacket, but deterministic throughout: no LLM call anywhere in its subtree. |
+| **Tool** | The same contract, but deterministic throughout: no LLM call anywhere in its subtree. |
 | **Application code** | Everything above the library: persistence policy, user surfaces, scheduling, long-term state, notification, and product workflow. |
 
 There is no fourth "workflow" or "traffic controller" type in the library.
@@ -164,7 +164,67 @@ different host-language ergonomics.
 ## Minimal Example
 
 This example sketches a small research-brief Commission. It accepts a question
-and source notes, then returns a typed brief.
+and source notes, then returns a typed brief. `create_commission` builds a
+working Commission from the decisions no one can make for you: what goes in,
+what comes out, what it is called. Everything else is manufactured.
+
+```python
+from pydantic import BaseModel, Field
+
+from vibrantine import create_commission, invoke_sync
+
+
+class ResearchBriefInput(BaseModel):
+    question: str = Field(description="The question the brief should answer.")
+    source_notes: list[str] = Field(
+        description="Source notes or excerpts to ground the brief.",
+    )
+
+
+class ResearchBriefOutput(BaseModel):
+    answer: str = Field(description="The direct answer to the question.")
+    key_claims: list[str] = Field(description="Important claims made in the answer.")
+
+
+research_brief = create_commission(
+    name="research_brief",
+    description=(
+        "Create a grounded research brief from supplied source notes. "
+        "Returns an answer and its key claims."
+    ),
+    input=ResearchBriefInput,
+    output=ResearchBriefOutput,
+)
+
+result = invoke_sync(
+    research_brief,
+    ResearchBriefInput(
+        question="What are the main risks in this proposal?",
+        source_notes=[
+            "The project depends on an unstable third-party API.",
+            "The estimated budget assumes no additional compliance review.",
+            "The team has not yet validated demand with target users.",
+        ],
+    ),
+    budget_usd=0.10,
+)
+
+if result.status == "success" and result.output is not None:
+    print(result.output.answer)
+    print(result.output.key_claims)
+else:
+    print(result.error)
+```
+
+That is a complete Commission: typed, budgetable, recordable, and it nests
+in another Commission's toolbox like anything hand-written.
+
+## The Same Boundary, Written by Hand
+
+The factory covers the basic path. The day a Commission needs a custom
+interior (its own tools, a prompt file, steering fields, hand-shaped
+messages), the exit ramp is subclassing `Commission`. The boundary the
+caller sees does not change. The same brief, grown up a little:
 
 ```python
 from typing import ClassVar, Literal
@@ -256,8 +316,9 @@ else:
     print(result.error)
 ```
 
-The implementation inside the Commission can evolve. The caller still depends
-on the same input and output boundary.
+The calling code is the same shape as the factory version: same entry
+point, same envelope handling. The implementation inside the Commission can
+evolve, and the caller still depends on the same input and output boundary.
 
 ## Installation
 

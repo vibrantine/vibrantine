@@ -9,7 +9,7 @@ summary over the survivors, renders markdown, and writes it to disk.
 Three lessons live here:
 
 - The date header is plain application code, not a Commission or a Tool.
-  Not everything wears the jacket; the three-categories rule in one file.
+  Not everything wears the contract; the three-categories rule in one file.
 - Partial semantics are the author's explicit choice at every level: a
   failed source makes a section partial, a failed section makes the
   briefing partial, and a failed executive summary degrades the briefing
@@ -109,7 +109,7 @@ class MorningBriefingCommission(Commission[MorningBriefingInput, MorningBriefing
         ctx: CallContext,
     ) -> CommissionResult[MorningBriefingOutput]:
         # The date header is deliberately plain application code: no judgment,
-        # no fetch worth wrapping, so no contract jacket.
+        # no fetch worth wrapping, so no contract.
         now = datetime.now(UTC)
         date_label = now.strftime("%A %d %B %Y")
         provenance = Provenance(

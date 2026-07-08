@@ -88,7 +88,7 @@ What one Commission is.
   wrong in judgment-shaped ways. The LLM-anywhere rule answers that at every
   scale: a deterministic coordinator with LLM-bearing children is a
   Commission; a composite of ten deterministic tools is still a Tool. Tools
-  wear the same jacket because callers need the same discipline from them.
+  wear the same contract because callers need the same discipline from them.
 - **Rules out.**
   - A separate Tool ABC.
   - Any fourth "workflow," "graph," or "traffic controller" type; those
@@ -98,7 +98,7 @@ What one Commission is.
 
 - **Decision.** Inside a Commission, either the author fixes the control
   flow in Python or an LLM chooses steps from a toolbox. Both wear the same
-  jacket, and the framework never inspects or branches on which one it is.
+  contract, and the framework never inspects or branches on which one it is.
 - **Why.** The contract boundary is the invariant; the interior is not. If
   callers or the framework could tell how a Commission works inside,
   implementation details would harden into obligations. Invisibility is

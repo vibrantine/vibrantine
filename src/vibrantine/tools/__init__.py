@@ -6,7 +6,7 @@ output, errors-as-state, no LLM. Per
 `Commission[InputT, OutputT]` with `max_input_tokens=None`
 and no constructor model argument. The "is this a Commission or a
 tool" distinction is enforced by authoring discipline, not by the type
-system; both wear the same contract jacket.
+system; both wear the same contract.
 """
 
 from vibrantine.tools.delete import DeleteInput, DeleteOutput, DeleteTool

@@ -71,7 +71,7 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
     # Sub-answers are rendered whole into the parent loop's context, so an
     # oversized one is chopped at the boundary: `truncate_output` below keeps
     # claims over prose, the full version is persisted under the run_id named
-    # in the jacket, and the parent's LLM sees the chop plus the size warning.
+    # on the envelope, and the parent's LLM sees the chop plus the size warning.
     # Without a persistence backend the policy degrades to `partial` (full
     # output, flagged, never silent), which is a warning light rather than a
     # guard rail.

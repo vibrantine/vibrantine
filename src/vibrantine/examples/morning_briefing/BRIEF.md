@@ -28,7 +28,7 @@ What it demonstrates that nothing else in the examples does:
   level down).
 - **The three-categories rule in one file.** The date header is plain
   application code inside `_run`: no judgment, no fetch worth wrapping, so
-  no contract jacket.
+  no contract.
 - **Two-level partial semantics as explicit authorial choices.** A failed
   source makes its section partial; a wholly failed section is skipped and
   named in `failed_sections`; a failed executive summary degrades the
