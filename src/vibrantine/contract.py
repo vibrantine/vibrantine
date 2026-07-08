@@ -21,6 +21,8 @@ from typing import (
     Literal,
     Protocol,
     cast,
+    get_args,
+    get_origin,
     runtime_checkable,
 )
 
@@ -379,13 +381,20 @@ class Commission[InputT, OutputT](ABC):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Enforce the standard authoring format at class-definition time.
 
-        Two checks, so a malformed Commission fails when it's defined rather
+        Three checks, so a malformed Commission fails when it's defined rather
         than at first `invoke`, part of making the contract safe to author
         against (including by non-devs and lesser-model agents):
 
         1. The four identity ClassVars are set (the check follows the MRO, so
            a subclass inheriting them from a parent passes).
-        2. The override rule: a Commission overrides `build_user_message` (a
+        2. The generic parameters agree with the identity ClassVars. Both
+           state the I/O contract: type checkers reason from
+           `Commission[InputT, OutputT]`, the runtime reads the ClassVars.
+           Without the check a mismatch defines cleanly and the two audiences
+           see different contracts. Only concrete classes can disagree, so
+           TypeVars (a generic intermediate, the factory's function-scoped
+           type params), `Any`, and unparameterized bases are skipped.
+        3. The override rule: a Commission overrides `build_user_message` (a
            basic Commission) or `invoke` (a custom one). Overriding neither
            means it could never run. An abstract intermediate defers a slot
            with `@abstractmethod`, which counts as overriding it (and ABC
@@ -403,6 +412,27 @@ class Commission[InputT, OutputT](ABC):
                 f"attribute(s): {', '.join(missing)}. A Commission declares "
                 f"name, description, input_type, and output_type."
             )
+        for base in getattr(cls, "__orig_bases__", ()):
+            if get_origin(base) is not Commission:
+                continue
+            args = get_args(base)
+            if len(args) != 2:
+                continue
+            for arg, attr in zip(args, ("input_type", "output_type"), strict=True):
+                declared = getattr(cls, attr)
+                # `Any` is a class on 3.12, so exclude it before the
+                # concrete-class test or Any-parameterized bases would
+                # false-positive here.
+                if arg is Any or not isinstance(arg, type):
+                    continue
+                if arg is not declared:
+                    declared_name = getattr(declared, "__name__", repr(declared))
+                    raise TypeError(
+                        f"{cls.__name__} declares {arg.__name__} as a generic "
+                        f"parameter but sets {attr} = {declared_name}. The "
+                        f"generic parameters and the identity ClassVars state "
+                        f"the same contract and must name the same types."
+                    )
         overrides = {
             attr
             for klass in cls.__mro__

@@ -12,7 +12,7 @@ policies in different environments.
 """
 
 from datetime import UTC, datetime
-from typing import ClassVar, get_args
+from typing import Any, ClassVar, get_args
 
 import pytest
 from pydantic import BaseModel
@@ -336,3 +336,52 @@ def test_overriding_neither_build_nor_invoke_fails_at_definition() -> None:
             description: ClassVar[str] = "overrides neither extension point"
             input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
             output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+
+def test_output_classvar_disagreeing_with_generics_fails_at_definition() -> None:
+    # The generics and the ClassVars state the same contract twice: type
+    # checkers read the former, the runtime the latter. A mismatch must fail
+    # at definition, not run with the two audiences seeing different types.
+    with pytest.raises(TypeError, match="output_type"):
+
+        class _Mismatched(  # pyright: ignore[reportUnusedClass]
+            Commission[_PolicyProbeInput, _PolicyProbeOutput]
+        ):
+            name: ClassVar[str] = "mismatched"
+            description: ClassVar[str] = "generic and ClassVar disagree on output"
+            input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
+            output_type: ClassVar[type[BaseModel]] = _PolicyProbeInput  # wrong on purpose
+
+            def build_user_message(self, input: _PolicyProbeInput, ctx: CallContext) -> str:
+                return "probe"
+
+
+def test_input_classvar_disagreeing_with_generics_fails_at_definition() -> None:
+    with pytest.raises(TypeError, match="input_type"):
+
+        class _Mismatched(  # pyright: ignore[reportUnusedClass]
+            Commission[_PolicyProbeInput, _PolicyProbeOutput]
+        ):
+            name: ClassVar[str] = "mismatched"
+            description: ClassVar[str] = "generic and ClassVar disagree on input"
+            input_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput  # wrong on purpose
+            output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+            def build_user_message(self, input: _PolicyProbeInput, ctx: CallContext) -> str:
+                return "probe"
+
+
+def test_any_generic_parameters_skip_the_agreement_check() -> None:
+    # `Any` is a class on 3.12+, so the check must exclude it explicitly or
+    # an Any-parameterized subclass would false-positive against its concrete
+    # ClassVars. Defining cleanly is the assertion.
+    class _AnyParams(Commission[Any, Any]):
+        name: ClassVar[str] = "any_params"
+        description: ClassVar[str] = "Any-parameterized probe"
+        input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
+        output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+        def build_user_message(self, input: Any, ctx: CallContext) -> str:
+            return "probe"
+
+    assert _AnyParams.input_type is _PolicyProbeInput
