@@ -27,7 +27,7 @@ from vibrantine.contract import (
     TextPart,
 )
 from vibrantine.llm_tools import run_llm_loop
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 
 
 class _Out(BaseModel):
@@ -41,7 +41,7 @@ async def _run(user_message: str | list[Any]) -> dict[str, Any]:
     )
     await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message=user_message,
         toolbox=(),
@@ -134,7 +134,7 @@ async def test_partial_child_result_renders_output_and_error() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(_PartialTool(),),
@@ -157,7 +157,7 @@ async def test_empty_system_prompt_sends_no_system_message() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="",
         user_message="go",
         toolbox=(),
@@ -237,7 +237,7 @@ async def test_children_are_dispatched_with_the_remaining_budget() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -273,7 +273,7 @@ async def test_exhausted_grant_starves_later_children_at_zero() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -300,7 +300,7 @@ async def test_no_budget_passes_none_through_to_children() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -341,7 +341,7 @@ async def test_budget_status_line_follows_the_turns_tool_results() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -376,7 +376,7 @@ async def test_overspent_grant_reports_zero_remaining_not_negative() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -405,7 +405,7 @@ async def test_unbudgeted_loop_emits_no_budget_line() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(probe,),
@@ -427,7 +427,7 @@ async def test_preflight_gate_declines_before_the_first_call() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         # 4000 chars -> ~1000 tokens -> $0.01 input floor at $10/M.
         user_message="x" * 4000,
@@ -462,7 +462,7 @@ async def test_preflight_gate_declines_a_later_turn_after_spend_accumulates() ->
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         # 400 chars -> ~100 tokens -> $0.001 input floor: under the grant, so
         # turn one proceeds. After it, spend is 0.002 (own) + 0.001 (child)
@@ -487,7 +487,7 @@ async def test_unbudgeted_loop_never_gates_pre_flight() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="x" * 400_000,
         toolbox=(),
@@ -512,7 +512,7 @@ async def test_free_text_reply_gets_one_corrective_nudge() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(),
@@ -544,7 +544,7 @@ async def test_second_free_text_reply_fails_the_loop() -> None:
     )
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(),
@@ -571,7 +571,7 @@ async def test_empty_provider_choices_fail_as_loop_error() -> None:
 
     outcome = await run_llm_loop(
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL.id,
         system_prompt="sys",
         user_message="go",
         toolbox=(),

@@ -19,7 +19,8 @@ from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
 )
-from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.models import Model
+from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
 
 _SOURCE = (
     "The cat sat on the mat. It was a warm afternoon and the cat was content. "
@@ -31,7 +32,7 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_iterations: int = 10,
-    model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
+    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[SummarizeCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
     commission = SummarizeCommission(

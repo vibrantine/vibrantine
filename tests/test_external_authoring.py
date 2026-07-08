@@ -21,7 +21,7 @@ from vibrantine import (
     Provenance,
     invoke_sync,
 )
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 from vibrantine.tools import (
     DeleteInput,
     EditInput,
@@ -37,7 +37,7 @@ from vibrantine.tools import (
     WriteInput,
 )
 
-_MODEL = "google/gemini-3-flash-preview"  # stable fixture for pricing math
+_MODEL = FIXTURE_MODEL
 
 
 # --- §1: py.typed ships so a consumer's type-checker sees real types ---

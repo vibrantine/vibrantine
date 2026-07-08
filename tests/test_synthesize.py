@@ -20,8 +20,9 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
+from vibrantine.models import Model
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
 
 
 def _src(idx: int, content: str = "fact") -> SynthesisSource:
@@ -39,7 +40,7 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_input_tokens: int | None = None,
-    model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
+    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[SynthesizeCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
     commission = SynthesizeCommission(
@@ -156,7 +157,7 @@ async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> Non
 
 
 async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
-    # google/gemini-3-flash-preview: $0.50/M input, $3.00/M output.
+    # FIXTURE_MODEL: $0.50/M input, $3.00/M output.
     commission, _fake = _commission(
         [
             llm_response(content="free", in_tokens=1000, out_tokens=200),

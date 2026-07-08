@@ -14,7 +14,8 @@ from openai import AsyncOpenAI
 from vibrantine.contract import CallContext, CapabilitySet, ProgressEvent
 from vibrantine.dispatch import dispatch
 from vibrantine.examples.ask import AskCommission, AskInput
-from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.models import Model
+from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
 from vibrantine.tools.read import ReadTool
 
 
@@ -22,7 +23,7 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_iterations: int = 10,
-    model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
+    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[AskCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
     commission = AskCommission(

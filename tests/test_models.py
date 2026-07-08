@@ -46,8 +46,8 @@ def test_known_models_entries_are_well_formed() -> None:
 
 
 def test_known_model_carries_openrouter_endpoint() -> None:
-    model = KNOWN_MODELS["google/gemini-3-flash-preview"]
-    assert model.id == "google/gemini-3-flash-preview"
+    model = KNOWN_MODELS["google/gemini-3.5-flash"]
+    assert model.id == "google/gemini-3.5-flash"
     assert model.base_url == OPENROUTER_BASE_URL
     assert model.api_key_env == "OPENROUTER_API_KEY"
 

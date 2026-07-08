@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import CallContext, Commission, create_commission, dispatch
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 from vibrantine.tools import ReadTool
 
 
@@ -48,7 +48,7 @@ def _commission(
         output=RecipeOutput,
         toolbox=toolbox,
         system_prompt=system_prompt,
-        model="google/gemini-3-flash-preview",
+        model=FIXTURE_MODEL,
         client=cast(AsyncOpenAI, fake),
     )
 

@@ -18,6 +18,10 @@ injection seam:
   text, with token counts so pricing runs for real.
 - `AlwaysCancelled`: a `CancelToken` that is already cancelled, for testing
   cancellation paths.
+- `FIXTURE_MODEL`: a `Model` with pinned pricing, for tests that assert on
+  cost or budget math. Deliberately not a real catalog slug: passing it
+  bypasses `KNOWN_MODELS`, so retiring or repricing a real model never
+  silently rewrites a test's expected dollars.
 
 The one test worth writing first:
 
@@ -37,6 +41,21 @@ import json
 from collections.abc import Sequence
 from types import SimpleNamespace
 from typing import Any
+
+from vibrantine.models import Model
+
+# A priced Model for unit tests that assert on cost or budget arithmetic.
+# Deliberately not a real catalog slug: because `resolve()` returns a `Model`
+# as-is, passing this bypasses `KNOWN_MODELS` entirely, so retiring, repricing,
+# or renaming a real model never silently changes a test's expected numbers.
+# The rates ($0.50/M in, $3.00/M out) are the fixture pricing these tests were
+# written against, so existing cost arithmetic is unchanged.
+FIXTURE_MODEL = Model(
+    id="fixture/priced-model",
+    context_window=1_050_000,
+    input_usd_per_million=0.50,
+    output_usd_per_million=3.00,
+)
 
 
 class AlwaysCancelled:

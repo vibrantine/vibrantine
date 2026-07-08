@@ -18,11 +18,8 @@ from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
 from vibrantine.examples.morning_briefing.subcommissions.weather import WeatherCommission
 from vibrantine.examples.summarize import SummarizeCommission
 from vibrantine.examples.synthesize import SynthesizeCommission
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 from vibrantine.tools.fetch import FetchTool
-
-# Stable fixture for pricing math: $0.50/M input, $3.00/M output.
-FIXTURE_MODEL = "google/gemini-3-flash-preview"
 
 # One default LLM turn (100 in, 50 out) at the fixture model.
 TURN_COST = (100 * 0.50 + 50 * 3.00) / 1_000_000

@@ -27,9 +27,9 @@ from vibrantine.examples.recursive_research import (
 )
 from vibrantine.examples.recursive_research.types import ResearchClaim, ResearchOutput
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 
-# One LLM turn at the fixture model (google/gemini-3-flash-preview):
+# One LLM turn at the fixture model:
 # (100 in * $0.50 + 50 out * $3.00) / 1M.
 CALL_COST = (100 * 0.50 + 50 * 3.00) / 1_000_000
 
@@ -43,7 +43,7 @@ def _agent(
     agent = RecursiveResearchCommission(
         max_depth=max_depth,
         client=cast(AsyncOpenAI, fake),
-        model="google/gemini-3-flash-preview",  # stable fixture for pricing math
+        model=FIXTURE_MODEL,
     )
     return agent, fake
 

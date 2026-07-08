@@ -15,10 +15,7 @@ from vibrantine.examples.demo.agent import (
     demo_agent,
 )
 from vibrantine.examples.demo.trace import RecordingBackend, render_trace
-from vibrantine.testing import ScriptedLLM, llm_response
-
-# Stable fixture for pricing math: $0.50/M input, $3.00/M output.
-FIXTURE_MODEL = "google/gemini-3-flash-preview"
+from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 
 
 def test_demo_agent_toolbox_holds_the_four_examples() -> None:

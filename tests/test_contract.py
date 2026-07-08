@@ -240,7 +240,7 @@ def test_default_model_resolves_the_size_gate() -> None:
     # No model kwarg → the system default (models.DEFAULT_MODEL); its context
     # window auto-resolves max_input_tokens, the size-gate ceiling. Observing
     # the resolved gate confirms the default model flowed through.
-    assert _BasicProbe().max_input_tokens == 1_050_000
+    assert _BasicProbe().max_input_tokens == 1_048_576
 
 
 def test_explicit_none_disables_the_size_gate() -> None:

@@ -19,7 +19,8 @@ from vibrantine.examples.email_handler import (
     EmailHandlerInput,
     IncomingEmail,
 )
-from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.models import Model
+from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
 
 _EMAIL_ARGS = {"sender": "a@b.test", "subject": "Quick question", "body": "Body text."}
 
@@ -31,7 +32,7 @@ def _input() -> EmailHandlerInput:
 def _commission(
     responses: list[SimpleNamespace],
     *,
-    model: str = "google/gemini-3-flash-preview",  # stable fixture for pricing math
+    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[EmailHandlerCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
     commission = EmailHandlerCommission(client=cast(AsyncOpenAI, fake), model=model)

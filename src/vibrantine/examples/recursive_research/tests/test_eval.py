@@ -52,7 +52,7 @@ pytestmark = [
 
 # Pinned so a failing case means the Commission changed, not the default
 # model. Swapping this constant is a deliberate, separate experiment.
-EVAL_MODEL = "google/gemini-3-flash-preview"
+EVAL_MODEL = "google/gemini-3.5-flash"
 
 BUDGET_USD = 0.25
 

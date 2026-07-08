@@ -43,6 +43,17 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   The base loop's own success return rides it. Documented in
   authoring.md Part III alongside the other protected helpers.
 
+### Fixed
+
+- The default model and sole `KNOWN_MODELS` entry pointed at
+  `google/gemini-3-flash-preview`, which OpenRouter no longer serves, so
+  an out-of-the-box call failed with a model-not-found error. Repointed
+  `DEFAULT_MODEL` and the catalog to `google/gemini-3.5-flash` (live;
+  1,048,576-token context; $1.50 / $9.00 per million in/out). Model
+  identifiers are catalog data, so this is not a major-version change; it
+  does change the default's price, so a caller relying on the previous
+  rates should pass an explicit `model=`.
+
 ## [0.4.0] - 2026-07-07
 
 ### Fixed

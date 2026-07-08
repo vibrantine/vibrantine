@@ -629,7 +629,7 @@ pytestmark = [
 ]
 
 # Pinned: a failing case means the Commission changed, not the default model.
-EVAL_MODEL = "google/gemini-3-flash-preview"
+EVAL_MODEL = "google/gemini-3.5-flash"
 
 FIXTURE_MEMO = """\
 Project Bluegum: Rainwater Harvesting Pilot: Status Memo

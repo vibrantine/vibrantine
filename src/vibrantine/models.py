@@ -57,11 +57,11 @@ class Model:
 
 
 KNOWN_MODELS: dict[str, Model] = {
-    "google/gemini-3-flash-preview": Model(
-        id="google/gemini-3-flash-preview",
-        context_window=1_050_000,
-        input_usd_per_million=0.50,
-        output_usd_per_million=3.00,
+    "google/gemini-3.5-flash": Model(
+        id="google/gemini-3.5-flash",
+        context_window=1_048_576,
+        input_usd_per_million=1.50,
+        output_usd_per_million=9.00,
     ),
 }
 
@@ -69,7 +69,7 @@ KNOWN_MODELS: dict[str, Model] = {
 # passes an explicit `model=`. The single seam a future "loaded default model"
 # (config-driven) routes through; keep model selection here, never hardcoded
 # inside a Commission body.
-DEFAULT_MODEL = "google/gemini-3-flash-preview"
+DEFAULT_MODEL = "google/gemini-3.5-flash"
 
 
 def resolve(model: "str | Model | None") -> Model:
