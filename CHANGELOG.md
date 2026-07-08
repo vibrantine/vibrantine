@@ -30,6 +30,12 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   of running with type checkers and the runtime seeing different
   contracts. TypeVars, `Any`, and unparameterized bases are skipped.
 
+- `_succeed`, the success-envelope counterpart to `_fail` on the
+  protected authoring tier: a custom `_run` builds its most common
+  return with one call instead of hand-assembling a `CommissionResult`.
+  The base loop's own success return rides it. Documented in
+  authoring.md Part III alongside the other protected helpers.
+
 ## [0.4.0] - 2026-07-07
 
 ### Fixed
