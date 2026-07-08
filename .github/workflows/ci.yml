@@ -11,6 +11,11 @@ on:
     branches: [main]
   pull_request:
 
+# The workflow only reads the repo; keep the default token read-only so a
+# fork PR's run never holds write credentials.
+permissions:
+  contents: read
+
 jobs:
   quality:
     strategy:
