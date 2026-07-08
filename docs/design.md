@@ -299,6 +299,26 @@ What the invoker holds.
   - Backends wired at construction; the backend is a runtime concern, so
     it travels in the call context.
 
+#### None keeps a meaning per knob; the sentinel absorbs "unset"
+
+- **Decision.** Constructor knobs distinguish "caller said nothing" (the
+  unset sentinel, falling to the class default) from an explicit `None`,
+  which keeps a real, knob-specific meaning: gate off
+  (`max_input_tokens`), no cap (`max_output_tokens`), no opinion
+  (`persistence_mode`), unrestricted (`CapabilitySet.tools`), no ceiling
+  (`budget_usd`).
+- **Why.** Each meaning is locally load-bearing: a tool must be able to
+  say "no gate" as a different thing from "auto-size the gate"; a node
+  must be able to defer recording without saying "off". A uniform
+  None-means-off convention would buy surface consistency by breaking
+  knob semantics. The cost is a per-knob lookup table in the user's head;
+  the consolidated "meanings of None" table in authoring.md Part III is
+  the designated re-entry point.
+- **Rules out.**
+  - Collapsing the meanings for consistency's sake.
+  - A new knob adding another meaning of `None` without a row in that
+    table and a reason recorded here.
+
 #### The public surface is minimized mercilessly
 
 - **Decision.** Complexity is judged at the boundary, not in the interior.
