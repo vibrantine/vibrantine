@@ -704,7 +704,11 @@ class Commission[InputT, OutputT](ABC):
         provenance: Provenance,
         cost: CostMetrics,
     ) -> CommissionResult[OutputT]:
-        """Build a structured failure result (errors-as-values)."""
+        """Build a structured failure result (errors-as-values).
+
+        Protected authoring tier, like `_succeed`: supported interior surface
+        for a custom `_run`, provisional until the authoring-surface freeze.
+        """
         return cast(
             CommissionResult[OutputT],
             CommissionResult(
