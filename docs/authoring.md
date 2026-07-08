@@ -1275,7 +1275,7 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 ## The authoring factory
 
-`create_commission(*, name, description, input, output, tools=(),
+`create_commission(*, name, description, input, output, toolbox=(),
 system_prompt=None, model=None, client=None, max_iterations=10)` returns an
 ordinary basic Commission riding the default loop; run it through the entry
 points like any other.

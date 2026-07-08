@@ -1,6 +1,6 @@
 """Rung 2: the same shape, handed a tool.
 
-One new idea: `tools=`. The default loop shows the model a tool menu built
+One new idea: `toolbox=`. The default loop shows the model a tool menu built
 from what you grant, dispatches whatever it picks, and feeds the result
 back; the Commission below answers a question about a file by reading the
 file itself with `ReadTool`. Tools are granted, never grabbed: an empty
@@ -38,7 +38,7 @@ file_answerer = create_commission(
     ),
     input=FileQuestionInput,
     output=FileQuestionOutput,
-    tools=(ReadTool(),),
+    toolbox=(ReadTool(),),
 )
 
 

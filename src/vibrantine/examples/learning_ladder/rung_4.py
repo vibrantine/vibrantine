@@ -60,7 +60,7 @@ meal_planner = create_commission(
     ),
     input=DinnerInput,
     output=DinnerOutput,
-    tools=(recipe_writer,),
+    toolbox=(recipe_writer,),
 )
 
 

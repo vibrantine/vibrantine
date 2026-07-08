@@ -21,6 +21,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   overriding `invoke` fails at class definition with a message naming the
   rename.
 
+- **Breaking:** `create_commission`'s `tools=` keyword is renamed
+  `toolbox=`, matching the `Commission` constructor and the class
+  attribute. The two doors now use one word for the tools a Commission
+  owns, kept distinct from `CapabilitySet.tools` (the allow-list of
+  permitted tool *names*). Migration: rename `create_commission(...,
+  tools=(...))` to `toolbox=(...)`; the value and behavior are unchanged.
+
 ### Added
 
 - Definition-time agreement check between a Commission's generic

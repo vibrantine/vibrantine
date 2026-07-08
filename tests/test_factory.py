@@ -37,7 +37,7 @@ def _commission(
     *,
     name: str = "recipe_writer",
     description: str = "Writes a recipe for a named dish.",
-    tools: "tuple[Commission[Any, Any], ...]" = (),
+    toolbox: "tuple[Commission[Any, Any], ...]" = (),
     system_prompt: str | None = None,
 ) -> Commission[RecipeInput, RecipeOutput]:
     fake = ScriptedLLM(responses or [])
@@ -46,7 +46,7 @@ def _commission(
         description=description,
         input=RecipeInput,
         output=RecipeOutput,
-        tools=tools,
+        toolbox=toolbox,
         system_prompt=system_prompt,
         model="google/gemini-3-flash-preview",
         client=cast(AsyncOpenAI, fake),
@@ -108,7 +108,7 @@ def test_user_message_is_the_input_as_json() -> None:
 
 def test_tools_land_in_the_toolbox() -> None:
     read = ReadTool()
-    commission = _commission(tools=(read,))
+    commission = _commission(toolbox=(read,))
 
     assert commission.toolbox == (read,)
 

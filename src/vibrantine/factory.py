@@ -62,7 +62,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     description: str,
     input: type[InputT],
     output: type[OutputT],
-    tools: "tuple[Commission[Any, Any], ...]" = (),
+    toolbox: "tuple[Commission[Any, Any], ...]" = (),
     system_prompt: str | None = None,
     model: str | Model | None = None,
     client: "AsyncOpenAI | None" = None,
@@ -73,8 +73,8 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     Required arguments are the crafted parts: `name` and `description` are
     the Commission's identity (the description is written for the LLM that
     decides whether to call it), and `input`/`output` are the typed contract
-    (Pydantic models whose every field carries a `description=`). `tools`
-    are the sub-Commissions the loop may dispatch; empty means pure judgment
+    (Pydantic models whose every field carries a `description=`). `toolbox`
+    is the sub-Commissions the loop may dispatch; empty means pure judgment
     over the input.
 
     Everything else is manufactured: the system prompt defaults to the
@@ -110,6 +110,6 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     return _FromFactory(
         model=model,
         client=client,
-        toolbox=tools,
+        toolbox=toolbox,
         max_iterations=max_iterations,
     )
