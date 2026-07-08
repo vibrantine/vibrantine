@@ -409,6 +409,22 @@ what you give, what you get, and when the giving hurts.
   is to keep the toll small rather than pretend it away: one base class,
   and a basic Commission that is mostly two typed models and a prompt.
 
+### The escape hatch, for obligations
+
+- **You give.** A custom `_run` takes over duties the default loop
+  performs automatically: checking cancellation, dispatching children,
+  summing their costs, carrying provenance on every return, depositing
+  traces. These are checklist discipline, not rails, and the costliest
+  one (cost rollup) breaks silently when forgotten.
+- **You get.** Full ownership of control flow, with the framework never
+  inspecting the interior. The one-escape-hatch decision only works if
+  the hatch is genuinely free; the price of that freedom is carrying the
+  obligations yourself.
+- **When it bites.** Per custom coordinator, at authoring time; a slip
+  corrupts the subtree's receipts until noticed. The mitigations are
+  `_succeed` / `_fail` for envelope assembly and the cost-rollup test
+  recipe in commission-testing.md, which makes the silent one checkable.
+
 ## Not built yet
 
 The design above is whole; the implementation is not. This section lists
