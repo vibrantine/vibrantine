@@ -165,18 +165,19 @@ async def run_llm_loop[OutputT: BaseModel](
     messages: list[ChatCompletionMessageParam] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    # Translate before anything is sent or spent: an untranslatable part is
-    # an authoring error, reported structurally rather than raised.
-    try:
-        opening_content = _to_provider_content(user_message)
-    except ValueError as exc:
-        return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
-    messages.append({"role": "user", "content": opening_content})
 
     # The transcript escapes via the trace mailbox on every exit path
-    # (conclude, budget stop, iteration cap, cancellation, a raise), so
-    # failure runs, the ones worth autopsying, are recorded too.
+    # (invalid opening message, conclude, budget stop, iteration cap,
+    # cancellation, a raise), so failure runs, the ones worth autopsying,
+    # are recorded too.
     try:
+        # Translate before anything is sent or spent: an invalid opening
+        # message is an authoring error, reported structurally rather than
+        # raised.
+        try:
+            messages.append({"role": "user", "content": _to_provider_content(user_message)})
+        except _InvalidOpeningMessage as exc:
+            return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
         in_tokens = 0
         out_tokens = 0
         # Summed cost of every sub-Commission dispatched below. Folded into the
@@ -499,6 +500,14 @@ async def run_llm_loop[OutputT: BaseModel](
         deposit_llm_trace(cast("list[dict[str, Any]]", messages))
 
 
+class _InvalidOpeningMessage(ValueError):
+    """An opening message the loop must not send; surfaced as `validation`.
+
+    Module-private so the loop's narrow except never relabels an incidental
+    ValueError from a future translator edit as an authoring error.
+    """
+
+
 def _to_provider_content(
     message: str | list[ContentPart],
 ) -> str | list[ChatCompletionContentPartParam]:
@@ -506,12 +515,19 @@ def _to_provider_content(
 
     A bare str passes through unchanged (the common single-text case). A
     parts list maps to the provider's typed content-part dicts, one explicit
-    branch per modality. A part with no branch here raises ValueError, which
-    the loop surfaces as a validation failure: a modality this loop cannot
-    translate must never be silently sent as something else.
+    branch per modality. A message the loop must not send (a part with no
+    branch here, or an empty parts list) raises `_InvalidOpeningMessage`,
+    which the loop surfaces as a validation failure: a modality this loop
+    cannot translate must never be silently sent as something else.
     """
     if isinstance(message, str):
         return message
+    if not message:
+        raise _InvalidOpeningMessage(
+            "build_user_message returned an empty parts list; providers "
+            "reject an empty content array. Return a bare string or at "
+            "least one content part."
+        )
     parts: list[ChatCompletionContentPartParam] = []
     # The list comes straight from author code, unvalidated at runtime, so
     # every element is checked rather than trusted to match the annotation.
@@ -528,7 +544,7 @@ def _to_provider_content(
                 }
             )
         else:
-            raise ValueError(
+            raise _InvalidOpeningMessage(
                 f"build_user_message returned a content part the default "
                 f"loop cannot translate: {type(part).__name__}. Supported "
                 f"parts: TextPart, ImagePart, AudioPart."

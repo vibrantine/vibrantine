@@ -133,6 +133,30 @@ async def test_unknown_part_fails_structurally_before_any_llm_call() -> None:
     assert fake.calls == []
 
 
+async def test_empty_parts_list_fails_structurally_before_any_llm_call() -> None:
+    # Providers reject an empty content array with an opaque 400; the loop
+    # refuses it pre-send with the same clean validation failure an unknown
+    # part gets, so a conditionally-built list that filtered to nothing is
+    # named as the authoring error it is.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model=FIXTURE_MODEL.id,
+        system_prompt="sys",
+        user_message=[],
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(0.0, 0.0),
+    )
+    assert outcome.output is None
+    assert outcome.error is not None
+    assert outcome.error.kind == "validation"
+    assert "empty parts list" in outcome.error.detail
+    assert fake.calls == []
+
+
 # --- Partial child results keep their output -------------------------------
 
 
@@ -691,6 +715,11 @@ class _DescribeProbe(_PartsProbe):
     ]
 
 
+class _BadPartProbe(_PartsProbe):
+    system_prompt = "sys"
+    parts: ClassVar[list[ContentPart]] = cast("list[ContentPart]", [TextPart(text="hi"), object()])
+
+
 class _HeavyImageProbe(_PartsProbe):
     # 10 text tokens beside an image that would estimate at 25,000.
     parts: ClassVar[list[ContentPart]] = [
@@ -732,6 +761,26 @@ async def test_size_gate_still_rejects_oversized_text_in_a_parts_list() -> None:
     assert result.error is not None
     assert result.error.kind == "validation"
     assert fake.calls == []
+
+
+async def test_invalid_opening_message_failure_still_deposits_trace(tmp_path: Path) -> None:
+    # The trace mailbox's promise is every exit path, this new pre-send one
+    # included: a recorded run that failed on an untranslatable part still
+    # persists what existed at the point of failure (the system message).
+    backend = FilesystemBackend(tmp_path)
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    commission = _BadPartProbe(client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL)
+    result = await dispatch(
+        commission,
+        _PartialIn(query="q"),
+        CallContext(backend=backend, record="always"),
+    )
+    assert result.status == "failure"
+    assert result.error is not None and result.error.kind == "validation"
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None
+    assert record.llm_trace == [{"role": "system", "content": "sys"}]
 
 
 async def test_parts_list_run_completes_and_deposits_transcript(tmp_path: Path) -> None:

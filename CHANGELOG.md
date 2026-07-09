@@ -32,10 +32,14 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 ### Changed
 
 - The default loop translates opening-message parts with one explicit
-  branch per modality and rejects a part it cannot translate as a
-  structured `validation` failure before the provider is contacted, so
-  nothing is spent. Previously the translation's else branch would have
-  silently sent any unknown part type as an image.
+  branch per modality and rejects an opening message it must not send (a
+  part it cannot translate, or an empty parts list, which providers refuse
+  as an empty content array) as a structured `validation` failure before
+  the provider is contacted, so nothing is spent; a recorded run still
+  deposits its transcript on this exit path. Previously the translation's
+  else branch assumed every non-text part was an image: a part carrying an
+  `image_url` field was silently sent as one, and anything else crashed
+  the run with a raw AttributeError.
 
 ## [0.5.0] - 2026-07-09
 
