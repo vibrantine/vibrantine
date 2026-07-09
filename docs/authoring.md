@@ -737,6 +737,9 @@ the envelope, budgets, persistence) behaves exactly as it does for text.
 ```python
 from vibrantine import AudioPart, ContentPart, ImagePart, TextPart
 
+class ChartCheck(Commission[ChartCheckInput, ChartCheckOutput]):
+    ...  # identity ClassVars and system_prompt as usual
+
     def build_user_message(self, input: ChartCheckInput, ctx: CallContext) -> list[ContentPart]:
         return [
             TextPart(text=f"Does this chart support the claim? Claim: {input.claim}"),

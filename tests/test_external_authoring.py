@@ -230,11 +230,14 @@ def test_reference_import_block_matches_public_all() -> None:
 
     doc = (Path(__file__).parent.parent / "docs" / "authoring.md").read_text(encoding="utf-8")
     section_start = doc.index("## The public surface")
-    section = doc[section_start : doc.index("\n## ", section_start)]
-    match = re.search(r"from vibrantine import \(\n(.*?)\n\)", section, re.DOTALL)
-    assert match is not None, "import block missing from 'The public surface'"
+    section_end = doc.find("\n## ", section_start)
+    section = doc[section_start:] if section_end == -1 else doc[section_start:section_end]
+    # Exactly one, so a second illustrative import block added to the section
+    # can never silently become the one the lock reads.
+    blocks = re.findall(r"from vibrantine import \(\n(.*?)\n\)", section, re.DOTALL)
+    assert len(blocks) == 1, "expected exactly one import block in 'The public surface'"
     names: set[str] = set()
-    for line in match.group(1).splitlines():
+    for line in blocks[0].splitlines():
         code = line.split("#", 1)[0]
         names.update(name.strip() for name in code.split(",") if name.strip())
     assert names == set(vibrantine.__all__)
