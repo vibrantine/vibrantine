@@ -6,6 +6,37 @@ All notable changes to Vibrantine are recorded here. The format follows
 public contract exported from `vibrantine.__all__`, plus the supported side
 doors its boundary docstring names (such as `vibrantine.testing`).
 
+## [Unreleased]
+
+### Added
+
+- `AudioPart` joins the `ContentPart` union: base64 `data` plus a `format`
+  tag (`"wav"` or `"mp3"`), conforming to the provider's `input_audio`
+  content-part shape. Exported from `vibrantine.__all__`; provisional in
+  its fields, the same asterisk as `ImagePart`.
+- Image and audio input are now verified capabilities rather than
+  plumbed-but-unproven. Live probes against the default model confirmed:
+  images work as both `data:` URIs and https URLs; audio works as WAV
+  through the `input_audio` shape; media is billed as ordinary input
+  tokens, which the existing post-turn `CostMetrics` accounting captures
+  unchanged; and a model lacking the modality fails as a clear structured
+  provider error ("No endpoints found that support image input") with
+  nothing spent. `ImagePart`'s single `image_url` field survived its first
+  consumer unchanged and keeps its provisional asterisk.
+- authoring.md Part II gains a multimodal-input section: the parts
+  vocabulary, the URL vs `data:` URI choice, additive union widening, and
+  the text-only size-gate / budget-floor posture. The Part III
+  one-import-line block now mirrors `vibrantine.__all__` exactly, and a
+  contract test parses the doc to keep it that way.
+
+### Changed
+
+- The default loop translates opening-message parts with one explicit
+  branch per modality and rejects a part it cannot translate as a
+  structured `validation` failure before the provider is contacted, so
+  nothing is spent. Previously the translation's else branch would have
+  silently sent any unknown part type as an image.
+
 ## [0.5.0] - 2026-07-09
 
 ### Changed
