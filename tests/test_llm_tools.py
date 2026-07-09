@@ -7,9 +7,13 @@ and the free-text nudge. A fake AsyncOpenAI-shaped client records each call
 so the messages it was sent can be inspected.
 """
 
+import base64
+import io
 import json
 import math
+import wave
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
@@ -17,16 +21,20 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
+    AudioPart,
     CallContext,
     Commission,
     CommissionResult,
+    ContentPart,
     CostMetrics,
     ErrorState,
     ImagePart,
     Provenance,
     TextPart,
 )
+from vibrantine.dispatch import dispatch
 from vibrantine.llm_tools import run_llm_loop
+from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 
 
@@ -79,6 +87,50 @@ async def test_mixed_parts_preserve_order_and_image_shape() -> None:
         {"type": "text", "text": "describe this:"},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
     ]
+
+
+def _tiny_wav_b64() -> str:
+    """A base64 WAV clip built with the stdlib: 10 ms of mono silence."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(8000)
+        writer.writeframes(b"\x00\x00" * 80)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+async def test_audio_part_translates_to_input_audio() -> None:
+    wav = _tiny_wav_b64()
+    user_msg = await _run([TextPart(text="transcribe:"), AudioPart(data=wav, format="wav")])
+    assert user_msg["content"] == [
+        {"type": "text", "text": "transcribe:"},
+        {"type": "input_audio", "input_audio": {"data": wav, "format": "wav"}},
+    ]
+
+
+async def test_unknown_part_fails_structurally_before_any_llm_call() -> None:
+    # A part the loop cannot translate must never be silently sent as some
+    # other modality; the run fails as a validation error before the
+    # provider is contacted, so nothing is spent.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model=FIXTURE_MODEL.id,
+        system_prompt="sys",
+        user_message=cast("list[ContentPart]", [TextPart(text="hi"), object()]),
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(),
+        max_iterations=3,
+        prices_per_million=(0.0, 0.0),
+    )
+    assert outcome.output is None
+    assert outcome.error is not None
+    assert outcome.error.kind == "validation"
+    assert not outcome.error.retryable
+    assert "object" in outcome.error.detail
+    assert fake.calls == []
 
 
 # --- Partial child results keep their output -------------------------------
@@ -587,3 +639,120 @@ async def test_empty_provider_choices_fail_as_loop_error() -> None:
     assert "no choices" in outcome.error.detail
     assert outcome.in_tokens == 12
     assert outcome.out_tokens == 3
+
+
+# --- Multimodal posture: gates count text only; the envelope is unchanged ---
+
+
+async def test_pre_turn_budget_floor_counts_text_parts_only() -> None:
+    # $1 per input token. The text floor is 2 tokens ($2), under the $10
+    # grant; a counted image or audio part would put the floor near $200,000
+    # and decline the turn. Proceeding proves the documented undercount
+    # posture: non-text parts contribute zero to the pre-turn floor.
+    fake = ScriptedLLM(
+        [llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})], in_tokens=1, out_tokens=0)]
+    )
+    outcome = await run_llm_loop(
+        client=cast(AsyncOpenAI, fake),
+        model=FIXTURE_MODEL.id,
+        system_prompt="",
+        user_message=[
+            TextPart(text="abcdefgh"),
+            ImagePart(image_url="d" * 400_000),
+            AudioPart(data="A" * 400_000, format="wav"),
+        ],
+        toolbox=(),
+        output_type=_Out,
+        ctx=CallContext(budget_usd=10.0),
+        max_iterations=3,
+        prices_per_million=(1_000_000.0, 0.0),
+    )
+    assert outcome.error is None
+    assert len(fake.calls) == 1
+
+
+class _PartsProbe(Commission[_PartialIn, _Out]):
+    """Default-loop probe whose opening message is a multimodal parts list."""
+
+    name: ClassVar[str] = "parts_probe"
+    description: ClassVar[str] = "Test Commission with a parts-list opening message."
+    input_type: ClassVar[type] = _PartialIn
+    output_type: ClassVar[type] = _Out
+    parts: ClassVar[list[ContentPart]]
+
+    def build_user_message(self, input: _PartialIn, ctx: CallContext) -> list[ContentPart]:
+        return self.parts
+
+
+class _DescribeProbe(_PartsProbe):
+    parts: ClassVar[list[ContentPart]] = [
+        TextPart(text="describe:"),
+        ImagePart(image_url="data:image/png;base64,AAAA"),
+    ]
+
+
+class _HeavyImageProbe(_PartsProbe):
+    # 10 text tokens beside an image that would estimate at 25,000.
+    parts: ClassVar[list[ContentPart]] = [
+        TextPart(text="x" * 40),
+        ImagePart(image_url="d" * 100_000),
+    ]
+
+
+class _HeavyTextProbe(_PartsProbe):
+    # 50 text tokens: over the same gate the heavy image passes under.
+    parts: ClassVar[list[ContentPart]] = [
+        TextPart(text="x" * 200),
+        ImagePart(image_url="data:image/png;base64,AAAA"),
+    ]
+
+
+async def test_size_gate_measures_text_only_in_a_parts_list() -> None:
+    # Gate ceiling: 40 tokens * 0.75 = 30. The heavy image alone would
+    # estimate at 25,000 tokens; the run reaching the LLM proves the gate
+    # measured only the 10 tokens of text.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    commission = _HeavyImageProbe(
+        client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL, max_input_tokens=40
+    )
+    result = await dispatch(commission, _PartialIn(query="q"), CallContext())
+    assert result.status == "success"
+    assert len(fake.calls) == 1
+
+
+async def test_size_gate_still_rejects_oversized_text_in_a_parts_list() -> None:
+    # The control for the test above: the same gate, breached by text alone,
+    # still fails the run before the provider is contacted.
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
+    commission = _HeavyTextProbe(
+        client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL, max_input_tokens=40
+    )
+    result = await dispatch(commission, _PartialIn(query="q"), CallContext())
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert fake.calls == []
+
+
+async def test_parts_list_run_completes_and_deposits_transcript(tmp_path: Path) -> None:
+    # The whole envelope over a multimodal opening message: the default loop
+    # runs, concludes normally, and the persisted trace carries the
+    # translated parts exactly as the provider received them.
+    backend = FilesystemBackend(tmp_path)
+    fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "seen"})])])
+    commission = _DescribeProbe(client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL)
+    result = await dispatch(
+        commission,
+        _PartialIn(query="what is this?"),
+        CallContext(backend=backend, record="always"),
+    )
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None and record.llm_trace is not None
+    user_msg = next(m for m in record.llm_trace if m["role"] == "user")
+    assert user_msg["content"] == [
+        {"type": "text", "text": "describe:"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+    ]

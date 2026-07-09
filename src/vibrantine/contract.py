@@ -304,10 +304,10 @@ class ImagePart(BaseModel):
     image-bearing consumer (shape-via-consumer). Today it carries only a
     URL/data string.
 
-    Later modalities (audio, video) join the union the same way: a new typed
-    part with its own `type` tag, its fields fixed by its first consumer.
-    Widening the union is additive and does not break authors who already
-    return text or image parts.
+    Later modalities (video, documents) join the union the same way: a new
+    typed part with its own `type` tag, its fields fixed by its first
+    consumer. Widening the union is additive and does not break authors who
+    already return existing parts.
     """
 
     type: Literal["image"] = "image"
@@ -316,7 +316,22 @@ class ImagePart(BaseModel):
     )
 
 
-type ContentPart = TextPart | ImagePart
+class AudioPart(BaseModel):
+    """An audio clip in a Commission's opening user message.
+
+    Provisional, same asterisk as `ImagePart`: the fields conform to the
+    OpenAI `input_audio` content part (base64 data plus an encoding tag),
+    and stay open until enough consumers have confirmed the shape.
+    """
+
+    type: Literal["audio"] = "audio"
+    data: str = Field(description="Base64-encoded audio bytes.")
+    format: Literal["wav", "mp3"] = Field(
+        description="Audio encoding; the formats the provider shape accepts.",
+    )
+
+
+type ContentPart = TextPart | ImagePart | AudioPart
 
 
 def estimate_tokens(text: str) -> int:
@@ -327,8 +342,8 @@ def estimate_tokens(text: str) -> int:
 def _message_text(message: "str | list[ContentPart]") -> str:
     """Text content of an opening message, for the pre-flight size gate.
 
-    Image parts contribute unknown token counts; the gate measures the text
-    only until an image-bearing consumer refines the estimate.
+    Non-text parts contribute unknown token counts; the gate measures the
+    text only until a multimodal consumer refines the estimate.
     """
     if isinstance(message, str):
         return message

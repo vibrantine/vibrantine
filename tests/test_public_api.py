@@ -71,6 +71,7 @@ def test_the_exported_surface_is_locked_exactly() -> None:
         "ContentPart",
         "TextPart",
         "ImagePart",
+        "AudioPart",
         "DEFAULT_MAX_ITERATIONS",
         "estimate_tokens",
         "deposit_llm_trace",

@@ -14,10 +14,10 @@ promise. The model vocabulary's *shapes* are protected, but the *contents*
 of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are catalog data:
 they change as models come and go, without a major version. And the
 non-text `ContentPart` members are provisional in their fields: `ImagePart`
-today, and any later modality part (an audio or video part) when its consumer
-arrives, keeps its exact fields open until a real consumer fixes them. What is
-stable is the union itself: its name, its role, and that new modality parts
-join it additively. `TextPart`'s fields are settled.
+and `AudioPart` today, and any later modality part (a video or document part)
+when its consumer arrives, keeps its exact fields open until a real consumer
+fixes them. What is stable is the union itself: its name, its role, and that
+new modality parts join it additively. `TextPart`'s fields are settled.
 The `vibrantine.testing` module is also supported surface:
 the test doubles for the `client=` injection seam, kept at its own import
 path so test tooling never ships into production namespaces. Everything
@@ -41,6 +41,7 @@ act. See `docs/design.md § The public surface is minimized mercilessly`.
 from vibrantine.contract import (
     DEFAULT_MAX_ITERATIONS,
     NEVER_CANCELLED,
+    AudioPart,
     CallContext,
     CancelToken,
     CapabilitySet,
@@ -118,6 +119,7 @@ __all__ = [
     "ContentPart",
     "TextPart",
     "ImagePart",
+    "AudioPart",
     "DEFAULT_MAX_ITERATIONS",
     "estimate_tokens",
     "deposit_llm_trace",

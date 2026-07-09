@@ -39,12 +39,14 @@ from openai.types.chat import (
 from pydantic import BaseModel, ValidationError
 
 from vibrantine.contract import (
+    AudioPart,
     CallContext,
     Commission,
     CommissionResult,
     ContentPart,
     ErrorKind,
     ErrorState,
+    ImagePart,
     TextPart,
     estimate_tokens,
 )
@@ -163,7 +165,13 @@ async def run_llm_loop[OutputT: BaseModel](
     messages: list[ChatCompletionMessageParam] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": _to_provider_content(user_message)})
+    # Translate before anything is sent or spent: an untranslatable part is
+    # an authoring error, reported structurally rather than raised.
+    try:
+        opening_content = _to_provider_content(user_message)
+    except ValueError as exc:
+        return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
+    messages.append({"role": "user", "content": opening_content})
 
     # The transcript escapes via the trace mailbox on every exit path
     # (conclude, budget stop, iteration cap, cancellation, a raise), so
@@ -497,16 +505,34 @@ def _to_provider_content(
     """Translate the opening message to OpenAI content format.
 
     A bare str passes through unchanged (the common single-text case). A
-    parts list maps to the provider's typed content-part dicts.
+    parts list maps to the provider's typed content-part dicts, one explicit
+    branch per modality. A part with no branch here raises ValueError, which
+    the loop surfaces as a validation failure: a modality this loop cannot
+    translate must never be silently sent as something else.
     """
     if isinstance(message, str):
         return message
     parts: list[ChatCompletionContentPartParam] = []
-    for part in message:
+    # The list comes straight from author code, unvalidated at runtime, so
+    # every element is checked rather than trusted to match the annotation.
+    for part in cast("list[object]", message):
         if isinstance(part, TextPart):
             parts.append({"type": "text", "text": part.text})
-        else:
+        elif isinstance(part, ImagePart):
             parts.append({"type": "image_url", "image_url": {"url": part.image_url}})
+        elif isinstance(part, AudioPart):
+            parts.append(
+                {
+                    "type": "input_audio",
+                    "input_audio": {"data": part.data, "format": part.format},
+                }
+            )
+        else:
+            raise ValueError(
+                f"build_user_message returned a content part the default "
+                f"loop cannot translate: {type(part).__name__}. Supported "
+                f"parts: TextPart, ImagePart, AudioPart."
+            )
     return parts
 
 
