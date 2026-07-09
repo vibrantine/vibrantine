@@ -499,9 +499,12 @@ wishes do not belong in the design record.
 - **Adapters.** Small wrappers that expose any Commission as a tool to
   external agent systems, MCP first. Built when the first external
   consumer wants one.
-- **Multimodal input and output.** The message shapes already leave room
-  (typed parts rather than bare strings). Built when the first
-  image-bearing consumer fixes the real fields.
+- **Multimodal output, and further input modalities.** Image and audio
+  *input* are built: typed parts (`TextPart` / `ImagePart` / `AudioPart`),
+  verified live against the default model (2026-07). Video and document
+  input wait for a settled provider shape and a real consumer (PDF is
+  ruled to the doc-management bundle via text extraction first);
+  multimodal *output* has no design yet.
 - **Abstract intermediate Commissions.** The definition-time identity
   check requires all four ClassVars on every subclass, so a shared
   template base class cannot defer identity to its children; shared

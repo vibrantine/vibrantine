@@ -484,6 +484,10 @@ The doubles for this are supported library surface, in `vibrantine.testing`:
   text, with token counts so cost and budget math run for real.
 - `AlwaysCancelled`: a cancel token that is already cancelled, for proving
   your Commission checks before doing the work.
+- `FIXTURE_MODEL`: a frozen, priced model (fixed context window and rates)
+  for tests that assert on cost or size-gate numbers. It is deliberately not
+  in the catalog, so repricing or renaming a real model never silently
+  changes your expected values.
 
 ```python
 # src/doctag/tests/test_commission.py
@@ -723,6 +727,58 @@ price of owning the control flow. Two protected helpers assemble the
 envelope from those parts: `self._succeed(output, provenance=..., cost=...)`
 and `self._fail(kind, detail, retryable=..., provenance=..., cost=...)`;
 the full helper table is in Part III.
+
+## Multimodal input: images and audio in the opening message
+
+`build_user_message` may return a list of typed parts instead of a plain
+string, and that is the entire multimodal story. Everything else (the loop,
+the envelope, budgets, persistence) behaves exactly as it does for text.
+
+```python
+from vibrantine import AudioPart, ContentPart, ImagePart, TextPart
+
+    def build_user_message(self, input: ChartCheckInput, ctx: CallContext) -> list[ContentPart]:
+        return [
+            TextPart(text=f"Does this chart support the claim? Claim: {input.claim}"),
+            ImagePart(image_url=input.chart_url),
+        ]
+```
+
+Three parts exist today, and each is the provider's own shape:
+
+- `TextPart(text=...)`: a text span. Fields settled.
+- `ImagePart(image_url=...)`: an image, as either an https URL or a `data:`
+  URI. Use the URL form when the image is already hosted (the provider
+  fetches it and your message stays small); use a `data:` URI (base64) when
+  the bytes are local or private. Both forms are verified live.
+- `AudioPart(data=..., format=...)`: base64 audio bytes plus the encoding
+  tag (`"wav"` or `"mp3"`). Verified live.
+
+Where the edges are, so you can rely on them:
+
+- **Unknown parts never mistranslate.** The loop translates each part
+  explicitly; a part it does not recognize fails the run structurally
+  (`kind="validation"`) before the provider is contacted, so nothing is
+  ever silently sent as the wrong modality and nothing is spent.
+- **Gates measure text only, by design.** Non-text parts count zero toward
+  the pre-flight size gate and the pre-turn budget floor. Those two checks
+  must only ever *under*count, so they never decline a run the provider
+  would have accepted. The true cost still lands: the provider bills media
+  as ordinary input tokens, the post-turn budget check sees them, and
+  `CostMetrics` reports them.
+- **Model support is the model's problem, not the contract's.** Sending an
+  image to a text-only model fails as a structured provider error that
+  names the problem ("No endpoints found that support image input"). The
+  library keeps no capability catalog to maintain or drift.
+- **New modalities join the union additively.** There is no `VideoPart`
+  today because no settled provider shape and no real consumer exist; when
+  both do, it joins `ContentPart` without breaking anyone. The non-text
+  parts' *fields* stay provisional until enough consumers confirm them; the
+  union itself, and additive widening, are the stable promise.
+- **Documents are not a content part.** A PDF is heavy read-only state:
+  extract its text with a deterministic tool in your own repo and send
+  ordinary text. A provider-native file part would join the union only if a
+  real consumer proves extraction insufficient.
 
 ## Composition: calling children
 
@@ -1108,8 +1164,14 @@ from vibrantine import (
     Model, KNOWN_MODELS, DEFAULT_MODEL, openai_compatible, ollama,  # models
     run_one, invoke_sync, dispatch,                        # entry points
     create_commission,                                     # authoring factory
+    ContentPart, TextPart, ImagePart, AudioPart,           # message content parts
+    DEFAULT_MAX_ITERATIONS, estimate_tokens, deposit_llm_trace,  # authoring edge
 )
 ```
+
+A contract test (`tests/test_external_authoring.py`) parses this block and
+asserts it names exactly `vibrantine.__all__`, so the one-import-line claim
+above can never silently drift from the code.
 
 The std-lib **tools** are importable from `vibrantine.tools` (provisional,
 but ready to drop into a toolbox):
@@ -1324,6 +1386,10 @@ What a basic Commission rides:
   pre-flight when the next turn's estimated input cost alone would break
   the grant), `max_iterations`, cancellation, or the model returning no
   tool call.
+- The pre-flight size gate and the pre-turn budget floor measure text only;
+  image and audio parts count zero there, and their real cost lands in the
+  post-turn check from the provider's reported usage
+  (Part II § Multimodal input).
 
 Any Commission placed in another Commission's toolbox is exposed to that
 model with your `description` verbatim, which is why the description is

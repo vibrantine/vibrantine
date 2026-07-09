@@ -219,6 +219,27 @@ def test_protected_helper_signatures() -> None:
     assert params("fits") == ["estimated_tokens"]
 
 
+# --- Part III: the one-import-line block IS the public surface ---
+def test_reference_import_block_matches_public_all() -> None:
+    # The doc claims everything you may depend on fits in one import line.
+    # This parses that block out of "The public surface" and asserts it
+    # names exactly `vibrantine.__all__`, so the claim can never drift.
+    import re
+
+    import vibrantine
+
+    doc = (Path(__file__).parent.parent / "docs" / "authoring.md").read_text(encoding="utf-8")
+    section_start = doc.index("## The public surface")
+    section = doc[section_start : doc.index("\n## ", section_start)]
+    match = re.search(r"from vibrantine import \(\n(.*?)\n\)", section, re.DOTALL)
+    assert match is not None, "import block missing from 'The public surface'"
+    names: set[str] = set()
+    for line in match.group(1).splitlines():
+        code = line.split("#", 1)[0]
+        names.update(name.strip() for name in code.split(",") if name.strip())
+    assert names == set(vibrantine.__all__)
+
+
 # --- §3.5 / §4: the authoring-edge helpers are top-level exports ---
 def test_authoring_edge_helpers_are_exported() -> None:
     import vibrantine
