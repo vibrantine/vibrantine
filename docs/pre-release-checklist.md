@@ -10,27 +10,29 @@ provisional, or future work.
 
 ## Release Posture
 
-Last pass: 2026-07-07.
+Last pass: 2026-07-10.
 
 - [x] Keep `pyproject.toml` at a pre-release version unless a package release is
-  intentional. (0.2.0, matching the intentional v0.2.0 tag.)
+  intentional. (0.5.0, matching the intentional v0.5.0 tag; Unreleased
+  changes sit on main awaiting the next cut.)
 - [x] Keep README installation guidance git-based until PyPI publishing is
-  intentional.
+  intentional. (Pinned to the v0.5.0 tag.)
 - [x] Make the README maturity language match the repo's real state: early,
-  referenceable, not fully launched.
+  referenceable, not fully launched. ("Early-stage software ... not yet on
+  PyPI.")
 - [x] Keep `contact@vibrantine.com` marked as a placeholder until the address
   exists.
 - [x] Confirm the package metadata has no personal contact email unless that is
   deliberate. (`authors` carries a name only.)
 - [x] Confirm the GitHub repository description and visibility match the README
-  posture. (Private; description matches the pyproject one-liner. Note for
-  the sharing step: while the repo is private, the README's git-install
-  command only works for collaborators.)
+  posture. (PUBLIC as of this pass; description matches the pyproject
+  one-liner, and the README's git-install command now works for everyone.)
 
 ## Security And Privacy Passes
 
 Repeat these passes before sharing the repository more widely. Last pass:
-2026-07-07, all clean; details noted per item.
+2026-07-10 (with the repository already public), all clean; details noted
+per item.
 
 - [x] Search tracked files for secrets:
   - API keys, bearer tokens, passwords, provider tokens, private URLs.
@@ -55,8 +57,8 @@ Repeat these passes before sharing the repository more widely. Last pass:
   - (The concept drafts promoted into `authoring.md` and retired on
     2026-07-07; `docs/working/` holds one deliberate decision record.)
 - [x] Review GitHub-visible branches and tags for pre-cleanup history that
-  should not be public. (Remote holds `main`, the current work branch, and
-  the `v0.1.0`/`v0.2.0` tags; nothing else.)
+  should not be public. (Remote holds `main` and the `v0.1.0` through
+  `v0.5.0` tags; nothing else.)
 - [x] Review generated artifacts:
   - no `dist/`,
   - no caches,
@@ -78,30 +80,34 @@ Repeat these passes before sharing the repository more widely. Last pass:
   than interpolating it. (Both hold; escape rejection is pinned by
   `tests/test_persistence.py::test_*_rejects_run_id_that_escapes_root`.)
 
-Suggested local searches:
+Suggested local searches (`git grep` searches tracked files only; the old
+`rg -uu` form also read ignored files and would print the real `.env` key
+into the terminal):
 
 ```bash
-rg -n -uu "OPENROUTER_API_KEY|sk-|Bearer |password|secret|token" .
-rg -n -uu "@gmail\.com|@hotmail\.com|@outlook\.com|Users/|C:\\Users\\" .
+git grep -nIE "OPENROUTER_API_KEY|sk-|Bearer |password|secret|token" -- .
+git grep -nIE "@gmail\.com|@hotmail\.com|@outlook\.com|/Users/|C:\\\\Users" -- .
 git status -sb
 ```
 
 ## Validation Gates
 
-Last pass: 2026-07-07, all green.
+Last pass: 2026-07-10, all green.
 
-- [x] `uv run pytest` (359 passed, 6 skipped)
+- [x] `uv run pytest` (393 passed, 7 skipped)
 - [x] `uv run ruff check .`
 - [x] `uv run ruff format --check .`
 - [x] `uv run basedpyright`
-- [x] `uv build` (wheel excludes colocated `tests/`, carries `prompts/*.md`)
-- [ ] Optional before package release: `uv build --no-sources`
+- [x] `uv build` (wheel inspected: zero test files, `prompts/*.md` carried)
+- [x] Optional before package release: `uv build --no-sources` (clean)
 - [x] Fresh git dependency smoke test from a separate temporary project.
-  (A `uv init` project added vibrantine as a git dependency, imported the
-  frozen surface, ran `ReadTool` through `invoke_sync` with no API key, and
-  imported the prompt-bearing `RecursiveResearchCommission` from the built
-  package. Note: `uv add git+...@<branch>` chokes on branch names containing
-  slashes; pin a commit SHA or tag instead.)
+  (A `uv init` project added vibrantine via the public
+  `git+https://github.com/vibrantine/vibrantine.git` URL pinned to a commit
+  SHA, imported the full 36-name frozen surface including the multimodal
+  `ContentPart` members, ran `ReadTool` through `invoke_sync` with no API
+  key, and imported the prompt-bearing `RecursiveResearchCommission` from
+  the installed package. Note: `uv add git+...@<branch>` chokes on branch
+  names containing slashes; pin a commit SHA or tag instead.)
 
 The fresh-install smoke test should prove that a consumer can import
 Vibrantine without relying on the checkout layout.
@@ -430,16 +436,22 @@ Potential future tasks:
 
 ## Final Wrap Checklist
 
-- [x] Security/privacy passes complete. (Latest pass 2026-07-07; repeat at
-  the actual sharing moment.)
-- [ ] Commission-by-Commission audit complete or consciously deferred.
+- [x] Security/privacy passes complete. (Latest pass 2026-07-10, run with
+  the repository already public; repeat at each future sharing moment.)
+- [x] Commission-by-Commission audit complete or consciously deferred.
+  (Consciously deferred 2026-07-10: the Commissions moved to
+  `vibrantine.examples`, outside the frozen surface, so the per-Commission
+  audit sections above are historical; audit opportunistically when an
+  example is next touched.)
 - [x] Examples folder exists or is explicitly deferred. `vibrantine.examples`
   landed 2026-07-05; all shipped Commissions live there, importable but not
   part of the frozen surface.
-- [ ] External consumer repo smoke test complete or explicitly deferred.
-- [ ] README reflects current maturity.
+- [x] External consumer repo smoke test complete or explicitly deferred.
+  (The 2026-07-10 fresh git-dependency smoke covers the mechanics; a
+  persistent external consumer repo remains future work.)
+- [x] README reflects current maturity. (Checked 2026-07-10.)
 - [x] Docs index points to this checklist.
-- [ ] CI green after final push.
-- [ ] Local validation gates green.
-- [ ] Worktree clean.
-- [ ] Latest pushed commit is the one intended for sharing.
+- [x] CI green after final push. (2026-07-10, both platforms.)
+- [x] Local validation gates green. (2026-07-10.)
+- [x] Worktree clean.
+- [x] Latest pushed commit is the one intended for sharing.
