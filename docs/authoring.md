@@ -29,6 +29,13 @@ provisional: use it, but expect movement. The runnable claims in this
 document are machine-checked by `tests/test_external_authoring.py`, so they
 fail loudly rather than rot silently.
 
+**If you have only the installed package.** The worked examples ship inside
+it, so specimen pointers into `src/vibrantine/examples/` resolve in your
+environment's installed copy of `vibrantine.examples`. Two things do not
+ship: the examples' colocated `tests/` folders, and the other docs this file
+links to (`commission-testing.md`, `design.md`). Those live in the repo at
+<https://github.com/vibrantine/vibrantine>.
+
 ---
 
 # Part I: Tutorial
@@ -831,7 +838,7 @@ from pydantic import BaseModel, Field
 
 from vibrantine import (
     Commission, CommissionResult, CallContext, CapabilitySet,
-    Provenance, Claim, CostMetrics, ErrorState, dispatch,
+    Provenance, Claim, CostMetrics, dispatch,
 )
 from vibrantine.tools import ReadTool, SampleTool, GrepTool
 import asyncio
@@ -947,9 +954,10 @@ class CorpusResearchCommission(Commission[ResearchInput, ResearchReport]):
 
         for _ in range(self._max_rounds):
             if ctx.cancel.is_cancelled:
-                return CommissionResult(
-                    status="failure",
-                    error=ErrorState(kind="cancelled", detail="Cancelled mid-research.", retryable=False),
+                return self._fail(
+                    "cancelled",
+                    "Cancelled mid-research.",
+                    retryable=False,
                     provenance=self._provenance(),
                     cost=CostMetrics(estimated_usd=total_cost),
                 )
@@ -990,6 +998,8 @@ class CorpusResearchCommission(Commission[ResearchInput, ResearchReport]):
         asm_res = await dispatch(self._assemble, AssembleInput(question=input.question, claims=all_claims), ctx)
         total_cost += asm_res.cost.estimated_usd
         if asm_res.status != "success":
+            # A child's existing ErrorState passes through unchanged; the
+            # _fail helper builds a new one, so this return stays hand-built.
             return CommissionResult(
                 status="failure",
                 error=asm_res.error,
@@ -997,9 +1007,8 @@ class CorpusResearchCommission(Commission[ResearchInput, ResearchReport]):
                 cost=CostMetrics(estimated_usd=total_cost),
             )
 
-        return CommissionResult(
-            status="success",
-            output=ResearchReport(summary=asm_res.output.summary, claims=all_claims, rounds=rounds),
+        return self._succeed(
+            ResearchReport(summary=asm_res.output.summary, claims=all_claims, rounds=rounds),
             provenance=self._provenance(),
             cost=CostMetrics(estimated_usd=total_cost),
         )
@@ -1402,7 +1411,7 @@ Before you ship a Commission, confirm:
 - [ ] **State stays outside**: no memory held inside the Commission between
   calls; accumulation belongs to the caller or the coordinator's local
   scope.
-- [ ] **Launch via `run_one` / `invoke_sync`**, never by calling `invoke`
+- [ ] **Launch via `run_one` / `invoke_sync`**, never by calling `_run`
   directly.
 - [ ] **Tested and evaluated**: contract tests with a `ScriptedLLM` from
   `vibrantine.testing`, a BRIEF with an efficacy bar, and eval cases per
