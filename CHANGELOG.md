@@ -29,6 +29,16 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   one-import-line block now mirrors `vibrantine.__all__` exactly, and a
   contract test parses the doc to keep it that way.
 
+### Fixed
+
+- The budget documentation overstated `budget_usd` as a "hard ceiling".
+  Enforcement is per-turn and a turn's exact cost is unknowable before it
+  runs, so the true spend can overshoot the grant by up to about one
+  turn's cost per tree level (observed live: $0.1032 spent of a $0.1000
+  grant across a three-level tree). The docs and docstrings now state
+  that bound; the result envelope always reported the true spend and is
+  unchanged.
+
 ### Changed
 
 - The default loop translates opening-message parts with one explicit

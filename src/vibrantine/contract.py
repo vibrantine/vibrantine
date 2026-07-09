@@ -741,8 +741,10 @@ class Commission[InputT, OutputT](ABC):
     ) -> CommissionResult[OutputT] | None:
         """Refuse when a budget is set but the model can't be priced.
 
-        `budget_usd` is a hard ceiling, and the framework can only honor it if
-        the model carries pricing (`self._model_spec.is_priced`). An unpriced
+        `budget_usd` is the caller's spending bound (enforced per turn, so
+        true spend can overshoot by up to about one turn's cost per tree
+        level), and the framework can only enforce it if the model carries
+        pricing (`self._model_spec.is_priced`). An unpriced
         model prices at $0, which would make the budget silently unenforced, so
         rather than run with a budget it can't keep, the call fails fast here.
         A *free* model (priced at $0.0, e.g. local Ollama) is priced and passes.
