@@ -195,7 +195,7 @@ What is deliberately not built, each item with the trigger that builds it, lives
 
 Conventional Commits. Plain factual messages: no emojis, no AI attribution (no `Co-Authored-By: Claude`, no "Generated with Claude Code" trailers, no mention of the assistant). State what changed and, when non-obvious, why.
 
-- **Subject**: `type(scope): subject`, imperative mood, ≤ 50 chars. Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `build`.
+- **Subject**: `type(scope): subject`, imperative mood, ≤ 72 chars. Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `build`.
 - **Body** (optional): wrap at 72 chars. Skip when the subject is self-explanatory. When present, explain motivation or constraint, not a paraphrase of the diff.
 Example:
 
