@@ -231,7 +231,6 @@ class Gatekeeper:
         self.tripped_fuse: str | None = None
         self._spend_at_trip = 0.0
         self._settled_after_trip = 0
-        self._in_flight = 0
         # One row per provider call, always on: the fuses read the same
         # counters, so the trust promise never depends on a config flag.
         self.calls: list[dict[str, Any]] = []
@@ -332,12 +331,11 @@ class Gatekeeper:
         Trips the breaker only; the node's own cancellation checkpoints
         handle the fast exit.
         """
-        if (
-            self.tripped is None
-            and self._deadline is not None
-            and time.monotonic() >= self._deadline
-        ):
+        if self.tripped is None and self._time_due():
             self._trip(self._time_detail(), fuse="time")
+
+    def _time_due(self) -> bool:
+        return self._deadline is not None and time.monotonic() >= self._deadline
 
     def final_error(self, root_run_id: str | None, *, log_persisted: bool) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
@@ -403,7 +401,7 @@ class Gatekeeper:
                     f"refused at the {self.max_llm_calls}-call limit",
                     fuse="llm_calls",
                 )
-            elif self._deadline is not None and time.monotonic() >= self._deadline:
+            elif self._time_due():
                 self._trip(self._time_detail(), fuse="time")
             elif (
                 self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
@@ -423,6 +421,8 @@ class Gatekeeper:
                     cost_usd=0.0,
                     grant_usd=grant_usd,
                     status="refused",
+                    calls_before=self.calls_admitted,
+                    spend_before=self.observed_spend_usd,
                 )
             )
             raise RunHaltedError(self.tripped.detail)
@@ -453,15 +453,12 @@ class Gatekeeper:
         fuses after the wait, and settles on exit: cost lands in the
         observed total, the row lands in the log (completed or failed), and
         the spend fuse is checked. The chair is held around the provider
-        call only and released at exit, before the caller dispatches
-        children: count leaf work, not coordinators, so the room is
-        deadlock-free even at a limit of 1.
+        call only: it frees at the call's own exit, before the settle
+        bookkeeping (and its on_llm_call callback) and before the caller
+        dispatches children. Count leaf work, not coordinators, so the room
+        is deadlock-free even at a limit of 1.
         """
         model = entry.id
-        prices = (
-            entry.input_usd_per_million or 0.0,
-            entry.output_usd_per_million or 0.0,
-        )
         run_id = _current_call_run_id()
         self._refuse_if_due(
             commission_name=commission_name, model=model, run_id=run_id, grant_usd=grant_usd
@@ -469,36 +466,49 @@ class Gatekeeper:
         # Vend before taking a chair: a missing-key raise should not occupy
         # the room, and it is not a refusal, so no log row.
         client = self.client_for(entry)
-        async with self._room:
-            # Re-check after the (possibly long) wait: a fuse may have
-            # tripped while this call sat in the queue.
-            self._refuse_if_due(
-                commission_name=commission_name, model=model, run_id=run_id, grant_usd=grant_usd
-            )
-            # Admission. No await between the check above and this increment;
-            # single-threaded asyncio makes check-then-admit atomic.
-            calls_before = self.calls_admitted
-            spend_before = self.observed_spend_usd
-            self.calls_admitted += 1
-            self._in_flight += 1
-            started_at = _utcnow_iso()
-            ticket = _ProviderTicket(client)
-            failed = False
-            try:
+        # Admission snapshot: set under the room lock, read at settle. A
+        # non-None ticket is what marks the call as admitted (a refusal
+        # raises before one exists, and settles nothing).
+        ticket: _ProviderTicket | None = None
+        calls_before = 0
+        spend_before = 0.0
+        started_at = ""
+        failed = False
+        try:
+            async with self._room:
+                # Re-check after the (possibly long) wait: a fuse may have
+                # tripped while this call sat in the queue.
+                self._refuse_if_due(
+                    commission_name=commission_name,
+                    model=model,
+                    run_id=run_id,
+                    grant_usd=grant_usd,
+                )
+                # Admission. No await between the check above and this
+                # increment; single-threaded asyncio makes check-then-admit
+                # atomic.
+                calls_before = self.calls_admitted
+                spend_before = self.observed_spend_usd
+                self.calls_admitted += 1
+                started_at = _utcnow_iso()
+                ticket = _ProviderTicket(client)
                 yield ticket
-            except BaseException:
-                failed = True
-                raise
-            finally:
-                # Settle even after a trip: an in-flight call that finishes
-                # past the halt still counts, or "every dollar reported"
-                # would be false exactly when it matters.
-                self._in_flight -= 1
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            # Settle even after a trip: an in-flight call that finishes
+            # past the halt still counts, or "every dollar reported" would
+            # be false exactly when it matters. Settled outside the room so
+            # the callback never occupies a chair; releasing the semaphore
+            # only *schedules* waiters, so this synchronous block (spend
+            # total, row, the spend-fuse check) still completes before any
+            # queued call re-checks the fuses.
+            if ticket is not None:
                 was_tripped = self.tripped is not None
-                in_price, out_price = prices
                 cost = 0.0
                 if ticket.in_tokens is not None and ticket.out_tokens is not None:
-                    cost = (ticket.in_tokens * in_price + ticket.out_tokens * out_price) / 1_000_000
+                    cost = entry.cost_usd(ticket.in_tokens, ticket.out_tokens)
                 self.observed_spend_usd += cost
                 if was_tripped:
                     self._settled_after_trip += 1
@@ -544,8 +554,8 @@ class Gatekeeper:
         cost_usd: float,
         grant_usd: float | None,
         status: str,
-        calls_before: int | None = None,
-        spend_before: float | None = None,
+        calls_before: int,
+        spend_before: float,
     ) -> dict[str, Any]:
         """One log row. Keys are shared with the persisted `calls` table."""
         return {
@@ -558,10 +568,8 @@ class Gatekeeper:
             "out_tokens": out_tokens,
             "cost_usd": cost_usd,
             "grant_usd": grant_usd,
-            "run_calls_before": calls_before if calls_before is not None else self.calls_admitted,
-            "run_spend_before_usd": (
-                spend_before if spend_before is not None else self.observed_spend_usd
-            ),
+            "run_calls_before": calls_before,
+            "run_spend_before_usd": spend_before,
             "status": status,
         }
 

@@ -19,7 +19,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
-from vibrantine._gatekeeper import RunHaltedError
+from vibrantine._gatekeeper import Gatekeeper, RunHaltedError
 from vibrantine.contract import (
     CallContext,
     Claim,
@@ -187,8 +187,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
 
         # Pre-flight budget check using estimated input cost. Cheap lower bound;
         # the post-call check below enforces against actual cost.
-        in_price = entry.input_usd_per_million or 0.0
-        estimated_in_cost = (estimated_tokens * in_price) / 1_000_000
+        estimated_in_cost = entry.cost_usd(estimated_tokens, 0)
         if ctx.budget_usd is not None and estimated_in_cost > ctx.budget_usd:
             return self._fail(
                 "budget_exceeded",
@@ -213,6 +212,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
             self._cost(in_tokens, out_tokens, entry),
             ctx,
             entry,
+            gatekeeper,
             json_mode=False,
         )
         if first_err is not None:
@@ -258,6 +258,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
             self._cost(in_tokens, out_tokens, entry),
             ctx,
             entry,
+            gatekeeper,
             json_mode=True,
         )
         if second_err is not None:
@@ -315,6 +316,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         cost_so_far: CostMetrics,
         ctx: CallContext,
         entry: Model,
+        gatekeeper: Gatekeeper,
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
@@ -325,7 +327,14 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         reply: list[dict[str, Any]] = []
         try:
             return await self._call_inner(
-                messages, provenance, cost_so_far, ctx, entry, reply, json_mode=json_mode
+                messages,
+                provenance,
+                cost_so_far,
+                ctx,
+                entry,
+                gatekeeper,
+                reply,
+                json_mode=json_mode,
             )
         finally:
             deposit_llm_trace([*cast("list[dict[str, Any]]", messages), *reply])
@@ -337,15 +346,15 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         cost_so_far: CostMetrics,
         ctx: CallContext,
         entry: Model,
+        gatekeeper: Gatekeeper,
         reply: list[dict[str, Any]],
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
         # A custom _run's own LLM calls pass the run's provider door like the
         # default loop's: the fuses, the room, the client vending, and the
-        # call log govern the whole tree or they govern nothing.
-        gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
-        assert gatekeeper is not None, "synthesize runs inside a run; dispatch refuses outside one"
+        # call log govern the whole tree or they govern nothing. The
+        # gatekeeper is _run's one fetch, passed down.
         try:
             async with gatekeeper.provider_call(
                 entry=entry,
@@ -369,6 +378,8 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                         response.usage.completion_tokens,
                     )
         except RunHaltedError as exc:
+            # Caught here rather than left to dispatch's backstop so the
+            # cost already spent on prior passes stays on the envelope.
             return (
                 "",
                 0,
