@@ -177,7 +177,9 @@ reported" checkable. Node-level allocation exhaustion keeps
 teardown vs one branch out of its slice), not resource type.
 
 **The spend fuse, honestly.** It refuses new calls once observed spend
-reaches the limit; calls already in flight complete, and a call's cost is
+passes the limit (strictly past: spending exactly the budget is within
+budget, the same reading as the node-level checks, and what lets a $0
+budget run free models); calls already in flight complete, and a call's cost is
 unknown until it does. Overshoot is therefore bounded in *number of calls*
 (about one concurrency window), not in *dollars*. The promise is "cannot
 spiral, stops hard, bounded in calls, every dollar reported", which is why

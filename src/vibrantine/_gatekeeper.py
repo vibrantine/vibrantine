@@ -357,7 +357,7 @@ class Gatekeeper:
             elif self._deadline is not None and time.monotonic() >= self._deadline:
                 self._trip(self._time_detail())
             elif (
-                self.spend_limit_usd is not None and self.observed_spend_usd >= self.spend_limit_usd
+                self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
             ):
                 self._trip(self._spend_detail())
         if self.tripped is not None:
@@ -382,7 +382,7 @@ class Gatekeeper:
         limit = self.spend_limit_usd if self.spend_limit_usd is not None else 0.0
         return (
             f"spend fuse tripped: observed spend ${self.observed_spend_usd:.4f} "
-            f"reached the ${limit:.4f} limit"
+            f"exceeded the ${limit:.4f} limit"
         )
 
     # --- the door ------------------------------------------------------------
@@ -471,11 +471,14 @@ class Gatekeeper:
                 )
                 # The spend fuse trips at settle, not only at the next
                 # admission, so parallel branches start winding down the
-                # moment the limit is reached instead of at their next call.
+                # moment the limit is passed instead of at their next call.
+                # Strictly past, not at: spending exactly the budget is
+                # within budget, the same reading as the node-level checks,
+                # and what lets a $0 budget run free models at all.
                 if (
                     self.tripped is None
                     and self.spend_limit_usd is not None
-                    and self.observed_spend_usd >= self.spend_limit_usd
+                    and self.observed_spend_usd > self.spend_limit_usd
                 ):
                     self._trip(self._spend_detail())
 
@@ -527,4 +530,7 @@ def _current_call_run_id() -> str | None:
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    # timespec pinned so every timestamp in a SQLite file (this log's rows,
+    # persistence's records) has one TEXT format and string order is time
+    # order; bare isoformat() drops the fraction when microsecond == 0.
+    return datetime.now(UTC).isoformat(timespec="microseconds")

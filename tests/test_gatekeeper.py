@@ -277,6 +277,33 @@ async def test_exactly_n_calls_do_not_trip_the_count_fuse() -> None:
     assert result.status == "success"
 
 
+async def test_spend_exactly_at_the_limit_does_not_trip() -> None:
+    # Spending exactly the budget is within budget: the fuse is strictly
+    # past the limit, the same reading as the node-level checks.
+    result = await run_one(
+        _Probe(),
+        _Q(question="?"),
+        models=[_scripted([_conclude()])],
+        budget_usd=COST_PER_DEFAULT_CALL,
+    )
+    assert result.status == "success"
+
+
+async def test_zero_budget_runs_a_free_model() -> None:
+    # budget_usd=0.0 arms the spend fuse at $0, but a genuinely free model
+    # (local Ollama shape) never spends past it: the run proceeds instead of
+    # being refused before its first call.
+    free = scripted_model(
+        ScriptedLLM([_conclude("gratis")]),
+        input_usd_per_million=0.0,
+        output_usd_per_million=0.0,
+    )
+    result = await run_one(_Probe(), _Q(question="?"), models=[free], budget_usd=0.0)
+    assert result.status == "success"
+    assert result.output is not None and result.output.answer == "gratis"
+    assert result.cost.estimated_usd == 0.0
+
+
 async def test_a_root_that_concludes_despite_a_trip_keeps_its_success() -> None:
     # Winding down and concluding with what it has is the designed response
     # to a trip, not a failure to override: the rewrite leaves successful
@@ -345,8 +372,9 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
                 cost=CostMetrics(estimated_usd=0.0),
             )
 
-    # The fast call alone reaches the limit exactly, so its own node check
-    # ($0.0002 > $0.0002 is false) passes and only the fuse notices.
+    # The fast call alone passes the limit (the fuse is strictly past, so
+    # the limit sits below one call's cost), tripping at its settle while
+    # the slow call is still open.
     result = await run_one(
         _FailsAfter(),
         _Q(question="?"),
@@ -355,7 +383,7 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
             _paced_entry([_conclude(in_tokens=10, out_tokens=5)], delay=0.2, id="fixture/slow"),
         ],
         default_model="fixture/fast",
-        budget_usd=COST_PER_DEFAULT_CALL,
+        budget_usd=COST_PER_DEFAULT_CALL / 2,
     )
     assert result.status == "failure"
     assert result.error is not None
