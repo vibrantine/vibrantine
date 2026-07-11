@@ -30,6 +30,7 @@ from vibrantine.examples.recursive_research import (
     ResearchInput,
     ResearchOutput,
 )
+from vibrantine.models import Model
 from vibrantine.orchestrator import run_one
 from vibrantine.tools.fetch import FetchTool
 
@@ -51,8 +52,15 @@ pytestmark = [
 ]
 
 # Pinned so a failing case means the Commission changed, not the default
-# model. Swapping this constant is a deliberate, separate experiment.
-EVAL_MODEL = "google/gemini-3.5-flash"
+# model. Swapping this entry is a deliberate, separate experiment. A full
+# Model (not a bare id) registered in each run's catalog below, so the pin
+# holds even when the system default moves; priced so BUDGET_USD enforces.
+EVAL_MODEL = Model(
+    id="google/gemini-3.5-flash",
+    context_window=1_048_576,
+    input_usd_per_million=1.50,
+    output_usd_per_million=9.00,
+)
 
 BUDGET_USD = 0.25
 
@@ -71,7 +79,7 @@ def _agent() -> RecursiveResearchCommission:
     return RecursiveResearchCommission(
         max_depth=1,
         fetch=FetchTool(transport=_fixture_transport()),
-        model=EVAL_MODEL,
+        model=EVAL_MODEL.id,
     )
 
 
@@ -103,6 +111,7 @@ async def test_direct_source_question_cites_target_and_avoids_trap() -> None:
     result = await run_one(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_OUTPUT]),
+        models=[EVAL_MODEL],
         budget_usd=BUDGET_USD,
     )
     _transcript("direct_source_question", question, result)
@@ -137,6 +146,7 @@ async def test_broad_question_covers_all_aspects_from_multiple_sources() -> None
     result = await run_one(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_OUTPUT, URL_ENERGY, URL_COST]),
+        models=[EVAL_MODEL],
         budget_usd=BUDGET_USD,
     )
     _transcript("broad_decomposable_question", question, result)
@@ -162,6 +172,7 @@ async def test_conflicting_sources_preserve_both_accounts() -> None:
     result = await run_one(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_COMMISSION_GOV, URL_COMMISSION_NEWS]),
+        models=[EVAL_MODEL],
         budget_usd=BUDGET_USD,
     )
     _transcript("source_conflict", question, result)
