@@ -521,10 +521,19 @@ class Commission[InputT, OutputT](ABC):
         A cap left unset at construction resolves at run time from the run
         catalog entry's context window (which this property cannot see), so
         None here means either "explicitly no gate" or "resolved per run".
+
+        Assignable: setting it pins an explicit cap after construction (an
+        external pre-chunker sizing work against `fits()` owns its number
+        this way); assigning None disables the gate, exactly like the
+        constructor argument.
         """
         if isinstance(self._max_input_tokens_setting, _Unset):
             return None
         return self._max_input_tokens_setting
+
+    @max_input_tokens.setter
+    def max_input_tokens(self, value: int | None) -> None:
+        self._max_input_tokens_setting = value
 
     def build_user_message(
         self,
@@ -767,11 +776,13 @@ class Commission[InputT, OutputT](ABC):
     def fits(self, estimated_tokens: int) -> bool:
         """Whether an input of the given token count would pass the size gate.
 
-        Judged against the explicit constructor cap only. A cap left unset
-        resolves at run time from the run catalog entry's context window,
-        which this method cannot see; the default loop (and any custom
-        `_run` mirroring it) checks `_fits_cap(_effective_input_cap(entry))`
-        instead.
+        Judged against the explicit cap only (constructor argument or a
+        later `max_input_tokens` assignment). A cap left unset resolves at
+        run time from the run catalog entry's context window, which this
+        method cannot see: with no explicit cap this always answers True,
+        and the run-time gate is the authoritative check. A caller sizing
+        work outside a run (pre-chunking a corpus) should set an explicit
+        cap it owns rather than lean on the default.
         """
         return self._fits_cap(estimated_tokens, self.max_input_tokens)
 

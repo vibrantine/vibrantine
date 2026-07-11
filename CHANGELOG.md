@@ -89,7 +89,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   `Commission(model=...)` narrows to a pure name (`str | None`) looked up
   in the run's catalog when the loop runs, `models.resolve()` and its
   silent bare-OpenRouter fallback retire, and an unset `max_input_tokens`
-  now resolves from the catalog entry's context window at run time.
+  now resolves from the catalog entry's context window at run time. As a
+  consequence, `fits()` and the `max_input_tokens` property judge the
+  explicit cap only: with no explicit cap, `fits()` always answers True
+  and the property reads None, because the real gate now runs at run time
+  against the catalog entry. A caller sizing work outside a run (an
+  external pre-chunker) should assign `max_input_tokens` a number it owns;
+  the property is assignable, exactly like the constructor argument.
 - **Breaking:** the advisory `CallContext.concurrency` field (which
   nothing read) retires in favor of the run-wide room, and `run_halted`
   joins the frozen `ErrorKind` vocabulary.

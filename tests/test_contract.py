@@ -265,6 +265,23 @@ async def test_run_catalog_entry_resolves_the_size_gate() -> None:
     assert len(fake.calls) == 0
 
 
+def test_max_input_tokens_is_assignable_and_fits_reflects_it() -> None:
+    # The external pre-chunker shape: pin an explicit cap after construction
+    # and size work against fits(). Unset means fits() judges no cap (the
+    # authoritative gate runs at run time, against the catalog entry).
+    probe = _PolicyProbe()
+    assert probe.max_input_tokens is None
+    assert probe.fits(10**9)
+
+    probe.max_input_tokens = 100
+    assert probe.max_input_tokens == 100
+    assert probe.fits(75)  # 100 * 0.75 target fraction
+    assert not probe.fits(76)
+
+    probe.max_input_tokens = None
+    assert probe.fits(10**9)
+
+
 def test_explicit_none_disables_the_size_gate() -> None:
     # max_input_tokens=None is the tools' "no gate": it must mean no gate,
     # not "auto-resolve from the model" (that's what leaving it unset does).
