@@ -23,7 +23,7 @@ Structural invariants. Breaking one is an architectural decision, not a quick fi
 - **Stateless across invocations.** No cross-invocation memory. The persistence layer stores run *records* for inspection; resumable state stays above the library.
 - **Prompts are internal.** Each Commission owns its system prompt; callers choose *which* Commission to invoke.
 
-`ErrorState.kind` SSOT: `"validation" | "internal" | "rate_limit" | "timeout" | "budget_exceeded" | "cancelled" | "output_too_large"`. Add a kind only when it represents a structurally distinct caller decision.
+`ErrorState.kind` SSOT: `"validation" | "internal" | "rate_limit" | "timeout" | "budget_exceeded" | "cancelled" | "output_too_large" | "run_halted"`. Add a kind only when it represents a structurally distinct caller decision. `run_halted` is spoken only by the root result when a run fuse tripped; node-level allocation exhaustion stays `budget_exceeded` (the line between them is scope, not resource type).
 
 **Vocabulary-append rule.** The closed `Literal` vocabularies (`ErrorKind`, `CommissionStatus`, `ConfidenceLevel`, `PersistenceMode`, `OverflowPolicy`) are part of the frozen contract. Adding or removing a member is a **major version bump**: downstream `match`/dispatch code is written against the exact set. `tests/test_contract.py` locks each vocabulary to its documented members, so a change can't land without updating the lock test (and, by that signal, the docs and the version).
 
@@ -70,9 +70,10 @@ The full surface is on `CallContext`, but not every field changes behavior today
 - **`cancel`**: enforced everywhere. Commissions check `ctx.cancel.is_cancelled` at natural breakpoints and return `kind="cancelled"`.
 - **`on_progress`**: emitted by Synthesize (`synthesis_pass`, `structured_pass`), NewsDigest (`fetching`, `synthesizing`), and MorningBriefing (`sections`, `executive_summary`, `written`). Coordinators forward `on_progress` to their children, so worker events bubble up under the original callback.
 - **`capabilities`**: allow-list of tool names, enforced by `run_llm_loop` (not by Commission bodies): the LLM's tool menu is the intersection of the Commission's toolbox and this set. `None` = unrestricted (root default); a set permits exactly those names, empty set permitting nothing. Python coordinators' hardcoded `dispatch` calls are ungated by design.
-- **`concurrency`**: `int`, per-coordinator hint. No v0 coordinator honors it (`MorningBriefingCommission` uses unbounded `asyncio.gather`); a tree-wide resource-management refactor is planned but consciously deferred.
 
-New Commissions should consult the enforced fields (`budget_usd`, `cancel`, `on_progress`) at their natural breakpoints; `capabilities` is enforced automatically by `run_llm_loop`. The remaining stub field (`concurrency`) can be passed through to children unchanged.
+There is no per-context concurrency field: provider-call concurrency is a run-wide bound (the Gatekeeper's room, `run_one(concurrency=)`), held around each provider call and shared by the whole tree. Coordinators may `asyncio.gather` freely; their LLM children queue at the room, not at the coordinator.
+
+New Commissions should consult the enforced fields (`budget_usd`, `cancel`, `on_progress`) at their natural breakpoints; `capabilities` is enforced automatically by `run_llm_loop`. `cancel` is also the run's breaker: a fuse trip (`run_one`'s `max_llm_calls` / `time_limit_seconds` / `budget_usd`) flips the same signal, so checking it is how a Commission participates in run teardown.
 
 ## Schema discipline (Pydantic types)
 

@@ -33,6 +33,8 @@ from vibrantine.models import Model, resolve
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
+    from vibrantine._gatekeeper import Gatekeeper
+
 
 class _Unset(Enum):
     """Sentinel: caller did not pass a value; fall back to the class default.
@@ -58,6 +60,10 @@ type ErrorKind = Literal[
     "budget_exceeded",
     "cancelled",
     "output_too_large",
+    # Whole-run teardown: a run fuse tripped and run_one rewrote the root.
+    # Node-level allocation exhaustion stays budget_exceeded; the line
+    # between the two kinds is scope, not resource type.
+    "run_halted",
 ]
 type PersistenceMode = Literal["off", "on_failure", "dev", "always"]
 type OverflowPolicy = Literal[
@@ -222,9 +228,7 @@ class PersistedRecord(BaseModel):
         description="The full CommissionResult, serialized via model_dump.",
     )
     ctx_snapshot: dict[str, Any] = Field(
-        description=(
-            "Frozen subset of CallContext: budget_usd, capabilities, concurrency, parent_run_id."
-        ),
+        description=("Frozen subset of CallContext: budget_usd, capabilities, parent_run_id."),
     )
     llm_trace: list[dict[str, Any]] | None = Field(
         default=None,
@@ -268,9 +272,6 @@ class CallContext:
     capabilities: CapabilitySet = field(default_factory=CapabilitySet)
     cancel: CancelToken = NEVER_CANCELLED
     on_progress: Callable[[ProgressEvent], None] | None = None
-    # Per-coordinator cap, not tree-wide. A shared tree-wide resource
-    # primitive is a planned refactor.
-    concurrency: int = 4
     # Populated by `dispatch` from the outer call's run_id; None at the root.
     # Commission bodies can read this for provenance/logging; they should not
     # set it manually; dispatch threads it via ContextVar across nested calls.
@@ -283,6 +284,13 @@ class CallContext:
     # `persistence_mode` is None (no opinion); a node's explicit mode,
     # including "off", wins. None here too means recording stays off.
     record: PersistenceMode | None = None
+    # The run's internal control object (fuses, room, stop signal, call
+    # log), created by run_one and carried to every node by reference.
+    # Internal plumbing, not caller surface: never set it by hand. dispatch
+    # refuses a context whose run object is not the run in progress, so a
+    # replace() can rebuild grants but never smuggle in a fresh room, fresh
+    # fuses, or a wider ceiling.
+    _gatekeeper: "Gatekeeper | None" = None
 
 
 # Message content parts ---------------------------------------------------
@@ -608,6 +616,7 @@ class Commission[InputT, OutputT](ABC):
         outcome = await run_llm_loop(
             client=self._resolved_client,
             model=self._model,
+            commission_name=self.name,
             system_prompt=system_prompt,
             user_message=user_message,
             toolbox=self.toolbox,

@@ -13,8 +13,8 @@ from typing import cast
 
 from openai import AsyncOpenAI
 
-from vibrantine.contract import CallContext, ProgressEvent, Provenance
-from vibrantine.dispatch import dispatch
+from vibrantine import run_one
+from vibrantine.contract import ProgressEvent, Provenance
 from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
@@ -66,10 +66,9 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
         [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -86,10 +85,11 @@ async def test_synthesize_record_carries_both_pass_transcripts(tmp_path: Path) -
         [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(backend=backend, record="always"),
+        backend=backend,
+        record="always",
     )
 
     assert result.run_id is not None
@@ -116,10 +116,11 @@ async def test_synthesize_failed_run_still_carries_transcripts(tmp_path: Path) -
         [llm_response(content="free"), llm_response(content="not json")]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0)]),
-        CallContext(backend=backend, record="always"),
+        backend=backend,
+        record="always",
     )
 
     assert result.status == "failure"
@@ -145,7 +146,7 @@ async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> Non
         [llm_response(content="free"), llm_response(content=structured)]
     )
 
-    result = await dispatch(commission, SynthesizeInput(sources=sources), CallContext())
+    result = await run_one(commission, SynthesizeInput(sources=sources))
 
     assert result.status == "success"
     assert result.output is not None
@@ -165,10 +166,9 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -183,10 +183,10 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
 async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:
     commission, fake = _commission([llm_response(content="unused"), llm_response(content="unused")])
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0)]),
-        CallContext(cancel=AlwaysCancelled()),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"
@@ -202,10 +202,10 @@ async def test_synthesize_emits_progress_events_for_each_phase() -> None:
         [llm_response(content="free"), llm_response(content=_VALID_STRUCTURED)]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(on_progress=events.append),
+        on_progress=events.append,
     )
 
     assert result.status == "success"
@@ -219,10 +219,10 @@ async def test_synthesize_budget_too_small_blocks_before_any_llm_call() -> None:
     # Pre-flight: estimated input cost from the prompt alone exceeds $0.0000001.
     commission, fake = _commission([llm_response(content="unused"), llm_response(content="unused")])
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(budget_usd=1e-7),
+        budget_usd=1e-7,
     )
 
     assert result.status == "failure"
@@ -235,7 +235,9 @@ async def test_synthesize_budget_too_small_blocks_before_any_llm_call() -> None:
 
 async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> None:
     # First call costs (1000 * 0.50 + 200 * 3.00) / 1M = $0.0011.
-    # Budget $0.0005 fits the tiny pre-flight estimate but trips after the first call.
+    # Budget $0.0005 fits the tiny pre-flight estimate; real spend then
+    # settles past the grant, so the spend fuse trips and the root reports
+    # run_halted.
     commission, fake = _commission(
         [
             llm_response(content="free", in_tokens=1000, out_tokens=200),
@@ -243,15 +245,16 @@ async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> No
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(budget_usd=0.0005),
+        budget_usd=0.0005,
     )
 
     assert result.status == "failure"
     assert result.error is not None
-    assert result.error.kind == "budget_exceeded"
+    assert result.error.kind == "run_halted"
+    assert "spend fuse tripped" in result.error.detail
     assert len(fake.calls) == 1
     # Cost still reflects what we actually spent on the first call.
     assert result.cost.estimated_usd > 0
@@ -266,10 +269,9 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
     )
     bulky_source = _src(0, content="lorem ipsum dolor sit amet " * 50)
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[bulky_source]),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -283,7 +285,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
 async def test_synthesize_empty_sources_fails_validation_before_llm() -> None:
     commission, fake = _commission([])
 
-    result = await dispatch(commission, SynthesizeInput(sources=[]), CallContext())
+    result = await run_one(commission, SynthesizeInput(sources=[]))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -305,10 +307,9 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
         [llm_response(content="free"), llm_response(content=structured)]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -331,10 +332,9 @@ async def test_synthesize_claim_with_no_source_indices_is_rejected() -> None:
         [llm_response(content="free"), llm_response(content=structured)]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -358,10 +358,10 @@ async def test_synthesize_budget_with_unpriced_model_refuses_before_any_call() -
         model="unregistered/model",
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(budget_usd=1.0),
+        budget_usd=1.0,
     )
 
     assert result.status == "failure"
@@ -379,10 +379,9 @@ async def test_synthesize_unpriced_model_without_budget_still_runs() -> None:
         model="unregistered/model",
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "success", result.error
@@ -399,10 +398,9 @@ async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
-        CallContext(),
     )
 
     assert result.status == "failure"

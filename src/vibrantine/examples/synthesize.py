@@ -18,6 +18,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
+from vibrantine._gatekeeper import RunHaltedError
 from vibrantine.contract import (
     CallContext,
     Claim,
@@ -186,6 +187,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
             synth_messages,
             provenance,
             self._cost(in_tokens, out_tokens),
+            ctx,
             json_mode=False,
         )
         if first_err is not None:
@@ -229,6 +231,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
             structured_messages,
             provenance,
             self._cost(in_tokens, out_tokens),
+            ctx,
             json_mode=True,
         )
         if second_err is not None:
@@ -284,6 +287,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         messages: list[ChatCompletionMessageParam],
         provenance: Provenance,
         cost_so_far: CostMetrics,
+        ctx: CallContext,
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
@@ -294,7 +298,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         reply: list[dict[str, Any]] = []
         try:
             return await self._call_inner(
-                messages, provenance, cost_so_far, reply, json_mode=json_mode
+                messages, provenance, cost_so_far, ctx, reply, json_mode=json_mode
             )
         finally:
             deposit_llm_trace([*cast("list[dict[str, Any]]", messages), *reply])
@@ -304,22 +308,53 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         messages: list[ChatCompletionMessageParam],
         provenance: Provenance,
         cost_so_far: CostMetrics,
+        ctx: CallContext,
         reply: list[dict[str, Any]],
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
+        # A custom _run's own LLM calls pass the run's provider door like the
+        # default loop's: the fuses, the room, and the call log govern the
+        # whole tree or they govern nothing.
+        gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+        assert gatekeeper is not None, "synthesize runs inside a run; dispatch refuses outside one"
         try:
-            if json_mode:
-                response: ChatCompletion = await self._resolved_client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                )
-            else:
-                response = await self._resolved_client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                )
+            async with gatekeeper.provider_call(
+                client=self._resolved_client,
+                model=self._model,
+                commission_name=self.name,
+                grant_usd=ctx.budget_usd,
+                prices=self._prices(),
+            ) as ticket:
+                if json_mode:
+                    response: ChatCompletion = await ticket.client.chat.completions.create(
+                        model=self._model,
+                        messages=messages,
+                        response_format={"type": "json_object"},
+                    )
+                else:
+                    response = await ticket.client.chat.completions.create(
+                        model=self._model,
+                        messages=messages,
+                    )
+                if response.usage is not None:
+                    ticket.record_usage(
+                        response.usage.prompt_tokens,
+                        response.usage.completion_tokens,
+                    )
+        except RunHaltedError as exc:
+            return (
+                "",
+                0,
+                0,
+                self._fail(
+                    "cancelled",
+                    f"Provider call refused by the run's stop signal: {exc}",
+                    retryable=False,
+                    provenance=provenance,
+                    cost=cost_so_far,
+                ),
+            )
         except openai.RateLimitError as exc:
             return (
                 "",

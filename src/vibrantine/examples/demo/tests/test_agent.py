@@ -5,8 +5,8 @@ from typing import cast
 
 from openai import AsyncOpenAI
 
+from vibrantine import run_one
 from vibrantine.contract import CallContext
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.ask import AskCommission
 from vibrantine.examples.demo.agent import (
     ChatInput,
@@ -41,7 +41,7 @@ async def test_chat_turn_concludes_with_reply() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"reply": "hello there"})])])
     agent = DemoAgentCommission(toolbox=(), model=FIXTURE_MODEL, client=cast(AsyncOpenAI, fake))
 
-    result = await dispatch(agent, ChatInput(message="hi"), CallContext())
+    result = await run_one(agent, ChatInput(message="hi"))
 
     assert result.status == "success"
     assert result.output is not None and result.output.reply == "hello there"
@@ -74,10 +74,11 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
     )
     backend = RecordingBackend()
 
-    result = await dispatch(
+    result = await run_one(
         agent,
         ChatInput(message="check the file"),
-        CallContext(backend=backend, record="always"),
+        backend=backend,
+        record="always",
     )
 
     assert result.status == "success"

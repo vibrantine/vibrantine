@@ -38,6 +38,7 @@ from openai.types.chat import (
 )
 from pydantic import BaseModel, ValidationError
 
+from vibrantine._gatekeeper import RunHaltedError
 from vibrantine.contract import (
     AudioPart,
     CallContext,
@@ -115,6 +116,7 @@ async def run_llm_loop[OutputT: BaseModel](
     *,
     client: AsyncOpenAI,
     model: str,
+    commission_name: str,
     system_prompt: str,
     user_message: str | list[ContentPart],
     toolbox: Sequence[Commission[Any, Any]],
@@ -146,6 +148,11 @@ async def run_llm_loop[OutputT: BaseModel](
     conclude with an apologetic answer.
     """
     in_price, out_price = prices_per_million
+    # Every governed LLM call passes the run's provider door: the fuses, the
+    # room, and the call log live there. dispatch refuses a context without
+    # the run object, so a loop can only run inside a run.
+    gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+    assert gatekeeper is not None, "run_llm_loop requires a run; dispatch refuses outside one"
     # Capability ceiling: the LLM is only offered the intersection of this
     # Commission's toolbox and ctx.capabilities. None = unrestricted. A
     # forbidden tool is simply absent from the menu, so any call to it falls
@@ -234,11 +241,38 @@ async def run_llm_loop[OutputT: BaseModel](
                     )
 
             try:
-                response: ChatCompletion = await client.chat.completions.create(
+                # The chair is held around the provider call only and
+                # released at the `with` exit, before this turn's tool calls
+                # dispatch children: count leaf work, not coordinators.
+                async with gatekeeper.provider_call(
+                    client=client,
                     model=model,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
+                    commission_name=commission_name,
+                    grant_usd=ctx.budget_usd,
+                    prices=prices_per_million,
+                ) as ticket:
+                    response: ChatCompletion = await ticket.client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                    )
+                    if response.usage is not None:
+                        ticket.record_usage(
+                            response.usage.prompt_tokens,
+                            response.usage.completion_tokens,
+                        )
+            except RunHaltedError as exc:
+                # The run's stop signal refused the call. Report an ordinary
+                # cancellation: mid-tree nodes ride the cancel path, and only
+                # the root speaks run_halted (run_one rewrites it there).
+                return _loop_error(
+                    "cancelled",
+                    f"Provider call refused by the run's stop signal: {exc}",
+                    retryable=False,
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
                 )
             except openai.RateLimitError as exc:
                 return _loop_error(

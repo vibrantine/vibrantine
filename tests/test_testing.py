@@ -14,7 +14,6 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import CallContext, Commission, run_one
-from vibrantine.dispatch import dispatch
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
 
 
@@ -59,7 +58,7 @@ async def test_responses_pop_in_order_and_calls_record_requests() -> None:
     )
     probe = _Probe(client=cast(AsyncOpenAI, scripted))
 
-    result = await dispatch(probe, _In(question="hello"), CallContext())
+    result = await run_one(probe, _In(question="hello"))
 
     assert result.output is not None and result.output.answer == "second"
     assert len(scripted.calls) == 2

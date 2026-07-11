@@ -4,11 +4,14 @@ Built around stub Commissions that emit a known result. Each test
 exercises one slice of dispatch's wrapping behavior: run_id generation,
 parent_run_id threading across nested dispatch calls (including under
 asyncio.gather), persistence-mode honoring, and overflow_policy
-enforcement.
+enforcement. dispatch refuses to operate outside a run, so each test
+opens a run scope through the shared `open_test_run` harness.
 """
 
 import asyncio
 import logging
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar, cast
@@ -31,6 +34,10 @@ from vibrantine.contract import (
 from vibrantine.dispatch import dispatch
 from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import ScriptedLLM, llm_response
+
+# The `open_test_run` fixture's shape: a factory whose `async with` yields a
+# CallContext inside an open run scope.
+OpenTestRun = Callable[..., AbstractAsyncContextManager[CallContext]]
 
 
 class _Input(BaseModel):
@@ -191,32 +198,38 @@ class _GatherParent(Commission[_Input, _Output]):
 # --- run_id + chain tests --------------------------------------------------
 
 
-async def test_dispatch_generates_run_id_on_result() -> None:
+async def test_dispatch_generates_run_id_on_result(open_test_run: OpenTestRun) -> None:
     stub = _Stub()
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
     assert result.run_id is not None
     assert len(result.run_id) > 0
 
 
-async def test_dispatch_parent_run_id_is_none_at_top_level() -> None:
+async def test_dispatch_parent_run_id_is_none_at_top_level(open_test_run: OpenTestRun) -> None:
     stub = _Stub()
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
     assert result.parent_run_id is None
 
 
-async def test_dispatch_child_sees_parent_run_id_in_ctx() -> None:
+async def test_dispatch_child_sees_parent_run_id_in_ctx(open_test_run: OpenTestRun) -> None:
     child = _Stub()
     parent = _Parent(child)
-    parent_result = await dispatch(parent, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        parent_result = await dispatch(parent, _Input(q="?"), ctx)
 
     assert child.seen_ctx is not None
     assert child.seen_ctx.parent_run_id == parent_result.run_id
 
 
-async def test_dispatch_gathered_children_share_correct_parent() -> None:
+async def test_dispatch_gathered_children_share_correct_parent(
+    open_test_run: OpenTestRun,
+) -> None:
     a, b = _Stub(), _Stub()
     parent = _GatherParent(a, b)
-    parent_result = await dispatch(parent, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        parent_result = await dispatch(parent, _Input(q="?"), ctx)
 
     assert a.seen_ctx is not None and b.seen_ctx is not None
     assert a.seen_ctx.parent_run_id == parent_result.run_id
@@ -226,60 +239,78 @@ async def test_dispatch_gathered_children_share_correct_parent() -> None:
 # --- persistence tests -----------------------------------------------------
 
 
-async def test_dispatch_off_does_not_call_backend(tmp_path: Path) -> None:
+async def test_dispatch_off_does_not_call_backend(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="off")
-    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
     # run_id still stamped (always free), but no record written.
     assert result.run_id is not None
 
 
-async def test_dispatch_always_persists_every_run(tmp_path: Path) -> None:
+async def test_dispatch_always_persists_every_run(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="always")
-    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     refs = await backend.list_references()
     assert refs == [result.run_id]
 
 
-async def test_dispatch_dev_persists_every_run(tmp_path: Path) -> None:
+async def test_dispatch_dev_persists_every_run(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="dev")
-    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     refs = await backend.list_references()
     assert refs == [result.run_id]
 
 
-async def test_dispatch_on_failure_persists_failures(tmp_path: Path) -> None:
+async def test_dispatch_on_failure_persists_failures(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="on_failure", result=_failure_result())
-    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     refs = await backend.list_references()
     assert refs == [result.run_id]
 
 
-async def test_dispatch_on_failure_skips_successes(tmp_path: Path) -> None:
+async def test_dispatch_on_failure_skips_successes(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="on_failure")
-    await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
 
 
-async def test_dispatch_no_opinion_and_no_ctx_record_stays_off(tmp_path: Path) -> None:
+async def test_dispatch_no_opinion_and_no_ctx_record_stays_off(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub()  # persistence_mode None (no opinion), no ctx.record either
-    await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
 
 
-async def test_ctx_record_switches_on_the_whole_tree(tmp_path: Path) -> None:
+async def test_ctx_record_switches_on_the_whole_tree(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     # The caller's record= default reaches every no-opinion node, parent and
     # child alike, with no per-node flipping; the record stores the effective
     # mode the node ran under.
@@ -287,9 +318,8 @@ async def test_ctx_record_switches_on_the_whole_tree(tmp_path: Path) -> None:
     child = _Stub()
     parent = _Parent(child)
 
-    parent_result = await dispatch(
-        parent, _Input(q="?"), CallContext(backend=backend, record="always")
-    )
+    async with open_test_run(backend=backend, record="always") as ctx:
+        parent_result = await dispatch(parent, _Input(q="?"), ctx)
 
     assert await backend.list_references() == [parent_result.run_id]
     child_refs = await backend.list_references(parent_run_id=parent_result.run_id)
@@ -299,40 +329,44 @@ async def test_ctx_record_switches_on_the_whole_tree(tmp_path: Path) -> None:
     assert loaded.mode == "always"
 
 
-async def test_explicit_off_vetoes_ctx_record(tmp_path: Path) -> None:
+async def test_explicit_off_vetoes_ctx_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="off")
-    await dispatch(stub, _Input(q="?"), CallContext(backend=backend, record="always"))
+    async with open_test_run(backend=backend, record="always") as ctx:
+        await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
 
 
-async def test_explicit_mode_beats_ctx_record(tmp_path: Path) -> None:
+async def test_explicit_mode_beats_ctx_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     # Node says on_failure, caller says always: the node's word is kept, so
     # this success is not recorded.
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="on_failure")
-    await dispatch(stub, _Input(q="?"), CallContext(backend=backend, record="always"))
+    async with open_test_run(backend=backend, record="always") as ctx:
+        await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
 
 
 async def test_dispatch_no_backend_skips_even_with_active_mode(
-    tmp_path: Path,
+    tmp_path: Path, open_test_run: OpenTestRun
 ) -> None:
     stub = _Stub(persistence_mode="always")
     # No backend on ctx → nothing to persist to → result still flows.
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
     assert result.status == "success"
 
 
 async def test_dispatch_persisted_record_has_chain_and_payloads(
-    tmp_path: Path,
+    tmp_path: Path, open_test_run: OpenTestRun
 ) -> None:
     backend = FilesystemBackend(tmp_path)
     child = _Stub(persistence_mode="always")
     parent = _Parent(child)
-    parent_result = await dispatch(parent, _Input(q="ask"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        parent_result = await dispatch(parent, _Input(q="ask"), ctx)
 
     child_refs = await backend.list_references(parent_run_id=parent_result.run_id)
     assert len(child_refs) == 1
@@ -363,16 +397,15 @@ class _ExplodingBackend:
         return 0
 
 
-async def test_dispatch_failing_backend_does_not_destroy_the_result() -> None:
+async def test_dispatch_failing_backend_does_not_destroy_the_result(
+    open_test_run: OpenTestRun,
+) -> None:
     # Persistence is observability: a backend that raises on store must not
     # break errors-as-values or eat the result it was recording.
     events: list[ProgressEvent] = []
     stub = _Stub(persistence_mode="always")
-    result = await dispatch(
-        stub,
-        _Input(q="?"),
-        CallContext(backend=_ExplodingBackend(), on_progress=events.append),
-    )
+    async with open_test_run(backend=_ExplodingBackend(), on_progress=events.append) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "success"
     assert result.output is not None
@@ -382,27 +415,32 @@ async def test_dispatch_failing_backend_does_not_destroy_the_result() -> None:
 # --- overflow tests --------------------------------------------------------
 
 
-async def test_dispatch_no_max_output_tokens_skips_check() -> None:
+async def test_dispatch_no_max_output_tokens_skips_check(open_test_run: OpenTestRun) -> None:
     stub = _Stub(max_output_tokens=None)
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
     assert result.status == "success"
     assert result.output is not None
 
 
-async def test_dispatch_under_cap_returns_unchanged() -> None:
+async def test_dispatch_under_cap_returns_unchanged(open_test_run: OpenTestRun) -> None:
     stub = _Stub(max_output_tokens=1000, overflow_policy="reject")
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
     assert result.status == "success"
 
 
-async def test_dispatch_overflow_reject_clears_output_and_fails() -> None:
+async def test_dispatch_overflow_reject_clears_output_and_fails(
+    open_test_run: OpenTestRun,
+) -> None:
     big = "x" * 4000  # ~1000 tokens
     stub = _Stub(
         result=_success_result(answer=big),
         max_output_tokens=10,
         overflow_policy="reject",
     )
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "failure"
     assert result.output is None
@@ -410,14 +448,17 @@ async def test_dispatch_overflow_reject_clears_output_and_fails() -> None:
     assert result.error.kind == "output_too_large"
 
 
-async def test_dispatch_overflow_partial_marks_partial_keeps_output() -> None:
+async def test_dispatch_overflow_partial_marks_partial_keeps_output(
+    open_test_run: OpenTestRun,
+) -> None:
     big = "x" * 4000
     stub = _Stub(
         result=_success_result(answer=big),
         max_output_tokens=10,
         overflow_policy="partial",
     )
-    result = await dispatch(stub, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None  # data still usable
@@ -425,7 +466,9 @@ async def test_dispatch_overflow_partial_marks_partial_keeps_output() -> None:
     assert result.error.kind == "output_too_large"
 
 
-async def test_dispatch_overflow_flag_emits_progress_event_unchanged() -> None:
+async def test_dispatch_overflow_flag_emits_progress_event_unchanged(
+    open_test_run: OpenTestRun,
+) -> None:
     events: list[ProgressEvent] = []
     big = "x" * 4000
     stub = _Stub(
@@ -433,14 +476,17 @@ async def test_dispatch_overflow_flag_emits_progress_event_unchanged() -> None:
         max_output_tokens=10,
         overflow_policy="flag",
     )
-    result = await dispatch(stub, _Input(q="?"), CallContext(on_progress=events.append))
+    async with open_test_run(on_progress=events.append) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "success"
     assert result.output is not None and result.output.a == big
     assert any(e.phase == "output_overflow" for e in events)
 
 
-async def test_dispatch_truncate_chops_and_persists_full_output(tmp_path: Path) -> None:
+async def test_dispatch_truncate_chops_and_persists_full_output(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     # The real mechanic: the envelope carries the chopped output as partial
     # with the run_id reference in the detail; the persisted record carries
     # the full pre-chop result, forced on (mode "always") even though neither
@@ -453,7 +499,8 @@ async def test_dispatch_truncate_chops_and_persists_full_output(tmp_path: Path) 
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(chopper, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None and result.output.a == "short"
@@ -468,7 +515,9 @@ async def test_dispatch_truncate_chops_and_persists_full_output(tmp_path: Path) 
     assert record.result["output"]["a"] == big  # full version, reachable
 
 
-async def test_dispatch_truncate_without_backend_degrades_to_partial() -> None:
+async def test_dispatch_truncate_without_backend_degrades_to_partial(
+    open_test_run: OpenTestRun,
+) -> None:
     # No backend means the full version cannot be persisted, so a reference
     # would point at nothing. Degrade: full output as partial, never silent.
     big = "x" * 4000
@@ -478,7 +527,8 @@ async def test_dispatch_truncate_without_backend_degrades_to_partial() -> None:
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(chopper, _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None and result.output.a == big  # output preserved
@@ -487,7 +537,9 @@ async def test_dispatch_truncate_without_backend_degrades_to_partial() -> None:
     assert "backend" in result.error.detail
 
 
-async def test_dispatch_truncate_without_hook_degrades_to_partial(tmp_path: Path) -> None:
+async def test_dispatch_truncate_without_hook_degrades_to_partial(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     # The base truncate_output declines (returns None): only the author knows
     # how to shrink a typed output without invalidating it. Degrade as above.
     backend = FilesystemBackend(tmp_path)
@@ -497,7 +549,8 @@ async def test_dispatch_truncate_without_hook_degrades_to_partial(tmp_path: Path
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(stub, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None and result.output.a == big
@@ -506,7 +559,9 @@ async def test_dispatch_truncate_without_hook_degrades_to_partial(tmp_path: Path
     assert "truncate_output" in result.error.detail
 
 
-async def test_dispatch_truncate_oversized_chop_degrades_to_partial(tmp_path: Path) -> None:
+async def test_dispatch_truncate_oversized_chop_degrades_to_partial(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     # A chop that still exceeds the cap is an authoring bug; trust the cap,
     # not the chop, and degrade rather than return an oversized "truncation".
     backend = FilesystemBackend(tmp_path)
@@ -517,7 +572,8 @@ async def test_dispatch_truncate_oversized_chop_degrades_to_partial(tmp_path: Pa
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(chopper, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None and result.output.a == big
@@ -526,7 +582,9 @@ async def test_dispatch_truncate_oversized_chop_degrades_to_partial(tmp_path: Pa
     assert "still above the cap" in result.error.detail
 
 
-async def test_dispatch_truncate_store_failure_falls_back_to_full_output() -> None:
+async def test_dispatch_truncate_store_failure_falls_back_to_full_output(
+    open_test_run: OpenTestRun,
+) -> None:
     # If the forced store fails, the chopped envelope's reference dangles;
     # returning it would silently lose data. Fall back to the full output.
     events: list[ProgressEvent] = []
@@ -537,11 +595,8 @@ async def test_dispatch_truncate_store_failure_falls_back_to_full_output() -> No
         max_output_tokens=10,
         overflow_policy="truncate_with_reference",
     )
-    result = await dispatch(
-        chopper,
-        _Input(q="?"),
-        CallContext(backend=_FailingBackend(), on_progress=events.append),
-    )
+    async with open_test_run(backend=_FailingBackend(), on_progress=events.append) as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
 
     assert result.status == "partial"
     assert result.output is not None and result.output.a == big  # nothing lost
@@ -554,8 +609,11 @@ async def test_dispatch_truncate_store_failure_falls_back_to_full_output() -> No
 # --- exception-to-failure tests --------------------------------------------
 
 
-async def test_dispatch_converts_raised_exception_to_failure() -> None:
-    result = await dispatch(_Raiser(ValueError("boom")), _Input(q="?"), CallContext())
+async def test_dispatch_converts_raised_exception_to_failure(
+    open_test_run: OpenTestRun,
+) -> None:
+    async with open_test_run() as ctx:
+        result = await dispatch(_Raiser(ValueError("boom")), _Input(q="?"), ctx)
 
     assert result.status == "failure"
     assert result.output is None
@@ -569,10 +627,13 @@ async def test_dispatch_converts_raised_exception_to_failure() -> None:
     assert result.parent_run_id is None
 
 
-async def test_dispatch_persists_raised_exception_on_failure(tmp_path: Path) -> None:
+async def test_dispatch_persists_raised_exception_on_failure(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     raiser = _Raiser(RuntimeError("kaboom"), persistence_mode="on_failure")
-    result = await dispatch(raiser, _Input(q="?"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(raiser, _Input(q="?"), ctx)
 
     # The gap this closes: a raising Commission still gets its failure recorded.
     assert result.run_id is not None
@@ -584,17 +645,20 @@ async def test_dispatch_persists_raised_exception_on_failure(tmp_path: Path) -> 
     assert loaded.result["error"]["kind"] == "internal"
 
 
-async def test_dispatch_does_not_swallow_cancellation() -> None:
+async def test_dispatch_does_not_swallow_cancellation(open_test_run: OpenTestRun) -> None:
     # CancelledError is a BaseException, not an Exception: task cancellation must
     # propagate, never be converted to an `internal` failure value.
-    with pytest.raises(asyncio.CancelledError):
-        await dispatch(_Raiser(asyncio.CancelledError()), _Input(q="?"), CallContext())
+    async with open_test_run() as ctx:
+        with pytest.raises(asyncio.CancelledError):
+            await dispatch(_Raiser(asyncio.CancelledError()), _Input(q="?"), ctx)
 
 
 # --- stdlib logging tests ---------------------------------------------------
 
 
-async def test_run_emits_stdlib_logs(caplog: pytest.LogCaptureFixture) -> None:
+async def test_run_emits_stdlib_logs(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
     # The framework emits through standard logging at its choke points; an
     # application that sets a level sees every call and every LLM turn with
     # zero vibrantine-specific setup. INFO = one line per LLM round-trip
@@ -603,14 +667,15 @@ async def test_run_emits_stdlib_logs(caplog: pytest.LogCaptureFixture) -> None:
     probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
 
     with caplog.at_level(logging.INFO, logger="vibrantine"):
-        await dispatch(probe, _Input(q="hi"), CallContext())
+        async with open_test_run() as ctx:
+            await dispatch(probe, _Input(q="hi"), ctx)
 
     assert "LLM turn model=" in caplog.text
     assert "loop_probe finished status=success" in caplog.text
 
 
 async def test_conclude_validation_failure_logs_a_warning(
-    caplog: pytest.LogCaptureFixture,
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
 ) -> None:
     # The live-debugging lesson: a conclude that keeps failing validation must
     # be visible without persistence set up.
@@ -623,7 +688,8 @@ async def test_conclude_validation_failure_logs_a_warning(
     probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
 
     with caplog.at_level(logging.WARNING, logger="vibrantine"):
-        result = await dispatch(probe, _Input(q="hi"), CallContext())
+        async with open_test_run() as ctx:
+            result = await dispatch(probe, _Input(q="hi"), ctx)
 
     assert result.status == "success"
     assert "conclude args failed to validate as _Output" in caplog.text
@@ -645,12 +711,13 @@ class _LoopProbe(Commission[_Input, _Output]):
         return input.q
 
 
-async def test_loop_trace_lands_in_the_record(tmp_path: Path) -> None:
+async def test_loop_trace_lands_in_the_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"a": "done"})])])
     probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="always")
 
-    result = await dispatch(probe, _Input(q="hello"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(probe, _Input(q="hello"), ctx)
 
     assert result.run_id is not None
     loaded = await backend.load(result.run_id)
@@ -662,7 +729,7 @@ async def test_loop_trace_lands_in_the_record(tmp_path: Path) -> None:
     assert any(m.get("tool_calls") for m in loaded.llm_trace)
 
 
-async def test_loop_trace_survives_a_failed_run(tmp_path: Path) -> None:
+async def test_loop_trace_survives_a_failed_run(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     # Failure traces are the ones worth autopsying: two free-text replies end
     # the run as an internal failure, and the transcript (including the
     # corrective nudge) must still reach the record.
@@ -670,7 +737,8 @@ async def test_loop_trace_survives_a_failed_run(tmp_path: Path) -> None:
     fake = ScriptedLLM([llm_response(content="prose"), llm_response(content="more prose")])
     probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="on_failure")
 
-    result = await dispatch(probe, _Input(q="hi"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(probe, _Input(q="hi"), ctx)
 
     assert result.status == "failure"
     assert result.run_id is not None
@@ -683,7 +751,9 @@ async def test_loop_trace_survives_a_failed_run(tmp_path: Path) -> None:
     assert nudges, "the corrective nudge should appear in the recorded transcript"
 
 
-async def test_nested_traces_stay_with_their_own_records(tmp_path: Path) -> None:
+async def test_nested_traces_stay_with_their_own_records(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     # A parent loop dispatches a child loop mid-run. Each record must carry
     # exactly its own transcript: the mailbox re-hangs the parent's box after
     # the child call, so nothing merges or crosses.
@@ -702,7 +772,8 @@ async def test_nested_traces_stay_with_their_own_records(tmp_path: Path) -> None
         persistence_mode="always",
     )
 
-    result = await dispatch(parent, _Input(q="parent-q"), CallContext(backend=backend))
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(parent, _Input(q="parent-q"), ctx)
 
     assert result.status == "success", result.error
     parent_record = await backend.load(result.run_id or "")

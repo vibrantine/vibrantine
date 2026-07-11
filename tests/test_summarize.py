@@ -13,8 +13,8 @@ import pytest
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
+from vibrantine import run_one
 from vibrantine.contract import CallContext, ProgressEvent
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
@@ -48,10 +48,9 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "A content cat."})])]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE, length="one_sentence"),
-        CallContext(),
     )
 
     assert result.status == "success", result.error
@@ -108,15 +107,15 @@ async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
+    await run_one(commission, SummarizeInput(content=_SOURCE))
 
     assert _tool_names(fake.calls[0]) == {"conclude"}
 
 
 async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
     # First call uses 10000 in + 1000 out tokens.
-    # Cost = (10000*0.50 + 1000*3.00) / 1M = $0.008. Budget $0.001 → exceeded
-    # at the post-turn check, before the conclude output is packaged.
+    # Cost = (10000*0.50 + 1000*3.00) / 1M = $0.008. Budget $0.001 → the
+    # spend fuse trips at settle and the root reports run_halted.
     commission, fake = _commission(
         [
             llm_response(
@@ -127,15 +126,16 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
-        CallContext(budget_usd=0.001),
+        budget_usd=0.001,
     )
 
     assert result.status == "failure"
     assert result.error is not None
-    assert result.error.kind == "budget_exceeded"
+    assert result.error.kind == "run_halted"
+    assert "spend fuse tripped" in result.error.detail
     assert len(fake.calls) == 1
     assert result.cost.estimated_usd > 0.001
 
@@ -143,10 +143,10 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
 async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
-        CallContext(cancel=AlwaysCancelled()),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"
@@ -165,7 +165,7 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
         ]
     )
 
-    result = await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
+    result = await run_one(commission, SummarizeInput(content=_SOURCE))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -180,10 +180,10 @@ async def test_summarize_emits_loop_start_progress_event() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await dispatch(
+    await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
-        CallContext(on_progress=events.append),
+        on_progress=events.append,
     )
 
     assert any(e.phase == "loop_start" and e.commission_name == "summarize" for e in events)
@@ -199,7 +199,7 @@ async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> No
         ]
     )
 
-    result = await dispatch(commission, SummarizeInput(content=_SOURCE), CallContext())
+    result = await run_one(commission, SummarizeInput(content=_SOURCE))
 
     assert result.status == "success", result.error
     assert result.output is not None

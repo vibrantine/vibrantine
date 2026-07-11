@@ -38,6 +38,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
+from vibrantine._gatekeeper import current_gatekeeper
 from vibrantine.contract import (
     CallContext,
     Commission,
@@ -92,6 +93,32 @@ async def dispatch[InputT, OutputT](
     ctx: CallContext,
 ) -> CommissionResult[OutputT]:
     """Invoke `commission` with framework wrapping."""
+    # One front door, both directions enforced: run_one is the only way into
+    # a run, dispatch the only way around inside one. A hand-built
+    # CallContext used as an entry point would be a run with no Gatekeeper
+    # at all, so it is refused rather than run ungoverned. Outside any run
+    # the raise goes straight to the caller (there is no run to protect);
+    # inside a run (a coordinator smuggling a fresh context) the parent
+    # dispatch's backstop converts it to a failure value.
+    gatekeeper = current_gatekeeper.get()
+    if gatekeeper is None:
+        raise RuntimeError(
+            "dispatch was called outside a run; a hand-built CallContext has "
+            "no run Gatekeeper, so nothing would govern its LLM calls. You "
+            "are outside a run; use run_one."
+        )
+    if ctx._gatekeeper is not gatekeeper:  # pyright: ignore[reportPrivateUsage]
+        raise RuntimeError(
+            "this CallContext does not carry the run in progress. Child "
+            "contexts must derive from the caller's own context via "
+            "dataclasses.replace(), never be built fresh: a fresh context "
+            "would smuggle in a fresh room, fresh fuses, or a wider ceiling."
+        )
+    # The time fuse's second seam: a halt fires between LLM calls, not only
+    # at the provider door. Trips the breaker only; the node's own
+    # cancellation checkpoints handle the exit.
+    gatekeeper.check_time()
+
     parent = _current_run_id.get()
     my_run_id = str(uuid.uuid4())
 
@@ -279,7 +306,6 @@ def _build_record[InputT, OutputT](
             "capabilities": (
                 None if ctx.capabilities.tools is None else sorted(ctx.capabilities.tools)
             ),
-            "concurrency": ctx.concurrency,
             "parent_run_id": ctx.parent_run_id,
         },
         llm_trace=llm_trace,

@@ -4,7 +4,7 @@ This is the demo's application layer, and deliberately so: everything the
 library refuses to own (secret wiring, model choice, budgets, conversation
 state, presentation) has to live somewhere, and this file is the worked
 example of where. Every run rides the public contract: construct with
-config, build a typed input, dispatch with a CallContext, read the result
+config, build a typed input, run it through `run_one`, read the result
 envelope and the persisted records.
 """
 
@@ -18,12 +18,10 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from vibrantine.contract import (
-    CallContext,
     CommissionResult,
     PersistedRecord,
     ProgressEvent,
 )
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.ask import AskOutput
 from vibrantine.examples.demo.agent import ChatInput, ChatTurn, demo_agent
 from vibrantine.examples.demo.catalog import (
@@ -44,6 +42,7 @@ from vibrantine.examples.morning_briefing import MorningBriefingOutput
 from vibrantine.examples.recursive_research import ResearchOutput
 from vibrantine.examples.synthesize import SynthesizeOutput
 from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, ollama
+from vibrantine.orchestrator import run_one
 
 # Spending policy is the caller's, so it lives here, not on the examples.
 AGENT_BUDGET_USD = 0.20
@@ -328,23 +327,29 @@ def main(argv: list[str] | None = None) -> int:
             print(describe_input(demo_input))
             # record="always" is the whole persistence switch: it rides the
             # context to every node in the tree, including any spawned mid-run.
-            ctx = CallContext(
-                budget_usd=budget,
-                on_progress=_print_progress,
-                backend=backend,
-                record="always",
+            result = asyncio.run(
+                run_one(
+                    commission,
+                    demo_input,
+                    budget_usd=budget,
+                    on_progress=_print_progress,
+                    backend=backend,
+                    record="always",
+                )
             )
-            result = asyncio.run(dispatch(commission, demo_input, ctx))
             _print_result(result, entry.present)
         else:
-            ctx = CallContext(
-                budget_usd=budget_for(AGENT_BUDGET_USD),
-                on_progress=_print_progress,
-                backend=backend,
-                record="always",
-            )
             chat_input = ChatInput(message=line, transcript=list(transcript))
-            result = asyncio.run(dispatch(agent, chat_input, ctx))
+            result = asyncio.run(
+                run_one(
+                    agent,
+                    chat_input,
+                    budget_usd=budget_for(AGENT_BUDGET_USD),
+                    on_progress=_print_progress,
+                    backend=backend,
+                    record="always",
+                )
+            )
             if result.output is not None:
                 print(f"\n{result.output.reply}")
                 transcript.append(ChatTurn(role="user", text=line))

@@ -2,8 +2,6 @@
 
 import pytest
 
-from vibrantine.contract import CallContext
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
     NewsDigestCommission,
     NewsDigestInput,
@@ -101,10 +99,10 @@ async def test_synthesize_failure_propagates_its_error_kind() -> None:
 async def test_cancellation_before_fetches_returns_cancelled() -> None:
     digest, fake = make_digest(field="world", pages=PAGES, claims=[])
 
-    result = await dispatch(
+    result = await run_one(
         digest,
         NewsDigestInput(briefing_date=DATE),
-        CallContext(cancel=AlwaysCancelled()),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

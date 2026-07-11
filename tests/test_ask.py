@@ -11,8 +11,8 @@ from typing import Any, cast
 
 from openai import AsyncOpenAI
 
-from vibrantine.contract import CallContext, CapabilitySet, ProgressEvent
-from vibrantine.dispatch import dispatch
+from vibrantine import run_one
+from vibrantine.contract import CapabilitySet, ProgressEvent
 from vibrantine.examples.ask import AskCommission, AskInput
 from vibrantine.models import Model
 from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
@@ -47,10 +47,9 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="What is the capital of France?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "success", result.error
@@ -76,10 +75,9 @@ async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> Non
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="How many lines?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "success", result.error
@@ -99,10 +97,9 @@ async def test_ask_exceeds_iteration_cap_returns_internal_failure(tmp_path: Path
     ]
     commission, _fake = _commission(responses, max_iterations=3)
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -124,10 +121,9 @@ async def test_ask_no_tool_call_returns_internal_failure(tmp_path: Path) -> None
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -141,7 +137,8 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
     file.write_text("hello", encoding="utf-8")
 
     # First call uses 10000 in + 1000 out tokens.
-    # Cost = (10000*0.50 + 1000*3.00) / 1M = $0.008. Budget $0.001 → exceeded.
+    # Cost = (10000*0.50 + 1000*3.00) / 1M = $0.008. Budget $0.001 → the
+    # spend fuse trips at settle and the root reports run_halted.
     commission, fake = _commission(
         [
             llm_response(
@@ -153,15 +150,16 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(budget_usd=0.001),
+        budget_usd=0.001,
     )
 
     assert result.status == "failure"
     assert result.error is not None
-    assert result.error.kind == "budget_exceeded"
+    assert result.error.kind == "run_halted"
+    assert "spend fuse tripped" in result.error.detail
     assert len(fake.calls) == 1
     assert result.cost.estimated_usd > 0.001
 
@@ -172,10 +170,10 @@ async def test_ask_cancellation_at_entry_makes_no_llm_call(tmp_path: Path) -> No
 
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(cancel=AlwaysCancelled()),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"
@@ -198,10 +196,9 @@ async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) ->
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "success", result.error
@@ -220,10 +217,10 @@ async def test_ask_emits_loop_start_progress_event(tmp_path: Path) -> None:
 
     commission, _fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(
+    await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(on_progress=events.append),
+        on_progress=events.append,
     )
 
     assert any(e.phase == "loop_start" and e.commission_name == "ask" for e in events)
@@ -247,10 +244,9 @@ async def test_ask_unrestricted_capabilities_offer_read(tmp_path: Path) -> None:
     # Default ctx → capabilities.tools is None → unrestricted.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(
+    await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
-        CallContext(),
     )
 
     assert _tool_names(fake.calls[0]) == {"read", "conclude"}
@@ -262,10 +258,10 @@ async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
     # Empty allow-list = deny all; read drops off the menu, conclude stays.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await dispatch(
+    await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
-        CallContext(capabilities=CapabilitySet(tools=frozenset())),
+        capabilities=CapabilitySet(tools=frozenset()),
     )
 
     names = _tool_names(fake.calls[0])
@@ -283,10 +279,10 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
         ]
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
-        CallContext(capabilities=CapabilitySet(tools=frozenset())),
+        capabilities=CapabilitySet(tools=frozenset()),
     )
 
     assert result.status == "success"
@@ -310,10 +306,10 @@ async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
         model="unregistered/model",
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(budget_usd=1.0),
+        budget_usd=1.0,
     )
 
     assert result.status == "failure"
@@ -334,10 +330,9 @@ async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> N
         model="unregistered/model",
     )
 
-    result = await dispatch(
+    result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
-        CallContext(),
     )
 
     assert result.status == "success", result.error

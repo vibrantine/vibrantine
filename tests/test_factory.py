@@ -3,7 +3,7 @@
 The factory manufactures a basic LLM-loop Commission from the crafted
 decisions (name, description, input/output types, tools). Tests prove the
 result is an ordinary Commission: it runs the default loop end to end
-through dispatch, carries its identity, and shares nothing between two
+through run_one, carries its identity, and shares nothing between two
 factory calls. Construction itself is deterministic: no client is built
 and nothing is spent until the Commission actually runs.
 """
@@ -15,7 +15,7 @@ from typing import Any, cast
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from vibrantine import CallContext, Commission, create_commission, dispatch
+from vibrantine import CallContext, Commission, create_commission, run_one
 from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
 from vibrantine.tools import ReadTool
 
@@ -58,7 +58,7 @@ async def test_factory_commission_runs_the_default_loop() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"recipe": "Simmer the tomatoes."})])]
     )
 
-    result = await dispatch(commission, RecipeInput(dish="shakshuka"), CallContext())
+    result = await run_one(commission, RecipeInput(dish="shakshuka"))
 
     assert result.status == "success", result.error
     assert result.output is not None

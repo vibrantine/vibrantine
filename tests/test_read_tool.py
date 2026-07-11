@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from vibrantine.contract import CallContext
-from vibrantine.dispatch import dispatch
+from vibrantine import run_one
 from vibrantine.tools.read import ReadInput, ReadTool
 
 
@@ -31,7 +30,7 @@ async def test_read_success_returns_content_and_metadata(tmp_path: Path) -> None
     path = _make_file(tmp_path, "hello.txt", "alpha\nbeta\ngamma\n")
     before = datetime.now(UTC)
 
-    result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=path))
 
     assert result.status == "success"
     assert result.error is None
@@ -57,7 +56,7 @@ async def test_read_preserves_crlf_line_endings(tmp_path: Path) -> None:
     path = tmp_path / "crlf.txt"
     path.write_bytes(b"alpha\r\nbeta\r\n")
 
-    result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
@@ -68,7 +67,7 @@ async def test_read_preserves_crlf_line_endings(tmp_path: Path) -> None:
 async def test_read_empty_file_returns_zero_lines(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "empty.txt", "")
 
-    result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
@@ -82,10 +81,9 @@ async def test_read_slicing_returns_correct_window(tmp_path: Path) -> None:
     content = "".join(f"line{i}\n" for i in range(10))
     path = _make_file(tmp_path, "ten.txt", content)
 
-    result = await dispatch(
+    result = await run_one(
         ReadTool(),
         ReadInput(path=path, offset=3, limit=4),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -100,10 +98,9 @@ async def test_read_truncated_false_when_slice_reaches_end(tmp_path: Path) -> No
     content = "".join(f"line{i}\n" for i in range(5))
     path = _make_file(tmp_path, "five.txt", content)
 
-    result = await dispatch(
+    result = await run_one(
         ReadTool(),
         ReadInput(path=path, offset=3, limit=10),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -115,10 +112,9 @@ async def test_read_truncated_false_when_slice_reaches_end(tmp_path: Path) -> No
 async def test_read_offset_past_end_returns_empty_slice(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "small.txt", "one\ntwo\n")
 
-    result = await dispatch(
+    result = await run_one(
         ReadTool(),
         ReadInput(path=path, offset=100, limit=10),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -133,7 +129,7 @@ async def test_read_oversized_line_is_truncated_with_marker(tmp_path: Path) -> N
     long_line = "x" * 35_000 + "\n"
     path = _make_file(tmp_path, "long.txt", "short\n" + long_line + "trailer\n")
 
-    result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
@@ -146,10 +142,9 @@ async def test_read_oversized_line_is_truncated_with_marker(tmp_path: Path) -> N
 
 
 async def test_read_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(
+    result = await run_one(
         ReadTool(),
         ReadInput(path=Path("relative/path.txt")),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -161,7 +156,7 @@ async def test_read_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_read_nonexistent_path_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "does-not-exist.txt"
 
-    result = await dispatch(ReadTool(), ReadInput(path=missing), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=missing))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -170,7 +165,7 @@ async def test_read_nonexistent_path_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_read_directory_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(ReadTool(), ReadInput(path=tmp_path), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=tmp_path))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -182,7 +177,7 @@ async def test_read_binary_file_returns_internal_for_encoding(tmp_path: Path) ->
     binary = tmp_path / "binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01\x02\x03\xff")
 
-    result = await dispatch(ReadTool(), ReadInput(path=binary), CallContext())
+    result = await run_one(ReadTool(), ReadInput(path=binary))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -193,10 +188,10 @@ async def test_read_binary_file_returns_internal_for_encoding(tmp_path: Path) ->
 async def test_read_cancelled_before_read_returns_cancelled(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "any.txt", "ignored\n")
 
-    result = await dispatch(
+    result = await run_one(
         ReadTool(),
         ReadInput(path=path),
-        CallContext(cancel=_AlwaysCancelled()),
+        cancel=_AlwaysCancelled(),
     )
 
     assert result.status == "failure"
@@ -214,7 +209,7 @@ async def test_read_permission_denied_returns_internal(tmp_path: Path) -> None:
     path = _make_file(tmp_path, "locked.txt", "secret\n")
     path.chmod(0o000)
     try:
-        result = await dispatch(ReadTool(), ReadInput(path=path), CallContext())
+        result = await run_one(ReadTool(), ReadInput(path=path))
     finally:
         path.chmod(0o644)
 

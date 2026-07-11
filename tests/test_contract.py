@@ -43,6 +43,7 @@ def test_error_kind_literals_match_documented_ssot() -> None:
         "budget_exceeded",
         "cancelled",
         "output_too_large",
+        "run_halted",
     }
 
 

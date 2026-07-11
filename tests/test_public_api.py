@@ -102,15 +102,18 @@ def test_call_context_surface_is_locked() -> None:
     # CallContext is the extend-here seam for new orchestration concerns,
     # so it will legitimately grow; the lock makes each growth deliberate.
     names = [f.name for f in fields(vibrantine.CallContext)]
+    # Underscore fields are internal plumbing: locked here so their
+    # existence stays deliberate, but outside the SemVer promise (the
+    # package docstring's rule: any underscore-prefixed name is internal).
     assert names == [
         "budget_usd",
         "capabilities",
         "cancel",
         "on_progress",
-        "concurrency",
         "parent_run_id",
         "backend",
         "record",
+        "_gatekeeper",
     ]
 
 

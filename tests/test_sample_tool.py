@@ -3,8 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from vibrantine.contract import CallContext
-from vibrantine.dispatch import dispatch
+from vibrantine import run_one
 from vibrantine.tools.sample import (
     LINE_CAP_CHARS,
     SampleInput,
@@ -29,10 +28,9 @@ async def test_sample_small_file_returns_full_head_and_tail(tmp_path: Path) -> N
     path = _make(tmp_path, "small.txt", "one\ntwo\nthree\n")
     before = datetime.now(UTC)
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=path),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -52,10 +50,9 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
     content = "".join(f"line{i}\n" for i in range(100))
     path = _make(tmp_path, "many.txt", content)
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=path, head_lines=3, tail_lines=2),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -68,10 +65,9 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
 async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
     path = _make(tmp_path, "doc.txt", "a\nb\nc\nd\n")
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=path, head_lines=0, tail_lines=2),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -83,10 +79,9 @@ async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
 async def test_sample_empty_file(tmp_path: Path) -> None:
     path = _make(tmp_path, "empty.txt", "")
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=path),
-        CallContext(),
     )
 
     assert result.status == "success"
@@ -98,10 +93,9 @@ async def test_sample_empty_file(tmp_path: Path) -> None:
 
 
 async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=Path("relative.txt")),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -112,10 +106,9 @@ async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "missing.txt"
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=missing),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -125,10 +118,9 @@ async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_sample_directory_returns_validation(tmp_path: Path) -> None:
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=tmp_path),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -141,10 +133,9 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
     binary = tmp_path / "binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01")
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=binary),
-        CallContext(),
     )
 
     assert result.status == "failure"
@@ -156,10 +147,10 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
 async def test_sample_cancelled_returns_cancelled(tmp_path: Path) -> None:
     path = _make(tmp_path, "any.txt", "x")
 
-    result = await dispatch(
+    result = await run_one(
         SampleTool(),
         SampleInput(path=path),
-        CallContext(cancel=_AlwaysCancelled()),
+        cancel=_AlwaysCancelled(),
     )
 
     assert result.status == "failure"
@@ -176,7 +167,7 @@ async def test_sample_long_line_is_capped_with_marker(tmp_path: Path) -> None:
     long_line = "x" * (LINE_CAP_CHARS * 3)
     path = _make(tmp_path, "minified.js", f"{long_line}\nshort\n")
 
-    result = await dispatch(SampleTool(), SampleInput(path=path), CallContext())
+    result = await run_one(SampleTool(), SampleInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
@@ -189,7 +180,7 @@ async def test_sample_line_at_exact_cap_is_untouched(tmp_path: Path) -> None:
     exact = "y" * LINE_CAP_CHARS
     path = _make(tmp_path, "exact.txt", f"{exact}\n")
 
-    result = await dispatch(SampleTool(), SampleInput(path=path), CallContext())
+    result = await run_one(SampleTool(), SampleInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
