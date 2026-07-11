@@ -37,6 +37,7 @@ async def open_run(
     max_llm_calls: int | None = None,
     time_limit_seconds: float | None = None,
     concurrency: int = 16,
+    tool_ceiling: frozenset[str] | None = None,
     capabilities: CapabilitySet | None = None,
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
@@ -60,6 +61,7 @@ async def open_run(
         time_limit_seconds=time_limit_seconds,
         spend_limit_usd=spend_limit_usd,
         concurrency=concurrency,
+        tool_ceiling=tool_ceiling,
     )
     ctx = CallContext(
         budget_usd=budget_usd,

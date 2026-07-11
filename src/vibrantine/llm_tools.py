@@ -159,13 +159,21 @@ async def run_llm_loop[OutputT: BaseModel](
         return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
     in_price = entry.input_usd_per_million or 0.0
     out_price = entry.output_usd_per_million or 0.0
-    # Capability ceiling: the LLM is only offered the intersection of this
-    # Commission's toolbox and ctx.capabilities. None = unrestricted. A
-    # forbidden tool is simply absent from the menu, so any call to it falls
-    # through the unknown-tool branch below; no separate gate. `conclude` is
-    # framework-injected and never gated. See docs/design.md.
+    # The effective menu: toolbox ∩ branch grant ∩ run ceiling. The branch
+    # grant (ctx.capabilities) is the caller's distributed allow-list; the
+    # ceiling is the run's immutable tree-wide bound, held on the shared
+    # object so a grant widened by custom code stays clamped. None means
+    # unrestricted for both. A forbidden tool is simply absent from the
+    # menu, so any call to it falls through the unknown-tool branch below;
+    # no separate gate. `conclude` is framework-injected and never gated.
+    # See docs/design.md.
     allowed = ctx.capabilities.tools
-    permitted = [c for c in toolbox if allowed is None or c.name in allowed]
+    ceiling = gatekeeper.tool_ceiling
+    permitted = [
+        c
+        for c in toolbox
+        if (allowed is None or c.name in allowed) and (ceiling is None or c.name in ceiling)
+    ]
     tools: list[ChatCompletionToolParam] = [
         *(as_llm_tool(c) for c in permitted),
         make_conclude_tool(output_type),

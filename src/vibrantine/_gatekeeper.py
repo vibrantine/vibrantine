@@ -167,6 +167,7 @@ class Gatekeeper:
         time_limit_seconds: float | None,
         spend_limit_usd: float | None,
         concurrency: int,
+        tool_ceiling: frozenset[str] | None = None,
     ) -> None:
         # The run's model catalog (see build_catalog): one registry of
         # entries per run, defined at the front door. Model *choice* stays
@@ -176,6 +177,13 @@ class Gatekeeper:
         self.default_model = default_model
         # One client per distinct endpoint, built lazily on first use.
         self._clients: dict[tuple[str, str | None], AsyncOpenAI] = {}
+        # The tree-wide LLM-exposure ceiling: what a model may be *offered*,
+        # never varying by branch. It lives here as a stateless bound so
+        # custom code can rebuild a branch grant via replace() but never the
+        # ceiling reference: even a grant widened to unrestricted stays
+        # clamped. Name-based, not effect-based: it governs what a tool is
+        # called, not what it does (the trust boundary's honest statement).
+        self.tool_ceiling = tool_ceiling
         self.max_llm_calls = max_llm_calls
         self.spend_limit_usd = spend_limit_usd
         self._time_limit_seconds = time_limit_seconds

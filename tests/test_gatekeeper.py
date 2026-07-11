@@ -9,6 +9,7 @@ behavior around the provider is what is under test, never the provider.
 
 import asyncio
 import math
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
@@ -18,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
     CallContext,
+    CapabilitySet,
     Commission,
     CommissionResult,
     CostMetrics,
@@ -420,6 +422,67 @@ async def test_room_of_one_with_a_nested_llm_tree_completes() -> None:
         timeout=10,
     )
     assert result.status == "success"
+
+
+# --- The tool ceiling ---------------------------------------------------------
+
+
+async def test_tool_ceiling_clamps_the_llm_menu() -> None:
+    # The effective menu is toolbox ∩ branch grant ∩ ceiling; an empty
+    # ceiling clamps everything out, while the framework-injected conclude
+    # is never gated.
+    fake = ScriptedLLM([_conclude()])
+    probe = _Probe(toolbox=(_EchoTool(),))
+    result = await run_one(probe, _Q(question="?"), models=[scripted_model(fake)], tool_ceiling=[])
+    assert result.status == "success"
+    menu = [t["function"]["name"] for t in fake.calls[0]["tools"]]
+    assert menu == ["conclude"]
+
+
+async def test_a_widened_grant_stays_clamped_by_the_ceiling() -> None:
+    # Custom code can rebuild a branch grant via replace() (here: widened to
+    # unrestricted), but not the ceiling reference, which lives on the shared
+    # run object: the child's menu stays clamped.
+    fake = ScriptedLLM([_conclude()])
+    child = _Child(toolbox=(_EchoTool(),))
+
+    class _Widener(Commission[_Q, _A]):
+        name: ClassVar[str] = "widener"
+        description: ClassVar[str] = "Widens its child's grant to unrestricted."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            wide = replace(ctx, capabilities=CapabilitySet())
+            child_result = await dispatch(child, input, wide)
+            assert child_result.status == "success"
+            return self._succeed(
+                _A(answer="widened"),
+                provenance=_prov("widener"),
+                cost=CostMetrics(estimated_usd=child_result.cost.estimated_usd),
+            )
+
+    result = await run_one(
+        _Widener(),
+        _Q(question="?"),
+        models=[scripted_model(fake)],
+        tool_ceiling=[],
+        capabilities=CapabilitySet(tools=frozenset()),
+    )
+    assert result.status == "success"
+    menu = [t["function"]["name"] for t in fake.calls[0]["tools"]]
+    assert menu == ["conclude"]
+
+
+async def test_tool_ceiling_permits_exactly_its_names() -> None:
+    fake = ScriptedLLM([_conclude()])
+    probe = _Probe(toolbox=(_EchoTool(),))
+    result = await run_one(
+        probe, _Q(question="?"), models=[scripted_model(fake)], tool_ceiling=["echo"]
+    )
+    assert result.status == "success"
+    menu = [t["function"]["name"] for t in fake.calls[0]["tools"]]
+    assert menu == ["echo", "conclude"]
 
 
 # --- One front door ----------------------------------------------------------

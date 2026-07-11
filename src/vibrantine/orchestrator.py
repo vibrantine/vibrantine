@@ -67,6 +67,7 @@ async def run_one[InputT, OutputT](
     # the room
     concurrency: int = DEFAULT_CONCURRENCY,
     # authority
+    tool_ceiling: Sequence[str] | None = None,
     capabilities: CapabilitySet | None = None,
     # control and observability
     cancel: CancelToken | None = None,
@@ -123,6 +124,11 @@ async def run_one[InputT, OutputT](
         time_limit_seconds=time_limit_seconds,
         spend_limit_usd=budget_usd,
         concurrency=concurrency,
+        # An LLM-exposure ceiling, tree-wide and immutable: the effective
+        # menu everywhere becomes toolbox ∩ branch grant ∩ this set. It
+        # bounds what a model may be offered; branch-varying authority stays
+        # with capabilities, the distributed grant.
+        tool_ceiling=None if tool_ceiling is None else frozenset(tool_ceiling),
     )
     ctx = CallContext(
         budget_usd=budget_usd,
@@ -168,6 +174,7 @@ def invoke_sync[InputT, OutputT](
     max_llm_calls: int | None = DEFAULT_MAX_LLM_CALLS,
     time_limit_seconds: float | None = None,
     concurrency: int = DEFAULT_CONCURRENCY,
+    tool_ceiling: Sequence[str] | None = None,
     capabilities: CapabilitySet | None = None,
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
@@ -185,6 +192,7 @@ def invoke_sync[InputT, OutputT](
             max_llm_calls=max_llm_calls,
             time_limit_seconds=time_limit_seconds,
             concurrency=concurrency,
+            tool_ceiling=tool_ceiling,
             capabilities=capabilities,
             cancel=cancel,
             on_progress=on_progress,
