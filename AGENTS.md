@@ -114,7 +114,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 - **Validation**: `pydantic >= 2`
 - **HTTP**: `httpx` (async)
 - **Tests**: `pytest`, `pytest-asyncio`
-- **LLM**: any OpenAI-compatible endpoint via the `openai` SDK with `base_url` swapped. A `Model` bundles identity, endpoint, and pricing facts (`models.py`); a bare id string resolves to the OpenRouter endpoint, `ollama()` targets a local server, and `openai_compatible()` covers any other provider. LLM-using Commissions accept `model` as a constructor argument and are immutable post-construction. `max_input_tokens` derives from the model's context window via `KNOWN_MODELS`; `target_input_fraction` defaults to 0.75.
+- **LLM**: any OpenAI-compatible endpoint via the `openai` SDK with `base_url` swapped. A `Model` bundles identity, endpoint, and pricing facts (`models.py`); `ollama()` targets a local server and `openai_compatible()` covers any other provider. The run's models are defined once, in `run_one(models=[...])` (the catalog, which vends the clients); LLM-using Commissions accept `model` as a constructor argument, a pure catalog name, and are immutable post-construction. Unknown names fail fast. `max_input_tokens` derives at run time from the catalog entry's context window; `target_input_fraction` defaults to 0.75.
 - **Lint + format**: `ruff` (replaces black, isort, flake8)
 - **Types**: `basedpyright` in strict mode
 
@@ -122,7 +122,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 
 `OPENROUTER_API_KEY` is the only secret. Stored in `.env` (gitignored). A committed `.env.example` lists required variable names with empty values as the public template.
 
-- **Library**: the `Commission` base builds its `AsyncOpenAI` client lazily on first use, reading the resolved model's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests inject a `client` (or `model`) through the constructor instead. There is no `api_key` constructor argument, and a missing key surfaces at first run with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
+- **Library**: the run's catalog vends the `AsyncOpenAI` clients lazily at the first provider call, one per distinct endpoint, reading the entry's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests register `vibrantine.testing.scripted_model(...)` entries in `run_one(models=[...])` instead. There is no `api_key` argument anywhere, and a missing key surfaces at the first provider call with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
 - **Dev + tests**: `uv run --env-file .env <cmd>`, or export in your shell. Both pick it up the same way.
 - **Test policy**: unit tests mock the OpenAI client and require no key. Integration tests are marked `@pytest.mark.integration` and skip when the key is absent. Never commit fixtures containing real API responses with embedded keys.
   LLM-driven Commissions should also grow heuristic evaluation cases with

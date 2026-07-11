@@ -10,6 +10,43 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Added
 
+- **The Run Gatekeeper**: every run gets one internal control object,
+  created by `run_one`, standing at the provider seam as `dispatch`'s
+  mirror. It holds three resource fuses (an LLM-call backstop, default-on
+  at 1,000; an opt-in `time_limit_seconds` checked at both seams; a spend
+  fuse armed by `budget_usd` at the same number as the root grant), a
+  tree-wide concurrency room (`concurrency=`, default 16, held around the
+  provider call only, deadlock-free even at 1), an immutable name-based
+  tool-exposure ceiling (`tool_ceiling=`, clamping every menu in the tree
+  to toolbox ∩ branch grant ∩ ceiling), and an always-on in-memory
+  provider-call log. A fuse trip flips the run's one stop signal (the
+  same `CallContext.cancel` every checkpoint already honors), refuses new
+  provider calls, lets in-flight calls finish and count, and surfaces at
+  the root as the new `run_halted` `ErrorKind` with the fuse and numbers
+  named and true total spend in the cost field; a root that still
+  concluded keeps its result. Node-level allocation exhaustion stays
+  `budget_exceeded`: the line between the kinds is scope, not resource
+  type.
+- **The run model catalog**: `run_one(models=[...], default_model=...)`
+  defines the run's models once; every Commission references an entry by
+  name or takes the run default, unknown names fail fast, an empty
+  catalog auto-registers the system default, and the catalog builds and
+  vends the provider clients (one per distinct endpoint), so the
+  framework owns provider access by construction.
+- **The call-log accessor**: `run_one(on_llm_call=...)` receives one
+  plain dict per settled or refused provider call (caller, model,
+  timestamps, tokens, cost, the node's grant, fuse state, how it ended).
+  With a `SqliteBackend` wired, the rows also land at run end in a new
+  `calls` table beside `records`, joined on run id (absorb, not
+  replace), through an optional duck-typed `store_calls` the
+  `PersistenceBackend` Protocol does not require.
+- `run_one` and `invoke_sync` also gain `capabilities`, `cancel`, and
+  `on_progress`, absorbing everything the hand-built-context entry used
+  to provide.
+- `vibrantine.testing.scripted_model(fake)`: a catalog entry whose
+  provider is a `ScriptedLLM`, defaulting to `FIXTURE_MODEL`'s id and
+  pricing so cost assertions keep their dollars. The testing seam now
+  rides the same client-vending door as production.
 - `AudioPart` joins the `ContentPart` union: base64 `data` plus a `format`
   tag (`"wav"` or `"mp3"`), conforming to the provider's `input_audio`
   content-part shape. Exported from `vibrantine.__all__`; provisional in
@@ -41,6 +78,21 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Changed
 
+- **Breaking:** `run_one` is the only way into a run and `dispatch` the
+  only way around inside one, each refusing the other's job: nested
+  `run_one` refuses ("you are inside a run; use dispatch"), `dispatch`
+  outside a run refuses ("you are outside a run; use run_one"), and
+  `dispatch` refuses a context that does not carry the run in progress,
+  so the run object can never be swapped mid-tree.
+- **Breaking:** `Commission(client=...)` is removed; it was the
+  raw-client escape sitting in the framework's own front door.
+  `Commission(model=...)` narrows to a pure name (`str | None`) looked up
+  in the run's catalog when the loop runs, `models.resolve()` and its
+  silent bare-OpenRouter fallback retire, and an unset `max_input_tokens`
+  now resolves from the catalog entry's context window at run time.
+- **Breaking:** the advisory `CallContext.concurrency` field (which
+  nothing read) retires in favor of the run-wide room, and `run_halted`
+  joins the frozen `ErrorKind` vocabulary.
 - The default loop translates opening-message parts with one explicit
   branch per modality and rejects an opening message it must not send (a
   part it cannot translate, or an empty parts list, which providers refuse

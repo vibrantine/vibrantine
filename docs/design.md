@@ -294,7 +294,11 @@ What the invoker holds.
   and the numbers, true spend always reported) rather than steering. The
   spend fuse is honest, not absolute: it refuses new calls at the limit
   and lets in-flight calls finish, so overshoot is bounded in calls, not
-  dollars. And it is an in-process guardrail, not a sandbox: custom Python
+  dollars. The `run_halted` rewrite claims failed roots only: a root that
+  still concluded despite a trip keeps its result, because winding down
+  and concluding with what it has is the designed response to a trip, not
+  a failure to override (the trip stays visible in the call log). And it
+  is an in-process guardrail, not a sandbox: custom Python
   can step around it, a deliberate escape the library does not claim to
   close.
 - **Rules out.**
@@ -551,15 +555,6 @@ wishes do not belong in the design record.
   budgets and token/time accounting are the settled direction. Built
   with the first genuinely tiered workload: frontier judgment above,
   local fan workers below.
-- **The Run Gatekeeper.** The governed seam and the model catalog
-  (settled above, under the caller's controls) are designed but unbuilt;
-  the build spec with the full surface inventory is
-  [`working/run-gatekeeper-spec.md`](working/run-gatekeeper-spec.md). The
-  known lock trips: `run_halted` joins `ErrorKind`, the `Commission`
-  constructor loses `client=`, `run_one` grows the run's kwargs, and the
-  advisory `CallContext.concurrency` retires. Trigger: fired. Base Coder,
-  the first consumer that needs a budget it can trust, is being built
-  now.
 - **Per-model capacity caps.** A builder-side static spend cap riding
   with a Commission ("this worker may never exceed $0.01", the capacity
   half of budgeting), taking the minimum with the caller's grant. Built

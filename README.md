@@ -300,7 +300,7 @@ Vibrantine is early-stage software. The current release is v0.5.0, tagged in
 this repository and recorded in `CHANGELOG.md`; the project is not yet on
 PyPI.
 
-Available in v0.5.0:
+Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
@@ -314,6 +314,18 @@ Available in v0.5.0:
   grant, a pre-turn gate declines unaffordable turns up front, and a
   `[budget]` status line gives the model mid-run spend visibility so a
   prompt can instruct a graceful wind-down.
+- Run-wide governance at the provider seam: every LLM call in a run passes
+  one internal control object created by `run_one`, carrying three resource
+  fuses (an always-on LLM-call backstop, an opt-in time limit, and a spend
+  fuse armed by the budget), a tree-wide concurrency room, an immutable
+  tool-exposure ceiling, and an always-on provider-call log (`on_llm_call`
+  live, a queryable `calls` table beside the run records when SQLite is
+  wired). A tripped fuse halts the run loudly: a `run_halted` failure
+  naming the fuse, with true total spend reported.
+- The run model catalog: models are defined once at `run_one(models=[...])`
+  and referenced by name from Commissions; the catalog vends the provider
+  clients, unknown names fail fast, and an empty catalog auto-registers the
+  system default.
 - A working `truncate_with_reference` overflow policy: the author's typed
   `truncate_output` hook shrinks the output, and the full result is
   persisted under the run_id named in the error detail.
@@ -324,7 +336,8 @@ Available in v0.5.0:
   backends (JSON files, SQLite).
 - Observability in three tiers: stdlib logging to watch, progress events to
   react, persisted records to query.
-- A public testing seam: `client=` injection plus `vibrantine.testing`.
+- A public testing seam: `vibrantine.testing`, whose `scripted_model` rides
+  the run catalog so the full machinery runs for real against a script.
 - Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
   `MorningBriefing`, `RecursiveResearch`, the learning ladder
   (`vibrantine.examples.learning_ladder`: four runnable rungs, each the

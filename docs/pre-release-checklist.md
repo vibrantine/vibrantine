@@ -305,12 +305,11 @@ def __init__(
     *,
     child: ChildCommission | None = None,
     tool: SomeTool | None = None,
-    model: str | Model | None = None,
-    client: AsyncOpenAI | None = None,
+    model: str | None = None,
 ) -> None:
-    resolved_child = child or ChildCommission(model=model, client=client)
+    resolved_child = child or ChildCommission(model=model)
     resolved_tool = tool or SomeTool()
-    super().__init__(toolbox=(resolved_child, resolved_tool), model=model, client=client)
+    super().__init__(toolbox=(resolved_child, resolved_tool), model=model)
 ```
 
 Checklist for nested Commissions:
@@ -330,7 +329,8 @@ Every shipped or example Commission should have tests at the level of risk it
 carries. See [`commission-testing.md`](commission-testing.md) for the full
 standard.
 
-- [ ] Unit tests use fake LLM clients and require no API key.
+- [ ] Unit tests script the model through the run catalog
+  (`vibrantine.testing.scripted_model`) and require no API key.
 - [ ] Integration tests are marked `@pytest.mark.integration`.
 - [ ] Integration tests skip when credentials are absent.
 - [ ] Tests cover validation failures.

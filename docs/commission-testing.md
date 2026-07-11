@@ -47,15 +47,16 @@ Evaluation tests answer "does this Commission do useful work?"
 
 ## Contract Tests
 
-Unit tests must require no credentials. LLM-backed Commissions inject a
-scripted client through `client=`; the supported double is
-`vibrantine.testing.ScriptedLLM`, with `llm_response` building each scripted
-reply. The model's intelligence is not under test; the Commission's behavior
+Unit tests must require no credentials. LLM-backed Commissions script the
+model through the run's catalog: register
+`vibrantine.testing.scripted_model(ScriptedLLM([...]))` in
+`run_one(models=[...])`, with `llm_response` building each scripted reply.
+The model's intelligence is not under test; the Commission's behavior
 around the scripted response is.
 
 Tests are callers, so they use the caller's API: launch the Commission under
-test through the public entry points (`run_one`, or `dispatch` when the test
-supplies its own `CallContext`), never by calling the `_run` hook directly.
+test through the public entry points (`run_one` / `invoke_sync`), never by
+calling the `_run` hook directly.
 `_run` is the hook authors implement, not the call surface, and a test that
 calls it raw skips the framework wrapping (run_id stamping, overflow enforcement,
 exception-to-failure conversion, persistence) that every real caller gets.
@@ -66,8 +67,8 @@ probes; those necessarily sit inside the boundary.
 Cover the contract surface the Commission exercises:
 
 - Public import works from the intended module or package path.
-- Constructor injection works for `model`, `client`, child Commissions/tools,
-  and test doubles.
+- Constructor injection works for `model` (a catalog name), child
+  Commissions/tools, and test doubles.
 - Typed input is rendered correctly by `build_user_message`, or a custom
   `_run` preserves the typed input semantics.
 - Success returns `CommissionResult(status="success")` with validated output.

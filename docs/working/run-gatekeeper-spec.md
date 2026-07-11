@@ -2,12 +2,26 @@
 
 ## Status
 
-Decision record, settled 2026-07-11 after a full walkthrough with the author.
-This replaces the earlier draft of the same name: the reasoning that survived
-is carried over, and everything else was ruled in that session. **Build is
-triggered**, no longer deferred. The stated trigger ("the first consumer needs
-a budget it can trust") has fired: Base Coder, the tier-1 consumer, is being
-built now, and the author is paying attention.
+**BUILT, 2026-07-12**, in five commits on main (Gatekeeper + run_halted +
+one front door; the model catalog and client= removal; the tool ceiling;
+the calls table and on_llm_call accessor; this docs sweep). The
+deferred-to-build slots were filled as follows: the internal object is
+`_gatekeeper.Gatekeeper`; the call-count backstop shipped at 1,000 and the
+room at 16 as specified; the calls table's columns are the log row's keys
+plus `root_run_id`; the testing fake is `testing.scripted_model` (a catalog
+entry carrying its ScriptedLLM); the log accessor is the `on_llm_call`
+kwarg (plain dict rows, no new public type); client= was a straight
+removal. One refinement ratified at build time and promoted into design.md:
+the root rewrite to `run_halted` claims failed roots only; a root that
+still concluded despite a trip keeps its result, because winding down is
+the designed response to a trip.
+
+Below is the settled decision record as built, kept for the reasoning.
+Settled 2026-07-11 after a full walkthrough with the author. This replaces
+the earlier draft of the same name: the reasoning that survived is carried
+over, and everything else was ruled in that session. The stated trigger
+("the first consumer needs a budget it can trust") had fired: Base Coder,
+the tier-1 consumer, is being built now.
 
 The name: a Gatekeeper controls one door. It holds a call until a chair frees,
 turns a call back when a fuse has tripped, and keeps the register of who
