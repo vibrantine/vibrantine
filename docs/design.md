@@ -231,7 +231,10 @@ What the invoker holds.
   invocation. The Commission stays within it and reports actual cost on
   return; a parent gives each child a slice of its own remaining
   allocation. There is no mid-run drawdown account and no reservation
-  protocol.
+  protocol. The Gatekeeper's spend fuse reads a run-wide total solely to
+  halt the run at the caller's limit; it never reallocates, refunds, or
+  informs a node's decisions, so allocation remains the only budgeting
+  mechanism.
 - **Why.** Allocation composes with one number and no coordination. A
   drawdown ledger would be shared mutable state between siblings, exactly
   what the joints forbid.
@@ -247,7 +250,10 @@ What the invoker holds.
   children inherit the caller's grant, so on the default path a grant
   only ever narrows. A custom coordinator builds its children's contexts
   itself; keeping grants narrowing there is authoring discipline, not a
-  framework check. Whether a Commission acts on the world or merely
+  framework check. One mechanical bound stands above that discipline:
+  the run's tool-exposure ceiling (see the Gatekeeper decision) clamps
+  every menu in the tree, so even a grant widened by custom code cannot
+  offer a tool outside it. Whether a Commission acts on the world or merely
   drafts is decided by what the caller granted, not by any contract
   property.
 - **Why.** Authority delegated to a fallible worker must be bounded by the
@@ -260,6 +266,66 @@ What the invoker holds.
   - Commissions that grant themselves tools.
   - A framework rule that side effects live above the library.
   - Framework-decided confirmation gates.
+
+#### One run, one Gatekeeper at the provider seam
+
+- **Decision.** Every run gets one internal control object, created by
+  `run_one`, carried to every node by reference, and consulted by every
+  governed LLM call: the Gatekeeper, standing at the provider door as
+  `dispatch`'s mirror. It holds only what is identical for every node:
+  three resource fuses (LLM-call count, default on; time limit, opt-in;
+  spend, armed by the budget), a tree-wide concurrency room that counts
+  calls in flight rather than coordinators, an immutable tool-exposure
+  ceiling, the provider-call log (always on in memory, landing beside the
+  run records as a queryable table when a backend is wired), and the model
+  catalog. `run_one` is the only entry into a run and `dispatch` the only
+  path around inside one; each refuses the other's job, and `dispatch`
+  refuses a context carrying a different run object, so the Gatekeeper can
+  never be swapped mid-tree. It has no public name: the caller configures
+  it entirely through `run_one` keyword arguments.
+- **Why.** The library mediates unit-to-unit calls, but a Commission's LLM
+  call went straight to the provider, so every run-wide guarantee had
+  nowhere to live except authoring discipline. What keeps the object from
+  being the shared state the joints forbid is one invariant: calls report
+  in, control flows out, and data never flows back into a node's decision;
+  a node reads its own granted slice, never the run's running totals.
+  Fuses bound resources the run consumes, never how it is composed, and
+  they stop the bleeding loudly (a `run_halted` failure naming the fuse
+  and the numbers, true spend always reported) rather than steering. The
+  spend fuse is honest, not absolute: it refuses new calls at the limit
+  and lets in-flight calls finish, so overshoot is bounded in calls, not
+  dollars. And it is an in-process guardrail, not a sandbox: custom Python
+  can step around it, a deliberate escape the library does not claim to
+  close.
+- **Rules out.**
+  - A public Gatekeeper type, and any grant stored in the shared object.
+  - Structural fuses (depth, invocation count), which bound composition
+    rather than resources.
+  - Nested `run_one` and hand-built-context entry: both doors refuse.
+  - A second observability system: the provider log joins the record
+    store, never replaces it.
+  - Sandbox claims.
+
+#### The run's models are defined once; the catalog vends the clients
+
+- **Decision.** The caller registers the run's models once at `run_one`
+  (registering nothing gets the system default), and every Commission
+  names an entry or takes the run default. The catalog builds and holds
+  the clients; a Commission never constructs one, and a name not in the
+  catalog fails fast. Model *choice* stays distributed: each node carries
+  which entry it uses, never a copy of the catalog.
+- **Why.** People run one to three models per use case; the catalog is
+  where they are defined right, once, and then linked to. And because the
+  catalog vends the clients, the framework owns provider access by
+  construction, which is what makes the Gatekeeper's seam structural
+  rather than advisory. The named price, accepted in the dev phase:
+  `Commission(client=...)` is removed (it was the raw-client escape
+  sitting in the framework's own front door), `model=` narrows to a pure
+  name, and the testing seam moves to the catalog.
+- **Rules out.**
+  - Per-Commission clients on the governed path.
+  - Silent fallback for unknown model ids inside a run.
+  - Per-branch model menus, until a real consumer needs them.
 
 #### Oversized output is a policy the caller picks
 
@@ -485,17 +551,19 @@ wishes do not belong in the design record.
   budgets and token/time accounting are the settled direction. Built
   with the first genuinely tiered workload: frontier judgment above,
   local fan workers below.
-- **Model ownership: catalog, profile, grant.** The settled ownership
-  spine for model access: the application owns the inventory of model
-  profiles (a catalog, living above the library where state belongs), a
-  Commission owns its default model and capacity, the caller grants a run
-  its permitted subset, and a crafted Commission picks by key from within
-  the grant; it never freely discovers or invents model access. A
-  builder-side static spend cap ("this worker may never exceed $0.01",
-  the capacity half of budgeting, taking the minimum with the caller's
-  grant) rides the same direction. Built with autonomous Commission
-  crafting, or with the first application that must hand different
-  callers different model menus.
+- **The Run Gatekeeper.** The governed seam and the model catalog
+  (settled above, under the caller's controls) are designed but unbuilt;
+  the build spec with the full surface inventory is
+  [`working/run-gatekeeper-spec.md`](working/run-gatekeeper-spec.md). The
+  known lock trips: `run_halted` joins `ErrorKind`, the `Commission`
+  constructor loses `client=`, `run_one` grows the run's kwargs, and the
+  advisory `CallContext.concurrency` retires. Trigger: fired. Base Coder,
+  the first consumer that needs a budget it can trust, is being built
+  now.
+- **Per-model capacity caps.** A builder-side static spend cap riding
+  with a Commission ("this worker may never exceed $0.01", the capacity
+  half of budgeting), taking the minimum with the caller's grant. Built
+  with the first genuinely tiered workload.
 - **Adapters.** Small wrappers that expose any Commission as a tool to
   external agent systems, MCP first. Built when the first external
   consumer wants one.
@@ -512,9 +580,9 @@ wishes do not belong in the design record.
   real case so far. Any fix softens the fail-fast check, so the shape of
   the softening is not guessed in advance. Built when the first real
   Commission family hurts without it.
-- **Sibling streaming and a tree-wide concurrency cap.** Both
-  consciously deferred, per the trades. Built when a real workload hurts
-  without them.
+- **Sibling streaming.** Consciously deferred, per the trades. Built
+  when a real workload hurts without it. (The tree-wide concurrency cap
+  that used to share this entry is settled into the Gatekeeper.)
 - **The authoring-surface freeze.** The protected helpers and the tool
   namespace stay provisional until enough real consumers have exercised
   them. The freeze, including promoting protected names to public ones,
