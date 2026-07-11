@@ -18,6 +18,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
+    NEVER_CANCELLED,
     CallContext,
     CapabilitySet,
     Commission,
@@ -559,6 +560,91 @@ async def test_dispatch_refuses_a_context_from_outside_the_run() -> None:
     assert result.error is not None
     assert result.error.kind == "internal"
     assert "does not carry the run in progress" in result.error.detail
+
+
+# --- The stop signal ---------------------------------------------------------
+
+
+class _PeeksAtCancel(Commission[_EchoIn, _EchoOut]):
+    """A non-LLM leaf that records what its stop signal says."""
+
+    name: ClassVar[str] = "peeker"
+    description: ClassVar[str] = "Records ctx.cancel.is_cancelled. Test double."
+    input_type: ClassVar[type] = _EchoIn
+    output_type: ClassVar[type] = _EchoOut
+
+    def __init__(self, seen: list[bool]) -> None:
+        super().__init__(max_input_tokens=None)
+        self._seen = seen
+
+    async def _run(self, input: _EchoIn, ctx: CallContext) -> CommissionResult[_EchoOut]:
+        self._seen.append(ctx.cancel.is_cancelled)
+        return self._succeed(
+            _EchoOut(text=input.text), provenance=_prov("peeker"), cost=CostMetrics(estimated_usd=0)
+        )
+
+
+async def test_a_swapped_cancel_token_cannot_sever_the_breaker() -> None:
+    # A coordinator hands its whole subtree a never-cancelled token; the fuse
+    # then trips. Dispatch re-wraps the swapped token with the run breaker,
+    # so even non-LLM work downstream still sees the halt.
+    seen: list[bool] = []
+    peeker = _PeeksAtCancel(seen)
+    child = _Child()
+
+    class _Severer(Commission[_Q, _A]):
+        name: ClassVar[str] = "severer"
+        description: ClassVar[str] = "Swaps in its own cancel token, then keeps working."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            severed = replace(ctx, cancel=NEVER_CANCELLED)
+            first = await dispatch(child, input, severed)  # admitted: call 1 of 1
+            second = await dispatch(child, input, severed)  # refused: trips the fuse
+            assert first.status == "success"
+            assert second.status == "failure"
+            await dispatch(peeker, _EchoIn(text="after the trip"), severed)
+            return self._succeed(
+                _A(answer="kept working"),
+                provenance=_prov("severer"),
+                cost=CostMetrics(estimated_usd=0.0),
+            )
+
+    result = await run_one(
+        _Severer(),
+        _Q(question="?"),
+        models=[_scripted([_conclude(), _conclude()])],
+        max_llm_calls=1,
+    )
+    assert result.status == "success"  # the root concluded; wind-down stands
+    assert seen == [True]
+
+
+async def test_a_scoped_cancel_narrows_one_branch_only() -> None:
+    # The legitimate use the re-wrap preserves: a coordinator cancels one
+    # branch with its own token while the sibling runs untouched.
+    child = _Child()
+
+    class _Scoper(Commission[_Q, _A]):
+        name: ClassVar[str] = "scoper"
+        description: ClassVar[str] = "Cancels one child by scoped token."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            scoped = replace(ctx, cancel=AlwaysCancelled())
+            cancelled = await dispatch(child, input, scoped)
+            alive = await dispatch(child, input, ctx)
+            assert cancelled.status == "failure"
+            assert cancelled.error is not None and cancelled.error.kind == "cancelled"
+            assert alive.status == "success"
+            return self._succeed(
+                _A(answer="scoped"), provenance=_prov("scoper"), cost=CostMetrics(estimated_usd=0)
+            )
+
+    result = await run_one(_Scoper(), _Q(question="?"), models=[_scripted([_conclude()])])
+    assert result.status == "success"
 
 
 # --- The log ------------------------------------------------------------------

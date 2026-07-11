@@ -38,7 +38,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from vibrantine._gatekeeper import current_gatekeeper
+from vibrantine._gatekeeper import RunCancel, current_gatekeeper
 from vibrantine.contract import (
     CallContext,
     Commission,
@@ -122,9 +122,19 @@ async def dispatch[InputT, OutputT](
     parent = _current_run_id.get()
     my_run_id = str(uuid.uuid4())
 
+    # The breaker is unsevarable. A coordinator may hand a child a narrower
+    # caller token via replace() (scoping one branch's cancellation is
+    # legitimate), but the effective signal every node sees always includes
+    # the run breaker: a bare swapped token would cut its subtree off from
+    # fuse trips everywhere but the provider door, so non-LLM work (shell,
+    # fetch, file writes) would keep running after a halt.
+    cancel = ctx.cancel
+    if not isinstance(cancel, RunCancel):
+        cancel = RunCancel(cancel, gatekeeper)
+
     # The Commission body sees its parent's run_id via ctx; it does not see
     # its own (dispatch stamps that onto the result after _run returns).
-    ctx_for_run = replace(ctx, parent_run_id=parent)
+    ctx_for_run = replace(ctx, parent_run_id=parent, cancel=cancel)
 
     # A fresh mailbox for this call; whatever the interior deposits (the LLM
     # loop's transcript, on success or failure) is collected after _run and

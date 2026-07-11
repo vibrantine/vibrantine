@@ -124,6 +124,10 @@ class RunCancel:
     tripped, every existing cancellation checkpoint (the loop's per-iteration
     check, the pre-loop check, the leaf tools) reacts the same way; the
     breaker is not a second mechanism.
+
+    Unsevarable: `dispatch` re-wraps any bare token a coordinator swapped in
+    via replace(), so narrowing one branch's caller cancellation is legal
+    but opting a subtree out of fuse trips is not.
     """
 
     def __init__(self, caller: CancelToken, gatekeeper: "Gatekeeper") -> None:
