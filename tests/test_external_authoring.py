@@ -8,20 +8,20 @@ so the doc fails loudly in CI rather than rotting silently between refreshes.
 import inspect
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import ClassVar
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import (
     CallContext,
     Commission,
     CommissionResult,
+    CostMetrics,
     Provenance,
     invoke_sync,
 )
-from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools import (
     DeleteInput,
     EditInput,
@@ -36,8 +36,6 @@ from vibrantine.tools import (
     ShellInput,
     WriteInput,
 )
-
-_MODEL = FIXTURE_MODEL
 
 
 # --- §1: py.typed ships so a consumer's type-checker sees real types ---
@@ -83,7 +81,7 @@ def test_tool_input_fields_match_the_doc_table() -> None:
     assert "file_path" not in ReadInput.model_fields
 
 
-# --- §1 / §3.4 / §8: an injected client runs the LLM loop with NO key ---
+# --- §1 / §3.4 / §8: a scripted catalog entry runs the LLM loop with NO key ---
 class _AnswerInput(BaseModel):
     prompt: str = Field(description="What to answer.")
 
@@ -103,16 +101,23 @@ class _BasicCommission(Commission[_AnswerInput, _AnswerOutput]):
         return input.prompt
 
 
-def test_injected_client_runs_the_loop_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scripted_catalog_entry_runs_the_loop_without_a_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "42"})])])
-    commission = _BasicCommission(client=cast(AsyncOpenAI, fake), model=_MODEL)
+    commission = _BasicCommission()
 
-    res = invoke_sync(commission, _AnswerInput(prompt="what is the answer?"), budget_usd=0.10)
+    res = invoke_sync(
+        commission,
+        _AnswerInput(prompt="what is the answer?"),
+        models=[scripted_model(fake)],
+        budget_usd=0.10,
+    )
 
     assert res.status == "success"
     assert res.output is not None and res.output.answer == "42"
-    # The supported double satisfies the seam: no real AsyncOpenAI involved.
+    # The supported double satisfies the seam: no real provider involved.
     assert isinstance(fake, ScriptedLLM)
 
 
@@ -149,7 +154,7 @@ def test_override_both_is_allowed() -> None:
                 provenance=Provenance(
                     source=self.name, fetched_at=datetime.now(UTC), confidence="grounded"
                 ),
-                cost=self._cost(0, 0),
+                cost=CostMetrics(estimated_usd=0.0),
             )
 
     res = invoke_sync(_Both(), _AnswerInput(prompt="x"))
@@ -180,7 +185,6 @@ class _CustomSuccess(Commission[_AnswerInput, _AnswerOutput]):
     description: ClassVar[str] = "d"
     input_type: ClassVar[type] = _AnswerInput
     output_type: ClassVar[type] = _AnswerOutput
-    max_input_tokens = None
 
     async def _run(self, input: _AnswerInput, ctx: CallContext) -> CommissionResult[_AnswerOutput]:
         return CommissionResult(
@@ -189,7 +193,7 @@ class _CustomSuccess(Commission[_AnswerInput, _AnswerOutput]):
             provenance=Provenance(
                 source=self.name, fetched_at=datetime.now(UTC), confidence="grounded"
             ),
-            cost=self._cost(0, 0),
+            cost=CostMetrics(estimated_usd=0.0),
         )
 
 
@@ -214,8 +218,8 @@ def test_protected_helper_signatures() -> None:
 
     assert params("_fail") == ["kind", "detail", "retryable", "provenance", "cost"]
     assert params("_emit") == ["ctx", "phase", "detail"]
-    assert params("_cost") == ["in_tokens", "out_tokens"]
-    assert params("_prices") == []
+    # _cost now prices against the run catalog entry the caller resolved.
+    assert params("_cost") == ["in_tokens", "out_tokens", "entry"]
     assert params("fits") == ["estimated_tokens"]
 
 

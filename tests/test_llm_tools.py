@@ -3,10 +3,11 @@
 Covers how `run_llm_loop` translates a Commission's opening message
 (`str | list[ContentPart]`) into the content the provider actually receives,
 how child results are rendered back to the LLM (partial keeps its output),
-and the free-text nudge. A fake AsyncOpenAI-shaped client records each call
-so the messages it was sent can be inspected. The loop requires a live run
-scope, so direct calls take their ctx from the `open_test_run` harness;
-fuses stay off there, keeping the budget tests pure allocation tests.
+and the free-text nudge. A `ScriptedLLM` fake, registered as the run
+catalog's only entry via `scripted_model`, records each call so the
+messages it was sent can be inspected. The loop requires a live run scope,
+so direct calls take their ctx from the `open_test_run` harness; fuses stay
+off there, keeping the budget tests pure allocation tests.
 """
 
 import base64
@@ -21,7 +22,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import run_one
@@ -38,12 +38,28 @@ from vibrantine.contract import (
     TextPart,
 )
 from vibrantine.llm_tools import run_llm_loop
+from vibrantine.models import Model
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 # The `open_test_run` fixture's shape: a factory whose `async with` yields a
 # CallContext inside an open run scope.
 OpenTestRun = Callable[..., AbstractAsyncContextManager[CallContext]]
+
+
+def _models(fake: ScriptedLLM, prices_per_million: tuple[float, float] = (0.0, 0.0)) -> list[Model]:
+    """A one-entry run catalog serving `fake`, priced per million tokens.
+
+    Stands in for the loop's retired `prices_per_million=` kwarg: the loop
+    now takes its prices from the run catalog's entry, so each test
+    registers its fake at the same rates its arithmetic was written
+    against. The single entry is the run default, so loop calls pass
+    `model=None`.
+    """
+    input_usd, output_usd = prices_per_million
+    return [
+        scripted_model(fake, input_usd_per_million=input_usd, output_usd_per_million=output_usd)
+    ]
 
 
 class _Out(BaseModel):
@@ -55,10 +71,9 @@ async def _run(open_test_run: OpenTestRun, user_message: str | list[Any]) -> dic
     fake = ScriptedLLM(
         [llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})], in_tokens=10, out_tokens=5)]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message=user_message,
@@ -66,7 +81,6 @@ async def _run(open_test_run: OpenTestRun, user_message: str | list[Any]) -> dic
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     messages = fake.calls[0]["messages"]
     return next(m for m in messages if m["role"] == "user")
@@ -129,10 +143,9 @@ async def test_unknown_part_fails_structurally_before_any_llm_call(
     # other modality; the run fails as a validation error before the
     # provider is contacted, so nothing is spent.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message=cast("list[ContentPart]", [TextPart(text="hi"), object()]),
@@ -140,7 +153,6 @@ async def test_unknown_part_fails_structurally_before_any_llm_call(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.output is None
     assert outcome.error is not None
@@ -158,10 +170,9 @@ async def test_empty_parts_list_fails_structurally_before_any_llm_call(
     # part gets, so a conditionally-built list that filtered to nothing is
     # named as the authoring error it is.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message=[],
@@ -169,7 +180,6 @@ async def test_empty_parts_list_fails_structurally_before_any_llm_call(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.output is None
     assert outcome.error is not None
@@ -231,10 +241,9 @@ async def test_partial_child_result_renders_output_and_error(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -242,7 +251,6 @@ async def test_partial_child_result_renders_output_and_error(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.output is not None
     second_call_messages = fake.calls[1]["messages"]
@@ -258,10 +266,9 @@ async def test_empty_system_prompt_sends_no_system_message(
     # A promptless Commission (system_prompt None arrives here as "") must
     # not send an empty system message; some providers reject it.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="",
             user_message="go",
@@ -269,7 +276,6 @@ async def test_empty_system_prompt_sends_no_system_message(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     roles = [m["role"] for m in fake.calls[0]["messages"]]
     assert "system" not in roles
@@ -342,10 +348,9 @@ async def test_children_are_dispatched_with_the_remaining_budget(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run(budget_usd=1.0) as ctx:
+    async with open_test_run(budget_usd=1.0, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -353,7 +358,6 @@ async def test_children_are_dispatched_with_the_remaining_budget(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert outcome.error is None
     # Own turn cost: (100 * 10 + 50 * 20) / 1e6 = 0.002.
@@ -382,10 +386,9 @@ async def test_exhausted_grant_starves_later_children_at_zero(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run(budget_usd=0.2) as ctx:
+    async with open_test_run(budget_usd=0.2, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -393,7 +396,6 @@ async def test_exhausted_grant_starves_later_children_at_zero(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert len(probe.seen_budgets) == 2
     assert _close(probe.seen_budgets[0], 0.198)
@@ -413,10 +415,9 @@ async def test_no_budget_passes_none_through_to_children(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -424,7 +425,6 @@ async def test_no_budget_passes_none_through_to_children(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.error is None
     assert probe.seen_budgets == [None]
@@ -458,10 +458,9 @@ async def test_budget_status_line_follows_the_turns_tool_results(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run(budget_usd=1.0) as ctx:
+    async with open_test_run(budget_usd=1.0, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -469,7 +468,6 @@ async def test_budget_status_line_follows_the_turns_tool_results(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert outcome.error is None
     # Own turn cost 0.002 + one probe child 0.25 = 0.252 spent of the 1.0 grant.
@@ -497,10 +495,9 @@ async def test_overspent_grant_reports_zero_remaining_not_negative(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run(budget_usd=0.2) as ctx:
+    async with open_test_run(budget_usd=0.2, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -508,7 +505,6 @@ async def test_overspent_grant_reports_zero_remaining_not_negative(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert outcome.error is not None and outcome.error.kind == "budget_exceeded"
     # The overspend means the pre-turn gate declines a second provider call,
@@ -528,10 +524,9 @@ async def test_unbudgeted_loop_emits_no_budget_line(open_test_run: OpenTestRun) 
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -539,7 +534,6 @@ async def test_unbudgeted_loop_emits_no_budget_line(open_test_run: OpenTestRun) 
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert outcome.error is None
     assert _budget_lines(fake.calls[1]["messages"]) == []
@@ -554,10 +548,9 @@ async def test_preflight_gate_declines_before_the_first_call(
     # The opening message alone prices above the grant: the loop must fail
     # before any provider call, with zero spend.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    async with open_test_run(budget_usd=0.005) as ctx:
+    async with open_test_run(budget_usd=0.005, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             # 4000 chars -> ~1000 tokens -> $0.01 input floor at $10/M.
@@ -566,7 +559,6 @@ async def test_preflight_gate_declines_before_the_first_call(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert fake.calls == []
     assert outcome.error is not None
@@ -593,10 +585,9 @@ async def test_preflight_gate_declines_a_later_turn_after_spend_accumulates(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
         ]
     )
-    async with open_test_run(budget_usd=0.0035) as ctx:
+    async with open_test_run(budget_usd=0.0035, models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             # 400 chars -> ~100 tokens -> $0.001 input floor: under the grant, so
@@ -607,7 +598,6 @@ async def test_preflight_gate_declines_a_later_turn_after_spend_accumulates(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert len(fake.calls) == 1
     assert outcome.error is not None
@@ -620,10 +610,9 @@ async def test_preflight_gate_declines_a_later_turn_after_spend_accumulates(
 async def test_unbudgeted_loop_never_gates_pre_flight(open_test_run: OpenTestRun) -> None:
     # No budget means no estimation and no gate, however large the message.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake, (10.0, 20.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="x" * 400_000,
@@ -631,7 +620,6 @@ async def test_unbudgeted_loop_never_gates_pre_flight(open_test_run: OpenTestRun
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(10.0, 20.0),
         )
     assert outcome.error is None
     assert len(fake.calls) == 1
@@ -649,10 +637,9 @@ async def test_free_text_reply_gets_one_corrective_nudge(
             llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})]),
         ]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -660,7 +647,6 @@ async def test_free_text_reply_gets_one_corrective_nudge(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.error is None
     assert outcome.output is not None and outcome.output.answer == "x"
@@ -683,10 +669,9 @@ async def test_second_free_text_reply_fails_the_loop(open_test_run: OpenTestRun)
             llm_response(content="more prose"),
         ]
     )
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -694,7 +679,6 @@ async def test_second_free_text_reply_fails_the_loop(open_test_run: OpenTestRun)
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
     assert outcome.output is None
     assert outcome.error is not None
@@ -712,10 +696,9 @@ async def test_empty_provider_choices_fail_as_loop_error(open_test_run: OpenTest
         ]
     )
 
-    async with open_test_run() as ctx:
+    async with open_test_run(models=_models(fake)) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="sys",
             user_message="go",
@@ -723,7 +706,6 @@ async def test_empty_provider_choices_fail_as_loop_error(open_test_run: OpenTest
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(0.0, 0.0),
         )
 
     assert outcome.output is None
@@ -747,10 +729,9 @@ async def test_pre_turn_budget_floor_counts_text_parts_only(
     fake = ScriptedLLM(
         [llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})], in_tokens=1, out_tokens=0)]
     )
-    async with open_test_run(budget_usd=10.0) as ctx:
+    async with open_test_run(budget_usd=10.0, models=_models(fake, (1_000_000.0, 0.0))) as ctx:
         outcome = await run_llm_loop(
-            client=cast(AsyncOpenAI, fake),
-            model=FIXTURE_MODEL.id,
+            model=None,
             commission_name="probe",
             system_prompt="",
             user_message=[
@@ -762,7 +743,6 @@ async def test_pre_turn_budget_floor_counts_text_parts_only(
             output_type=_Out,
             ctx=ctx,
             max_iterations=3,
-            prices_per_million=(1_000_000.0, 0.0),
         )
     assert outcome.error is None
     assert len(fake.calls) == 1
@@ -814,10 +794,8 @@ async def test_size_gate_measures_text_only_in_a_parts_list() -> None:
     # estimate at 25,000 tokens; the run reaching the LLM proves the gate
     # measured only the 10 tokens of text.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    commission = _HeavyImageProbe(
-        client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL, max_input_tokens=40
-    )
-    result = await run_one(commission, _PartialIn(query="q"))
+    commission = _HeavyImageProbe(max_input_tokens=40)
+    result = await run_one(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
     assert result.status == "success"
     assert len(fake.calls) == 1
 
@@ -826,10 +804,8 @@ async def test_size_gate_still_rejects_oversized_text_in_a_parts_list() -> None:
     # The control for the test above: the same gate, breached by text alone,
     # still fails the run before the provider is contacted.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    commission = _HeavyTextProbe(
-        client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL, max_input_tokens=40
-    )
-    result = await run_one(commission, _PartialIn(query="q"))
+    commission = _HeavyTextProbe(max_input_tokens=40)
+    result = await run_one(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "validation"
@@ -842,10 +818,11 @@ async def test_invalid_opening_message_failure_still_deposits_trace(tmp_path: Pa
     # persists what existed at the point of failure (the system message).
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
-    commission = _BadPartProbe(client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL)
+    commission = _BadPartProbe()
     result = await run_one(
         commission,
         _PartialIn(query="q"),
+        models=[scripted_model(fake)],
         backend=backend,
         record="always",
     )
@@ -863,10 +840,11 @@ async def test_parts_list_run_completes_and_deposits_transcript(tmp_path: Path) 
     # translated parts exactly as the provider received them.
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "seen"})])])
-    commission = _DescribeProbe(client=cast(AsyncOpenAI, fake), model=FIXTURE_MODEL)
+    commission = _DescribeProbe()
     result = await run_one(
         commission,
         _PartialIn(query="what is this?"),
+        models=[scripted_model(fake)],
         backend=backend,
         record="always",
     )

@@ -3,8 +3,10 @@
 Pins the invariants the budget machinery leans on (every entry well-formed,
 the system default registered *with* real pricing; see
 `Commission._budget_unenforceable_failure`) plus the multi-provider menu:
-a `Model` bundles identity + endpoint + facts, `resolve` turns a spec into a
-`Model`, and unpriced (`None`) is distinct from free (`0.0`).
+a `Model` bundles identity + endpoint + facts, and unpriced (`None`) is
+distinct from free (`0.0`). Run-catalog resolution (unknown names fail
+fast, the empty catalog auto-registers the default) is exercised in
+`test_gatekeeper.py`, where the catalog lives.
 """
 
 from vibrantine.models import (
@@ -14,7 +16,6 @@ from vibrantine.models import (
     Model,
     ollama,
     openai_compatible,
-    resolve,
 )
 
 
@@ -79,28 +80,6 @@ def test_unpriced_is_distinct_from_free() -> None:
     free = ollama("phi3")
     assert not unpriced.is_priced
     assert free.is_priced
-
-
-def test_resolve_unknown_id_yields_unpriced_openrouter_model() -> None:
-    model = resolve("some/unknown-model")
-    assert isinstance(model, Model)
-    assert model.id == "some/unknown-model"
-    assert model.base_url == OPENROUTER_BASE_URL
-    assert model.context_window is None
-    assert not model.is_priced
-
-
-def test_resolve_known_id_yields_registered_model() -> None:
-    assert resolve(DEFAULT_MODEL) is KNOWN_MODELS[DEFAULT_MODEL]
-
-
-def test_resolve_none_yields_default_model() -> None:
-    assert resolve(None) is KNOWN_MODELS[DEFAULT_MODEL]
-
-
-def test_resolve_model_is_identity() -> None:
-    spec = ollama("mistral", context_window=32_000)
-    assert resolve(spec) is spec
 
 
 def test_openai_compatible_builds_from_name_and_address() -> None:

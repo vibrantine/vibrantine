@@ -20,7 +20,7 @@ is not part of any supported surface; it is a consumer that exercises:
 """
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -31,10 +31,6 @@ from vibrantine.contract import (
     CostMetrics,
     Provenance,
 )
-from vibrantine.models import Model
-
-if TYPE_CHECKING:
-    from openai import AsyncOpenAI
 
 _SYSTEM_PROMPT = (
     "You handle one incoming email. Decide exactly one route:\n"
@@ -237,15 +233,13 @@ class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
         *,
         draft: DraftReplyCommission | None = None,
         notify: NotifyUserTool | None = None,
-        client: "AsyncOpenAI | None" = None,
-        model: str | Model | None = None,
+        model: str | None = None,
     ) -> None:
-        # client/model forwarded to the base so the default loop is injectable
-        # for DI and tests (the constructor-injection convention; see
-        # docs/authoring.md, Step 4: The Toolbox).
+        # model forwarded to the base so the default loop's catalog choice is
+        # injectable for DI and tests (the constructor-injection convention;
+        # see docs/authoring.md, Step 4: The Toolbox).
         super().__init__(
             toolbox=(draft or DraftReplyCommission(), notify or NotifyUserTool()),
-            client=client,
             model=model,
         )
 

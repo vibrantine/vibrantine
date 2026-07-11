@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import ClassVar, cast
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
@@ -33,7 +32,7 @@ from vibrantine.contract import (
 )
 from vibrantine.dispatch import dispatch
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 # The `open_test_run` fixture's shape: a factory whose `async with` yields a
 # CallContext inside an open run scope.
@@ -664,10 +663,10 @@ async def test_run_emits_stdlib_logs(
     # zero vibrantine-specific setup. INFO = one line per LLM round-trip
     # (from the loop) plus one line per completed call (from dispatch).
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"a": "done"})])])
-    probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
+    probe = _LoopProbe()
 
     with caplog.at_level(logging.INFO, logger="vibrantine"):
-        async with open_test_run() as ctx:
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
             await dispatch(probe, _Input(q="hi"), ctx)
 
     assert "LLM turn model=" in caplog.text
@@ -685,10 +684,10 @@ async def test_conclude_validation_failure_logs_a_warning(
             llm_response(tool_calls=[("c2", "conclude", {"a": "ok"})]),
         ]
     )
-    probe = _LoopProbe(client=cast(AsyncOpenAI, fake))
+    probe = _LoopProbe()
 
     with caplog.at_level(logging.WARNING, logger="vibrantine"):
-        async with open_test_run() as ctx:
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
             result = await dispatch(probe, _Input(q="hi"), ctx)
 
     assert result.status == "success"
@@ -714,9 +713,9 @@ class _LoopProbe(Commission[_Input, _Output]):
 async def test_loop_trace_lands_in_the_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"a": "done"})])])
-    probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="always")
+    probe = _LoopProbe(persistence_mode="always")
 
-    async with open_test_run(backend=backend) as ctx:
+    async with open_test_run(backend=backend, models=[scripted_model(fake)]) as ctx:
         result = await dispatch(probe, _Input(q="hello"), ctx)
 
     assert result.run_id is not None
@@ -735,9 +734,9 @@ async def test_loop_trace_survives_a_failed_run(tmp_path: Path, open_test_run: O
     # corrective nudge) must still reach the record.
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(content="prose"), llm_response(content="more prose")])
-    probe = _LoopProbe(client=cast(AsyncOpenAI, fake), persistence_mode="on_failure")
+    probe = _LoopProbe(persistence_mode="on_failure")
 
-    async with open_test_run(backend=backend) as ctx:
+    async with open_test_run(backend=backend, models=[scripted_model(fake)]) as ctx:
         result = await dispatch(probe, _Input(q="hi"), ctx)
 
     assert result.status == "failure"
@@ -759,7 +758,7 @@ async def test_nested_traces_stay_with_their_own_records(
     # the child call, so nothing merges or crosses.
     backend = FilesystemBackend(tmp_path)
     child_fake = ScriptedLLM([llm_response(tool_calls=[("cc", "conclude", {"a": "child-done"})])])
-    child = _LoopProbe(client=cast(AsyncOpenAI, child_fake), persistence_mode="always")
+    child = _LoopProbe(model="fixture/child", persistence_mode="always")
     parent_fake = ScriptedLLM(
         [
             llm_response(tool_calls=[("p1", "loop_probe", {"q": "child-q"})]),
@@ -767,12 +766,19 @@ async def test_nested_traces_stay_with_their_own_records(
         ]
     )
     parent = _LoopProbe(
-        client=cast(AsyncOpenAI, parent_fake),
+        model="fixture/parent",
         toolbox=(child,),
         persistence_mode="always",
     )
 
-    async with open_test_run(backend=backend) as ctx:
+    async with open_test_run(
+        backend=backend,
+        models=[
+            scripted_model(parent_fake, id="fixture/parent"),
+            scripted_model(child_fake, id="fixture/child"),
+        ],
+        default_model="fixture/parent",
+    ) as ctx:
         result = await dispatch(parent, _Input(q="parent-q"), ctx)
 
     assert result.status == "success", result.error

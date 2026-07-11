@@ -1,16 +1,13 @@
 """Tests for the EmailHandler Commission (provisional route-and-execute validator).
 
 EmailHandler rides the default _run (the LLM loop) over a sub-Commission
-(DraftReply) and a tool (NotifyUser). Tests inject a fake AsyncOpenAI-shaped
-client returning scripted tool calls, with the real stub handlers, so routing,
-dispatched-child cost rollup, and the heterogeneous-output flattening are all
-exercised end-to-end.
+(DraftReply) and a tool (NotifyUser). Tests register a ScriptedLLM fake as
+the run's model catalog entry (`scripted_model`), with the real stub
+handlers, so routing, dispatched-child cost rollup, and the
+heterogeneous-output flattening are all exercised end-to-end.
 """
 
 from types import SimpleNamespace
-from typing import cast
-
-from openai import AsyncOpenAI
 
 from vibrantine import run_one
 from vibrantine.examples.email_handler import (
@@ -18,8 +15,7 @@ from vibrantine.examples.email_handler import (
     EmailHandlerInput,
     IncomingEmail,
 )
-from vibrantine.models import Model
-from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 _EMAIL_ARGS = {"sender": "a@b.test", "subject": "Quick question", "body": "Body text."}
 
@@ -30,11 +26,9 @@ def _input() -> EmailHandlerInput:
 
 def _commission(
     responses: list[SimpleNamespace],
-    *,
-    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[EmailHandlerCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
-    commission = EmailHandlerCommission(client=cast(AsyncOpenAI, fake), model=model)
+    commission = EmailHandlerCommission()
     return commission, fake
 
 
@@ -49,7 +43,7 @@ async def test_email_handler_non_urgent_concludes_directly() -> None:
         ]
     )
 
-    result = await run_one(commission, _input())
+    result = await run_one(commission, _input(), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -61,8 +55,9 @@ async def test_email_handler_non_urgent_concludes_directly() -> None:
 
 
 async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
-    # Unpriced model → own cost is $0, isolating the dispatched DraftReply's
-    # cost so the rollup is the only thing the assertion can be measuring.
+    # Unpriced catalog entry → own cost is $0, isolating the dispatched
+    # DraftReply's cost so the rollup is the only thing the assertion can be
+    # measuring.
     commission, fake = _commission(
         [
             llm_response(tool_calls=[("c1", "draft_reply", {"email": _EMAIL_ARGS})]),
@@ -80,10 +75,13 @@ async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
                 ]
             ),
         ],
-        model="unregistered/model",
     )
 
-    result = await run_one(commission, _input())
+    result = await run_one(
+        commission,
+        _input(),
+        models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
+    )
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -119,7 +117,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
         ]
     )
 
-    result = await run_one(commission, _input())
+    result = await run_one(commission, _input(), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -132,7 +130,9 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
 async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await run_one(commission, _input(), cancel=AlwaysCancelled())
+    result = await run_one(
+        commission, _input(), models=[scripted_model(fake)], cancel=AlwaysCancelled()
+    )
 
     assert result.status == "failure"
     assert result.error is not None

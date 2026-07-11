@@ -9,14 +9,12 @@ and nothing is spent until the Commission actually runs.
 """
 
 import json
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import CallContext, Commission, create_commission, run_one
-from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools import ReadTool
 
 
@@ -33,14 +31,12 @@ class RecipeOutput(BaseModel):
 
 
 def _commission(
-    responses: list[SimpleNamespace] | None = None,
     *,
     name: str = "recipe_writer",
     description: str = "Writes a recipe for a named dish.",
     toolbox: "tuple[Commission[Any, Any], ...]" = (),
     system_prompt: str | None = None,
 ) -> Commission[RecipeInput, RecipeOutput]:
-    fake = ScriptedLLM(responses or [])
     return create_commission(
         name=name,
         description=description,
@@ -48,17 +44,16 @@ def _commission(
         output=RecipeOutput,
         toolbox=toolbox,
         system_prompt=system_prompt,
-        model=FIXTURE_MODEL,
-        client=cast(AsyncOpenAI, fake),
     )
 
 
 async def test_factory_commission_runs_the_default_loop() -> None:
-    commission = _commission(
+    fake = ScriptedLLM(
         [llm_response(tool_calls=[("c1", "conclude", {"recipe": "Simmer the tomatoes."})])]
     )
+    commission = _commission()
 
-    result = await run_one(commission, RecipeInput(dish="shakshuka"))
+    result = await run_one(commission, RecipeInput(dish="shakshuka"), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert result.output is not None

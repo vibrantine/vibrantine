@@ -1,9 +1,6 @@
 """The demo agent: construction, transcript rendering, and scripted loop runs."""
 
 from pathlib import Path
-from typing import cast
-
-from openai import AsyncOpenAI
 
 from vibrantine import run_one
 from vibrantine.contract import CallContext
@@ -15,7 +12,7 @@ from vibrantine.examples.demo.agent import (
     demo_agent,
 )
 from vibrantine.examples.demo.trace import RecordingBackend, render_trace
-from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 
 def test_demo_agent_toolbox_holds_the_four_examples() -> None:
@@ -39,9 +36,9 @@ def test_build_user_message_renders_transcript_then_message() -> None:
 
 async def test_chat_turn_concludes_with_reply() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"reply": "hello there"})])])
-    agent = DemoAgentCommission(toolbox=(), model=FIXTURE_MODEL, client=cast(AsyncOpenAI, fake))
+    agent = DemoAgentCommission(toolbox=())
 
-    result = await run_one(agent, ChatInput(message="hi"))
+    result = await run_one(agent, ChatInput(message="hi"), models=[scripted_model(fake)])
 
     assert result.status == "success"
     assert result.output is not None and result.output.reply == "hello there"
@@ -54,7 +51,7 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
     ask_fake = ScriptedLLM(
         [llm_response(tool_calls=[("a1", "conclude", {"answer": "It says the demo works."})])]
     )
-    ask = AskCommission(model=FIXTURE_MODEL, client=cast(AsyncOpenAI, ask_fake))
+    ask = AskCommission(model="fixture/ask")
     agent_fake = ScriptedLLM(
         [
             llm_response(
@@ -67,16 +64,17 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
             ),
         ]
     )
-    agent = DemoAgentCommission(
-        toolbox=(ask,),
-        model=FIXTURE_MODEL,
-        client=cast(AsyncOpenAI, agent_fake),
-    )
+    agent = DemoAgentCommission(toolbox=(ask,), model="fixture/agent")
     backend = RecordingBackend()
 
     result = await run_one(
         agent,
         ChatInput(message="check the file"),
+        models=[
+            scripted_model(agent_fake, id="fixture/agent"),
+            scripted_model(ask_fake, id="fixture/ask"),
+        ],
+        default_model="fixture/agent",
         backend=backend,
         record="always",
     )

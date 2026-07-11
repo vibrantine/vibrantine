@@ -32,6 +32,7 @@ from vibrantine.contract import (
 )
 from vibrantine.models import ollama
 from vibrantine.orchestrator import run_one
+from vibrantine.testing import ScriptedLLM, scripted_model
 
 
 def test_error_kind_literals_match_documented_ssot() -> None:
@@ -237,11 +238,31 @@ def test_build_user_message_default_raises_not_implemented() -> None:
         _PolicyProbe().build_user_message(_PolicyProbeInput(), CallContext())
 
 
-def test_default_model_resolves_the_size_gate() -> None:
-    # No model kwarg → the system default (models.DEFAULT_MODEL); its context
-    # window auto-resolves max_input_tokens, the size-gate ceiling. Observing
-    # the resolved gate confirms the default model flowed through.
-    assert _BasicProbe().max_input_tokens == 1_048_576
+class _LongWindedProbe(_BasicProbe):
+    """Opening message far above a tiny context window's size gate."""
+
+    def build_user_message(self, input: _PolicyProbeInput, ctx: CallContext) -> str:
+        return "x" * 400  # estimates to ~100 tokens (len // 4)
+
+
+async def test_run_catalog_entry_resolves_the_size_gate() -> None:
+    # max_input_tokens left unset resolves at run time from the run catalog
+    # entry's context window (it is no longer fixed at construction). A tiny
+    # window (40 tokens * 0.75 target fraction = 30) must reject the
+    # ~100-token opening message before any LLM call.
+    fake = ScriptedLLM([])
+
+    result = await run_one(
+        _LongWindedProbe(),
+        _PolicyProbeInput(),
+        models=[scripted_model(fake, context_window=40)],
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert "size gate" in result.error.detail
+    assert len(fake.calls) == 0
 
 
 def test_explicit_none_disables_the_size_gate() -> None:
@@ -272,8 +293,9 @@ async def test_missing_key_fails_fast_with_the_env_var_named(
 ) -> None:
     # A keyed endpoint whose key is absent must fail before any network call,
     # naming the env var, instead of surfacing as a raw provider 401 mid-run.
-    # The raise crosses _run, so dispatch's backstop delivers it as a
-    # failure value through the front door.
+    # The raise happens in the run's client vending at the first provider
+    # call; it crosses _run, so dispatch's backstop delivers it as a failure
+    # value through the front door.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     result = await run_one(_BasicProbe(), _PolicyProbeInput())
 
@@ -288,11 +310,22 @@ def test_keyless_model_builds_a_client_without_any_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # api_key_env=None means the endpoint needs no key (local Ollama), so the
-    # missing-key check must never block it. The subject here is the interior
-    # client-building seam itself, hence the direct property access.
+    # missing-key check must never block it. The subject here is the run's
+    # client-vending seam itself, hence the direct Gatekeeper access.
+    from vibrantine._gatekeeper import Gatekeeper, build_catalog
+
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    probe = _BasicProbe(model=ollama("llama3"))
-    assert probe._resolved_client is not None  # pyright: ignore[reportPrivateUsage]
+    catalog, default = build_catalog([ollama("llama3")], None)
+    gk = Gatekeeper(
+        catalog=catalog,
+        default_model=default,
+        max_llm_calls=None,
+        time_limit_seconds=None,
+        spend_limit_usd=None,
+        concurrency=16,
+    )
+
+    assert gk.client_for(gk.resolve_model("llama3")) is not None
 
 
 def test_class_level_toolbox_is_the_default() -> None:

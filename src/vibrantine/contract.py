@@ -7,7 +7,6 @@ and trust level of the data it produces (`Provenance`, `Claim`), the cost
 it incurred (`CostMetrics`), and its failure modes (`ErrorState`).
 """
 
-import os
 from abc import ABC
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,11 +27,9 @@ from typing import (
 
 from pydantic import BaseModel, Field
 
-from vibrantine.models import Model, resolve
+from vibrantine.models import Model, UnknownModelError
 
 if TYPE_CHECKING:
-    from openai import AsyncOpenAI
-
     from vibrantine._gatekeeper import Gatekeeper
 
 
@@ -482,8 +479,7 @@ class Commission[InputT, OutputT](ABC):
     def __init__(
         self,
         *,
-        model: str | Model | None = None,
-        client: "AsyncOpenAI | None" = None,
+        model: str | None = None,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
         toolbox: "tuple[Commission[Any, Any], ...] | _Unset" = _UNSET,
         max_input_tokens: int | None | _Unset = _UNSET,
@@ -496,28 +492,20 @@ class Commission[InputT, OutputT](ABC):
         # unset, the class-level declaration stands.
         if not isinstance(toolbox, _Unset):
             self.toolbox = toolbox
-        # Model for the default loop's LLM, resolved to a `Model` (identity +
-        # endpoint + facts). A bare string or `model=None` resolves through
-        # `models.resolve` (None → the system default seam, models.DEFAULT_MODEL);
-        # a `Model` is taken as-is, enabling local/multi-provider targets. Keep
-        # `self._model` as the id string so every id-string site is untouched.
-        # Non-LLM Commissions (tools, coordinators) inherit this inertly; they
-        # override `_run` and never consult it.
-        self._model_spec: Model = resolve(model)
-        self._model = self._model_spec.id
+        # The model *choice*: a pure name, looked up in the run's catalog
+        # when the loop runs (None = the run default). Model objects (identity
+        # + endpoint + facts) live in the catalog, defined once at run_one;
+        # an unknown name fails fast there. The choice stays distributed:
+        # each Commission carries which entry it uses, never the entry.
+        # Non-LLM Commissions (tools, coordinators) inherit this inertly;
+        # they override `_run` and never consult it.
+        self._model = model
         self._max_iterations = max_iterations
-        # Built lazily by `_resolved_client` on first use; stays None for
-        # Commissions that never run the default loop, so tools/coordinators
-        # never construct a client.
-        self._client = client
-        # Size gate: unset auto-resolves from the model's context window; an
-        # explicit None disables the gate entirely (the standard tool shape:
-        # no LLM, no gate); an int pins it (the conservative path for unknown
-        # models). None and unset must stay distinct, hence the sentinel.
-        if isinstance(max_input_tokens, _Unset):
-            self.max_input_tokens = self._model_spec.context_window
-        else:
-            self.max_input_tokens = max_input_tokens
+        # Size gate setting: unset resolves at run time from the catalog
+        # entry's context window; an explicit None disables the gate entirely
+        # (the standard tool shape: no LLM, no gate); an int pins it. None
+        # and unset must stay distinct, hence the sentinel.
+        self._max_input_tokens_setting: int | None | _Unset = max_input_tokens
         self.target_input_fraction = target_input_fraction
         if not isinstance(persistence_mode, _Unset):
             self.persistence_mode = persistence_mode
@@ -525,6 +513,18 @@ class Commission[InputT, OutputT](ABC):
             self.max_output_tokens = max_output_tokens
         if not isinstance(overflow_policy, _Unset):
             self.overflow_policy = overflow_policy
+
+    @property
+    def max_input_tokens(self) -> int | None:
+        """The explicit size-gate cap; None when disabled or run-resolved.
+
+        A cap left unset at construction resolves at run time from the run
+        catalog entry's context window (which this property cannot see), so
+        None here means either "explicitly no gate" or "resolved per run".
+        """
+        if isinstance(self._max_input_tokens_setting, _Unset):
+            return None
+        return self._max_input_tokens_setting
 
     def build_user_message(
         self,
@@ -578,12 +578,35 @@ class Commission[InputT, OutputT](ABC):
         # cycle. After first call it's a cached sys.modules lookup.
         from vibrantine.llm_tools import run_llm_loop
 
+        zero_cost = CostMetrics(estimated_usd=0.0)
+
+        # Resolve the model choice against the run's catalog before anything
+        # else: an unknown name is an immediate, loud authoring error, and
+        # everything below (provenance, pricing, the size gate) hangs off
+        # the entry. dispatch refuses a context without a run, so the
+        # Gatekeeper is always present here.
+        gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+        assert gatekeeper is not None, "the default loop runs inside a run"
+        try:
+            entry = gatekeeper.resolve_model(self._model)
+        except UnknownModelError as exc:
+            return self._fail(
+                "validation",
+                str(exc),
+                retryable=False,
+                provenance=Provenance(
+                    source=f"{self.name}:{self._model}",
+                    fetched_at=datetime.now(UTC),
+                    confidence="grounded",
+                ),
+                cost=zero_cost,
+            )
+
         provenance = Provenance(
-            source=f"{self.name}:{self._model}",
+            source=f"{self.name}:{entry.id}",
             fetched_at=datetime.now(UTC),
             confidence="grounded",
         )
-        zero_cost = CostMetrics(estimated_usd=0.0)
 
         if ctx.cancel.is_cancelled:
             return self._fail(
@@ -594,7 +617,7 @@ class Commission[InputT, OutputT](ABC):
                 cost=zero_cost,
             )
 
-        budget_failure = self._budget_unenforceable_failure(ctx, provenance)
+        budget_failure = self._budget_unenforceable_failure(ctx, provenance, entry)
         if budget_failure is not None:
             return budget_failure
 
@@ -602,11 +625,11 @@ class Commission[InputT, OutputT](ABC):
         user_message = self.build_user_message(input, ctx)
 
         estimated = estimate_tokens(system_prompt + _message_text(user_message))
-        if not self.fits(estimated):
+        if not self._fits_cap(estimated, self._effective_input_cap(entry)):
             return self._fail(
                 "validation",
                 f"Estimated input of {estimated} tokens exceeds the size gate "
-                f"for model {self._model}.",
+                f"for model {entry.id}.",
                 retryable=False,
                 provenance=provenance,
                 cost=zero_cost,
@@ -614,7 +637,6 @@ class Commission[InputT, OutputT](ABC):
 
         self._emit(ctx, "loop_start")
         outcome = await run_llm_loop(
-            client=self._resolved_client,
             model=self._model,
             commission_name=self.name,
             system_prompt=system_prompt,
@@ -623,10 +645,9 @@ class Commission[InputT, OutputT](ABC):
             output_type=self.output_type,
             ctx=ctx,
             max_iterations=self._max_iterations,
-            prices_per_million=self._prices(),
         )
 
-        own_cost = self._cost(outcome.in_tokens, outcome.out_tokens)
+        own_cost = self._cost(outcome.in_tokens, outcome.out_tokens, entry)
         # Roll dispatched children's cost into this call's cost, so the
         # "costs roll up structurally" invariant holds on the LLM-loop path
         # (not just for hand-summing Python coordinators). Token counts stay
@@ -647,53 +668,15 @@ class Commission[InputT, OutputT](ABC):
         assert outcome.output is not None
         return self._succeed(cast(OutputT, outcome.output), provenance=provenance, cost=cost)
 
-    @property
-    def _resolved_client(self) -> "AsyncOpenAI":
-        """The OpenAI-compatible client for the default loop, built on first use.
+    def _cost(self, in_tokens: int, out_tokens: int, entry: Model) -> CostMetrics:
+        """Token counts priced against a run catalog entry, as CostMetrics.
 
-        The endpoint (base URL + API-key env var) travels with the resolved
-        `Model`, so this transparently targets OpenRouter or a local provider.
-        A keyed endpoint whose key is absent fails here, before any network
-        call or spend, with the env var named; letting it through would
-        surface as a raw provider 401 mid-run, pointing at nothing. A keyless
-        endpoint (`api_key_env=None`, e.g. local Ollama) never blocks. The
-        raise crosses `_run`, so dispatch's backstop returns it as a failure
-        value like any other Commission error.
+        An unpriced entry prices at $0 (callers gate on `entry.is_priced`
+        before trusting that for budgeting; see
+        `_budget_unenforceable_failure`).
         """
-        if self._client is None:
-            key_env = self._model_spec.api_key_env
-            # A keyless endpoint ignores the key, but the OpenAI client
-            # refuses a falsy one, so send a non-empty placeholder.
-            api_key = "unused" if key_env is None else os.environ.get(key_env, "")
-            if not api_key:
-                raise RuntimeError(
-                    f"No API key: environment variable {key_env!r} is not set "
-                    f"(model {self._model!r} at {self._model_spec.base_url}). "
-                    f"Set it, pass client= at construction, or use a keyless "
-                    f"Model (api_key_env=None)."
-                )
-            from openai import AsyncOpenAI
-
-            self._client = AsyncOpenAI(
-                base_url=self._model_spec.base_url,
-                api_key=api_key,
-            )
-        return self._client
-
-    def _prices(self) -> tuple[float, float]:
-        """Input/output USD per million tokens; (0.0, 0.0) for unpriced models.
-
-        Callers gate on `self._model_spec.is_priced` before trusting these for
-        budgeting; an unpriced model returns zeros here but can't be budgeted.
-        """
-        in_price = self._model_spec.input_usd_per_million
-        out_price = self._model_spec.output_usd_per_million
-        if in_price is None or out_price is None:
-            return (0.0, 0.0)
-        return (in_price, out_price)
-
-    def _cost(self, in_tokens: int, out_tokens: int) -> CostMetrics:
-        in_price, out_price = self._prices()
+        in_price = entry.input_usd_per_million or 0.0
+        out_price = entry.output_usd_per_million or 0.0
         usd = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
         return CostMetrics(estimated_usd=usd, in_tokens=in_tokens, out_tokens=out_tokens)
 
@@ -747,30 +730,30 @@ class Commission[InputT, OutputT](ABC):
         self,
         ctx: CallContext,
         provenance: Provenance,
+        entry: Model,
     ) -> CommissionResult[OutputT] | None:
         """Refuse when a budget is set but the model can't be priced.
 
         `budget_usd` is the caller's spending bound (enforced per turn, so
         true spend can overshoot by up to about one turn's cost per tree
-        level), and the framework can only enforce it if the model carries
-        pricing (`self._model_spec.is_priced`). An unpriced
-        model prices at $0, which would make the budget silently unenforced, so
-        rather than run with a budget it can't keep, the call fails fast here.
-        A *free* model (priced at $0.0, e.g. local Ollama) is priced and passes.
-        Returns None when enforcement is possible (a priced model, or no budget
-        set), so a budget-checking `_run` calls this once up front and
-        proceeds on None.
+        level), and the framework can only enforce it if the run catalog
+        entry carries pricing (`entry.is_priced`). An unpriced model prices
+        at $0, which would make the budget silently unenforced, so rather
+        than run with a budget it can't keep, the call fails fast here. A
+        *free* model (priced at $0.0, e.g. local Ollama) is priced and
+        passes. Returns None when enforcement is possible (a priced model,
+        or no budget set), so a budget-checking `_run` calls this once up
+        front and proceeds on None.
         """
-        if ctx.budget_usd is None or self._model_spec.is_priced:
+        if ctx.budget_usd is None or entry.is_priced:
             return None
         return self._fail(
             "validation",
-            f"budget_usd was set but model {self._model!r} is unpriced (not "
-            f"built with pricing and not in KNOWN_MODELS), so its cost can't "
-            f"be tracked and the budget can't be enforced. Pass a Model that "
-            f"carries prices (openai_compatible(...) with USD rates, or "
-            f"ollama() for a free local model), register the id in "
-            f"models.KNOWN_MODELS, or invoke without a budget.",
+            f"budget_usd was set but model {entry.id!r} is unpriced, so its "
+            f"cost can't be tracked and the budget can't be enforced. "
+            f"Register the model with USD rates in run_one(models=...) "
+            f"(openai_compatible(...) with prices, or ollama() for a free "
+            f"local model), or invoke without a budget.",
             retryable=False,
             provenance=provenance,
             cost=CostMetrics(estimated_usd=0.0),
@@ -782,7 +765,27 @@ class Commission[InputT, OutputT](ABC):
             ctx.on_progress(ProgressEvent(commission_name=self.name, phase=phase, detail=detail))
 
     def fits(self, estimated_tokens: int) -> bool:
-        """Whether an input of the given token count would pass the size gate."""
-        if self.max_input_tokens is None:
+        """Whether an input of the given token count would pass the size gate.
+
+        Judged against the explicit constructor cap only. A cap left unset
+        resolves at run time from the run catalog entry's context window,
+        which this method cannot see; the default loop (and any custom
+        `_run` mirroring it) checks `_fits_cap(_effective_input_cap(entry))`
+        instead.
+        """
+        return self._fits_cap(estimated_tokens, self.max_input_tokens)
+
+    def _effective_input_cap(self, entry: Model) -> int | None:
+        """The size-gate cap for a run against `entry`.
+
+        The explicit constructor setting wins (including None, no gate);
+        unset takes the entry's context window.
+        """
+        if isinstance(self._max_input_tokens_setting, _Unset):
+            return entry.context_window
+        return self._max_input_tokens_setting
+
+    def _fits_cap(self, estimated_tokens: int, cap: int | None) -> bool:
+        if cap is None:
             return True
-        return estimated_tokens <= self.max_input_tokens * self.target_input_fraction
+        return estimated_tokens <= cap * self.target_input_fraction

@@ -87,7 +87,6 @@ def test_commission_constructor_surface_is_locked() -> None:
     assert params == [
         "self",
         "model",
-        "client",
         "max_iterations",
         "toolbox",
         "max_input_tokens",

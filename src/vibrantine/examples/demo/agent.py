@@ -13,7 +13,6 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import CallContext, Commission
-from vibrantine.models import Model
 
 _SYSTEM_PROMPT = (
     "You are the interactive front door of the Vibrantine demo. Vibrantine "
@@ -93,7 +92,7 @@ class DemoAgentCommission(Commission[ChatInput, ChatOutput]):
         return "\n".join(lines)
 
 
-def demo_agent(model: str | Model | None = None) -> DemoAgentCommission:
+def demo_agent(model: str | None = None) -> DemoAgentCommission:
     """Build the agent over demo-configured instances of the four examples."""
     from vibrantine.examples.demo.catalog import (
         make_ask,

@@ -4,19 +4,18 @@ The recursive research agent is the concrete consumer that forces structural
 cost rollup on the LLM-loop path: a tree of LLM-loop nodes must report the
 summed cost of the whole subtree, and must enforce the budget against it.
 
-Tests inject one scripted LLM client across every depth, so a single
-scripted response queue is consumed in depth-first dispatch order. No network
-and no fetches are exercised; `conclude` is always available, so leaves
-conclude directly.
+Most tests register one scripted model as the run catalog's single entry (so
+it is the run default at every depth), and a single scripted response queue
+is consumed in depth-first dispatch order. No network and no fetches are
+exercised; `conclude` is always available, so leaves conclude directly.
 """
 
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from openai import AsyncOpenAI
 
 from vibrantine import run_one
 from vibrantine.contract import estimate_tokens
@@ -27,9 +26,9 @@ from vibrantine.examples.recursive_research import (
 )
 from vibrantine.examples.recursive_research.types import ResearchClaim, ResearchOutput
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import FIXTURE_MODEL, ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
-# One LLM turn at the fixture model:
+# One LLM turn at the fixture pricing:
 # (100 in * $0.50 + 50 out * $3.00) / 1M.
 CALL_COST = (100 * 0.50 + 50 * 3.00) / 1_000_000
 
@@ -40,11 +39,7 @@ def _agent(
     max_depth: int,
 ) -> tuple[RecursiveResearchCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
-    agent = RecursiveResearchCommission(
-        max_depth=max_depth,
-        client=cast(AsyncOpenAI, fake),
-        model=FIXTURE_MODEL,
-    )
+    agent = RecursiveResearchCommission(max_depth=max_depth)
     return agent, fake
 
 
@@ -93,7 +88,7 @@ async def test_rolls_up_child_cost_across_depth() -> None:
         max_depth=2,
     )
 
-    result = await run_one(agent, ResearchInput(question="q1"))
+    result = await run_one(agent, ResearchInput(question="q1"), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert len(fake.calls) == 5
@@ -103,50 +98,60 @@ async def test_rolls_up_child_cost_across_depth() -> None:
 
 async def test_model_menu_seats_reach_their_levels() -> None:
     # Three turns in depth-first order: root delegates, child concludes,
-    # root concludes. The shared fake records model= per turn, so the seat
-    # assignment is observable: calls 0 and 2 are the root (researcher
-    # seat), call 1 is the delegated child (subresearcher seat).
-    fake = ScriptedLLM(
+    # root concludes. Each seat name is a distinct catalog entry carrying
+    # its own fake, so the seat assignment is observable twice over: which
+    # fake served each turn, and the model= name each request carried.
+    root_fake = ScriptedLLM(
         [
             llm_response(tool_calls=_delegate("r1", "sub")),
-            llm_response(tool_calls=_conclude("c1")),
             llm_response(tool_calls=_conclude("r2")),
         ]
     )
+    leaf_fake = ScriptedLLM([llm_response(tool_calls=_conclude("c1"))])
     menu = RecursiveResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
-    agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+    agent = RecursiveResearchCommission(max_depth=1, models=menu)
 
-    result = await run_one(agent, ResearchInput(question="q"))
+    result = await run_one(
+        agent,
+        ResearchInput(question="q"),
+        models=[
+            scripted_model(root_fake, id="root-model"),
+            scripted_model(leaf_fake, id="leaf-model"),
+        ],
+        default_model="root-model",
+    )
 
     assert result.status == "success", result.error
-    assert [c["model"] for c in fake.calls] == [
-        "root-model",
-        "leaf-model",
-        "root-model",
-    ]
+    assert [c["model"] for c in root_fake.calls] == ["root-model", "root-model"]
+    assert [c["model"] for c in leaf_fake.calls] == ["leaf-model"]
 
 
 async def test_model_menu_default_fills_unnamed_seats() -> None:
     # Only the researcher seat is named; the delegated level falls back to
     # the menu default.
-    fake = ScriptedLLM(
+    root_fake = ScriptedLLM(
         [
             llm_response(tool_calls=_delegate("r1", "sub")),
-            llm_response(tool_calls=_conclude("c1")),
             llm_response(tool_calls=_conclude("r2")),
         ]
     )
+    default_fake = ScriptedLLM([llm_response(tool_calls=_conclude("c1"))])
     menu = RecursiveResearchModelMenu(default="menu-default", researcher="root-model")
-    agent = RecursiveResearchCommission(max_depth=1, client=cast(AsyncOpenAI, fake), models=menu)
+    agent = RecursiveResearchCommission(max_depth=1, models=menu)
 
-    result = await run_one(agent, ResearchInput(question="q"))
+    result = await run_one(
+        agent,
+        ResearchInput(question="q"),
+        models=[
+            scripted_model(root_fake, id="root-model"),
+            scripted_model(default_fake, id="menu-default"),
+        ],
+        default_model="menu-default",
+    )
 
     assert result.status == "success", result.error
-    assert [c["model"] for c in fake.calls] == [
-        "root-model",
-        "menu-default",
-        "root-model",
-    ]
+    assert [c["model"] for c in root_fake.calls] == ["root-model", "root-model"]
+    assert [c["model"] for c in default_fake.calls] == ["menu-default"]
 
 
 def test_model_and_menu_together_rejected() -> None:
@@ -173,7 +178,7 @@ async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
         max_depth=1,
     )
 
-    result = await run_one(agent, ResearchInput(question="q"))
+    result = await run_one(agent, ResearchInput(question="q"), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     # Depth-first turn order: root delegates (0), child concludes (1), root
@@ -201,7 +206,9 @@ async def test_oversized_sub_answer_chopped_when_backend_wired(tmp_path: Path) -
         max_depth=1,
     )
 
-    result = await run_one(agent, ResearchInput(question="q"), backend=backend)
+    result = await run_one(
+        agent, ResearchInput(question="q"), models=[scripted_model(fake)], backend=backend
+    )
 
     assert result.status == "success", result.error
     tool_messages = [m for m in fake.calls[2]["messages"] if m.get("role") == "tool"]
@@ -281,7 +288,9 @@ async def test_budget_ceiling_counts_children() -> None:
         max_depth=1,
     )
 
-    result = await run_one(agent, ResearchInput(question="q"), budget_usd=0.0005)
+    result = await run_one(
+        agent, ResearchInput(question="q"), models=[scripted_model(fake)], budget_usd=0.0005
+    )
 
     assert result.status == "failure"
     assert result.error is not None

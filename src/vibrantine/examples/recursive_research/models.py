@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass
 
-from vibrantine.models import Model
-
 
 @dataclass(frozen=True)
 class RecursiveResearchModelMenu:
@@ -12,9 +10,12 @@ class RecursiveResearchModelMenu:
     The Commission declares its seats; the caller fills them (or none).
     `researcher` is the root's own loop; `subresearcher` is every delegated
     level below the root. An unfilled seat falls back to `default`, then to
-    the system default model. Dumb data: resolution happens in `__init__`.
+    the run's default model. Seats are pure names resolved against the run
+    catalog (the distributed model *choice*; the Model objects live in
+    `run_one(models=[...])`). Dumb data: seat assignment happens in
+    `__init__`.
     """
 
-    default: str | Model | None = None
-    researcher: str | Model | None = None
-    subresearcher: str | Model | None = None
+    default: str | None = None
+    researcher: str | None = None
+    subresearcher: str | None = None

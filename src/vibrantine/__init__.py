@@ -19,7 +19,8 @@ when its consumer arrives, keeps its exact fields open until a real consumer
 fixes them. What is stable is the union itself: its name, its role, and that
 new modality parts join it additively. `TextPart`'s fields are settled.
 The `vibrantine.testing` module is also supported surface:
-the test doubles for the `client=` injection seam, kept at its own import
+the test doubles for the run catalog's client-vending seam
+(`scripted_model` and friends), kept at its own import
 path so test tooling never ships into production namespaces. Everything
 else not in `__all__` (including the example Commissions in
 `vibrantine.examples`, the tools in `vibrantine.tools`, and any

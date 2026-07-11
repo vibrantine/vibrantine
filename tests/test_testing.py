@@ -7,14 +7,13 @@ ScriptedLLM drives a real Commission end to end through the public entry
 points.
 """
 
-from typing import ClassVar, cast
+from typing import ClassVar
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine import CallContext, Commission, run_one
-from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 
 class _In(BaseModel):
@@ -40,9 +39,9 @@ class _Probe(Commission[_In, _Out]):
 
 async def test_scripted_llm_drives_a_real_commission() -> None:
     scripted = ScriptedLLM([llm_response(tool_calls=[("t1", "conclude", {"answer": "42"})])])
-    probe = _Probe(client=cast(AsyncOpenAI, scripted))
+    probe = _Probe()
 
-    result = await run_one(probe, _In(question="?"))
+    result = await run_one(probe, _In(question="?"), models=[scripted_model(scripted)])
 
     assert result.status == "success"
     assert result.output is not None and result.output.answer == "42"
@@ -56,9 +55,9 @@ async def test_responses_pop_in_order_and_calls_record_requests() -> None:
             llm_response(tool_calls=[("t1", "conclude", {"answer": "second"})]),
         ]
     )
-    probe = _Probe(client=cast(AsyncOpenAI, scripted))
+    probe = _Probe()
 
-    result = await run_one(probe, _In(question="hello"))
+    result = await run_one(probe, _In(question="hello"), models=[scripted_model(scripted)])
 
     assert result.output is not None and result.output.answer == "second"
     assert len(scripted.calls) == 2

@@ -28,7 +28,6 @@ from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import openai
-from openai import AsyncOpenAI
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionContentPartParam,
@@ -52,6 +51,7 @@ from vibrantine.contract import (
     estimate_tokens,
 )
 from vibrantine.dispatch import deposit_llm_trace, dispatch
+from vibrantine.models import UnknownModelError
 
 # One line per LLM round-trip at INFO (the httpx convention for "a network
 # call happened"); loop pathologies worth a human's attention at WARNING;
@@ -114,8 +114,7 @@ class LoopOutcome[OutputT]:
 
 async def run_llm_loop[OutputT: BaseModel](
     *,
-    client: AsyncOpenAI,
-    model: str,
+    model: str | None,
     commission_name: str,
     system_prompt: str,
     user_message: str | list[ContentPart],
@@ -123,7 +122,6 @@ async def run_llm_loop[OutputT: BaseModel](
     output_type: type[OutputT],
     ctx: CallContext,
     max_iterations: int,
-    prices_per_million: tuple[float, float],
 ) -> LoopOutcome[OutputT]:
     """Run the LLM call-dispatch-feed cycle until conclude or a stop condition.
 
@@ -147,12 +145,20 @@ async def run_llm_loop[OutputT: BaseModel](
     Commission failures; the LLM gets to decide whether to retry or
     conclude with an apologetic answer.
     """
-    in_price, out_price = prices_per_million
     # Every governed LLM call passes the run's provider door: the fuses, the
-    # room, and the call log live there. dispatch refuses a context without
-    # the run object, so a loop can only run inside a run.
+    # room, the client vending, and the call log live there. dispatch refuses
+    # a context without the run object, so a loop can only run inside a run.
     gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
     assert gatekeeper is not None, "run_llm_loop requires a run; dispatch refuses outside one"
+    # `model` is a pure name (None = the run default), resolved against the
+    # run's catalog; an unknown name fails structurally before anything is
+    # sent or spent.
+    try:
+        entry = gatekeeper.resolve_model(model)
+    except UnknownModelError as exc:
+        return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
+    in_price = entry.input_usd_per_million or 0.0
+    out_price = entry.output_usd_per_million or 0.0
     # Capability ceiling: the LLM is only offered the intersection of this
     # Commission's toolbox and ctx.capabilities. None = unrestricted. A
     # forbidden tool is simply absent from the menu, so any call to it falls
@@ -245,14 +251,12 @@ async def run_llm_loop[OutputT: BaseModel](
                 # released at the `with` exit, before this turn's tool calls
                 # dispatch children: count leaf work, not coordinators.
                 async with gatekeeper.provider_call(
-                    client=client,
-                    model=model,
+                    entry=entry,
                     commission_name=commission_name,
                     grant_usd=ctx.budget_usd,
-                    prices=prices_per_million,
                 ) as ticket:
                     response: ChatCompletion = await ticket.client.chat.completions.create(
-                        model=model,
+                        model=entry.id,
                         messages=messages,
                         tools=tools,
                         tool_choice="auto",
@@ -312,7 +316,7 @@ async def run_llm_loop[OutputT: BaseModel](
                 out_tokens += usage.completion_tokens
                 logger.info(
                     "LLM turn model=%s in=%d out=%d",
-                    model,
+                    entry.id,
                     usage.prompt_tokens,
                     usage.completion_tokens,
                 )
@@ -325,7 +329,7 @@ async def run_llm_loop[OutputT: BaseModel](
                     "LLM response carried no usage data (model=%s); this "
                     "turn's tokens are uncounted and budget enforcement "
                     "understates real spend.",
-                    model,
+                    entry.id,
                 )
 
             # Own token cost plus everything dispatched children spent, so a

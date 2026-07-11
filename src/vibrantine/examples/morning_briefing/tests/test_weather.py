@@ -16,12 +16,12 @@ def test_construction_requires_a_source_url() -> None:
 
 
 def test_toolbox_offers_only_fetch() -> None:
-    weather, _ = make_weather()
+    weather, _, _ = make_weather()
     assert {child.name for child in weather.toolbox} == {"fetch"}
 
 
 def test_user_message_carries_date_and_configured_source() -> None:
-    weather, _ = make_weather(source_url="https://weather.test/city")
+    weather, _, _ = make_weather(source_url="https://weather.test/city")
     message = weather.build_user_message(
         WeatherInput(briefing_date="Monday 06 July 2026"), CallContext()
     )
@@ -30,8 +30,10 @@ def test_user_message_carries_date_and_configured_source() -> None:
 
 
 async def test_success_returns_report_and_own_cost() -> None:
-    weather, _ = make_weather(report="Mild and overcast all day.")
-    result = await run_one(weather, WeatherInput(briefing_date="Monday 06 July 2026"))
+    weather, _, entry = make_weather(report="Mild and overcast all day.")
+    result = await run_one(
+        weather, WeatherInput(briefing_date="Monday 06 July 2026"), models=[entry]
+    )
 
     assert result.status == "success"
     assert result.output is not None

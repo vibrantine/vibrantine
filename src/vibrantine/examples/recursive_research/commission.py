@@ -17,7 +17,7 @@ This is the first Commission wired into an LLM-loop toolbox, so its
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from vibrantine.contract import (
     DEFAULT_MAX_ITERATIONS,
@@ -28,12 +28,7 @@ from vibrantine.contract import (
 )
 from vibrantine.examples.recursive_research.models import RecursiveResearchModelMenu
 from vibrantine.examples.recursive_research.types import ResearchInput, ResearchOutput
-from vibrantine.models import Model
 from vibrantine.tools.fetch import FetchTool
-
-if TYPE_CHECKING:
-    from openai import AsyncOpenAI
-
 
 # The prompt lives in prompts/system.md, read the way authoring.md's
 # Step 2 documents; a worked example must lean only on the public
@@ -83,9 +78,8 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
         *,
         max_depth: int = 2,
         fetch: FetchTool | None = None,
-        model: str | Model | None = None,
+        model: str | None = None,
         models: RecursiveResearchModelMenu | None = None,
-        client: "AsyncOpenAI | None" = None,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> None:
         if model is not None and models is not None:
@@ -106,7 +100,6 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
                 max_depth=max_depth - 1,
                 fetch=resolved_fetch,
                 model=sub_model,
-                client=client,
                 max_iterations=max_iterations,
             )
             toolbox = (sub, resolved_fetch)
@@ -115,7 +108,6 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
         super().__init__(
             toolbox=toolbox,
             model=own_model,
-            client=client,
             max_iterations=max_iterations,
         )
         self.max_depth = max_depth

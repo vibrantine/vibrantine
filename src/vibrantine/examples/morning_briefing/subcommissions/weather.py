@@ -7,16 +7,12 @@ the input carries only the briefing date, so each run is the standing work
 order "report today's weather".
 """
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import DEFAULT_MAX_ITERATIONS, CallContext, Commission
-from vibrantine.models import Model
 from vibrantine.tools.fetch import FetchTool
-
-if TYPE_CHECKING:
-    from openai import AsyncOpenAI
 
 _SYSTEM_PROMPT = (
     "You report the weather for a morning briefing. The user message gives "
@@ -72,8 +68,7 @@ class WeatherCommission(Commission[WeatherInput, WeatherOutput]):
         *,
         source_url: str,
         fetch: FetchTool | None = None,
-        model: str | Model | None = None,
-        client: "AsyncOpenAI | None" = None,
+        model: str | None = None,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> None:
         if not source_url.strip():
@@ -82,7 +77,6 @@ class WeatherCommission(Commission[WeatherInput, WeatherOutput]):
         super().__init__(
             toolbox=(resolved_fetch,),
             model=model,
-            client=client,
             max_iterations=max_iterations,
         )
         self._source_url = source_url

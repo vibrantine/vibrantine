@@ -2,15 +2,14 @@
 
 A basic LLM-loop Commission with an *empty* toolbox: the only tool the loop
 offers is the framework-injected `conclude`, so the happy path is a single
-LLM turn that calls conclude with the typed summary. Tests inject a fake
-AsyncOpenAI-shaped client that returns scripted responses.
+LLM turn that calls conclude with the typed summary. Tests register a
+ScriptedLLM fake as the run's model catalog entry (`scripted_model`).
 """
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import ValidationError
 
 from vibrantine import run_one
@@ -19,8 +18,7 @@ from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,
 )
-from vibrantine.models import Model
-from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 _SOURCE = (
     "The cat sat on the mat. It was a warm afternoon and the cat was content. "
@@ -32,14 +30,9 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_iterations: int = 10,
-    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[SummarizeCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
-    commission = SummarizeCommission(
-        client=cast(AsyncOpenAI, fake),
-        max_iterations=max_iterations,
-        model=model,
-    )
+    commission = SummarizeCommission(max_iterations=max_iterations)
     return commission, fake
 
 
@@ -51,6 +44,7 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
     result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE, length="one_sentence"),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success", result.error
@@ -107,7 +101,7 @@ async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await run_one(commission, SummarizeInput(content=_SOURCE))
+    await run_one(commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)])
 
     assert _tool_names(fake.calls[0]) == {"conclude"}
 
@@ -129,6 +123,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
     result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
+        models=[scripted_model(fake)],
         budget_usd=0.001,
     )
 
@@ -146,6 +141,7 @@ async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     result = await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
+        models=[scripted_model(fake)],
         cancel=AlwaysCancelled(),
     )
 
@@ -165,7 +161,9 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
         ]
     )
 
-    result = await run_one(commission, SummarizeInput(content=_SOURCE))
+    result = await run_one(
+        commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)]
+    )
 
     assert result.status == "failure"
     assert result.error is not None
@@ -176,13 +174,14 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
 
 async def test_summarize_emits_loop_start_progress_event() -> None:
     events: list[ProgressEvent] = []
-    commission, _fake = _commission(
+    commission, fake = _commission(
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
     await run_one(
         commission,
         SummarizeInput(content=_SOURCE),
+        models=[scripted_model(fake)],
         on_progress=events.append,
     )
 
@@ -199,7 +198,9 @@ async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> No
         ]
     )
 
-    result = await run_one(commission, SummarizeInput(content=_SOURCE))
+    result = await run_one(
+        commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)]
+    )
 
     assert result.status == "success", result.error
     assert result.output is not None

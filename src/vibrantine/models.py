@@ -1,25 +1,24 @@
-"""Known-models table: model identity + endpoint + per-token pricing facts.
-
-Lives at the library level so every LLM-using Commission consults one table
-rather than carrying its own copy. Add a model here once; consumers resolve it by identifier at
-construction. Unknown identifiers are permitted; they fall back to a bare
-`Model` pointed at the OpenRouter endpoint with no context window and no
-pricing, so a caller can target any OpenRouter model without first registering
-it. Pass an explicit `max_input_tokens` to be conservative under that fallback.
+"""The model vocabulary: identity + endpoint + per-token pricing facts.
 
 A model is an *object* (`Model`), not a bare id string: it bundles identity
 (`id`), endpoint (`base_url`, `api_key_env`) and facts (context window,
 pricing). Because the endpoint travels with the model, cloud (OpenRouter) and
 local (Ollama, also OpenAI-compatible) providers are selectable from one menu;
-the library is multi-provider, local-first by construction. Bare id strings
-still resolve through `KNOWN_MODELS` / `resolve()` for backward compatibility.
+the library is multi-provider, local-first by construction.
+
+A run's models are defined once, at the front door: `run_one(models=[...])`
+is the run's catalog, and every Commission references an entry by name
+(`Commission(model="...")`) or takes the run default. A name not in the
+catalog fails fast (`UnknownModelError`, surfaced as a validation failure);
+there is no silent fallback. An empty catalog auto-registers the system
+default below, so hello world configures nothing.
 
 Pricing is `float | None`. `None` means *unpriced/unknown*: the model simply
 carries no price here. `$0` (`0.0`) means *genuinely free*, e.g. a local Ollama
 model. The distinction matters: a call's cost rolls up structurally into its
 parents (`design.md § Cost and provenance are structural`), so an *unpriced*
 model anywhere in a
-tree silently under-reports the whole tree's cost; register it for accurate
+tree silently under-reports the whole tree's cost; price it for accurate
 accounting. A Commission invoked with a `budget_usd` but an *unpriced* model
 can't have that budget enforced, so it fails fast before running; a *free* model
 (`0.0`) enforces fine and runs.
@@ -65,27 +64,21 @@ KNOWN_MODELS: dict[str, Model] = {
     ),
 }
 
-# The system-wide default model. Every Commission uses this unless its caller
-# passes an explicit `model=`. The single seam a future "loaded default model"
-# (config-driven) routes through; keep model selection here, never hardcoded
-# inside a Commission body.
+# The system-wide default model. An empty run catalog auto-registers this
+# entry, and a multi-model catalog with no explicit default falls back to it.
+# The single seam a future "loaded default model" (config-driven) routes
+# through; keep model selection here, never hardcoded inside a Commission body.
 DEFAULT_MODEL = "google/gemini-3.5-flash"
 
 
-def resolve(model: "str | Model | None") -> Model:
-    """Resolve a model spec to a `Model`.
+class UnknownModelError(Exception):
+    """A Commission named a model that is not in the run's catalog.
 
-    A `Model` is returned as-is (identity). A string (or `None`, meaning
-    `DEFAULT_MODEL`) is looked up in `KNOWN_MODELS`; an unknown id falls back
-    to a bare `Model` on the OpenRouter endpoint: unpriced, no context window.
+    Immediate and loud, converted to a `validation` failure at the Commission
+    boundary. The pre-catalog silent fallback (an unknown id becoming a bare
+    OpenRouter model) retired with the catalog: a caller who wants an
+    arbitrary model registers it explicitly in `run_one(models=[...])`.
     """
-    if isinstance(model, Model):
-        return model
-    model_id = model or DEFAULT_MODEL
-    known = KNOWN_MODELS.get(model_id)
-    if known is not None:
-        return known
-    return Model(id=model_id)
 
 
 def openai_compatible(

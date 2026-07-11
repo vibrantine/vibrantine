@@ -56,7 +56,9 @@ class MenuEntry:
     title: str
     blurb: str
     budget_usd: float
-    build: Callable[[Model], tuple[Any, BaseModel]]
+    # Builders take a model *name* (None = the run default); the session's
+    # Model object itself is registered once, in run_one(models=[...]).
+    build: Callable[[str | None], tuple[Any, BaseModel]]
     present: Callable[[Any], str]
 
 
@@ -284,7 +286,10 @@ def main(argv: list[str] | None = None) -> int:
         return float(args.budget) if args.budget is not None else tier
 
     backend = RecordingBackend(on_store=_print_store)
-    agent = demo_agent(model)
+    # One session model: registered once as the run catalog's single entry
+    # (so it is the run default), and every Commission is built with no
+    # model name at all.
+    agent = demo_agent()
     entries = {entry.key: entry for entry in MENU}
     transcript: list[ChatTurn] = []
     # The last run's records in [n]-label order, so `t <n>` resolves against
@@ -320,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if line in entries:
             entry = entries[line]
-            commission, demo_input = entry.build(model)
+            commission, demo_input = entry.build(None)
             budget = budget_for(entry.budget_usd)
             cap = f"budget ${budget:.2f}" if budget is not None else "no budget cap"
             print(f"Running {entry.title} ({cap}) with its canned input:")
@@ -332,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
                     commission,
                     demo_input,
                     budget_usd=budget,
+                    models=[model],
                     on_progress=_print_progress,
                     backend=backend,
                     record="always",
@@ -345,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
                     agent,
                     chat_input,
                     budget_usd=budget_for(AGENT_BUDGET_USD),
+                    models=[model],
                     on_progress=_print_progress,
                     backend=backend,
                     record="always",

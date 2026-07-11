@@ -111,7 +111,7 @@ and run those steps with `uv run --env-file .env ...`.
 Before the long way, know the short way. `create_commission` builds a
 working LLM-loop Commission from the decisions no one can make for you:
 what goes in, what comes out, what it is called, and what tools it may
-touch. Everything else (client setup, model resolution, the system prompt,
+touch. Everything else (catalog wiring, the system prompt,
 cost and provenance plumbing) is manufactured for you.
 
 ```python
@@ -361,10 +361,9 @@ capability: reading files. Wire it in through the constructor:
         self,
         *,
         read: ReadTool | None = None,
-        model: str | Model | None = None,
-        client: "AsyncOpenAI | None" = None,
+        model: str | None = None,
     ) -> None:
-        super().__init__(toolbox=(read or ReadTool(),), model=model, client=client)
+        super().__init__(toolbox=(read or ReadTool(),), model=model)
 ```
 
 This small constructor is a load-bearing convention:
@@ -381,9 +380,11 @@ This small constructor is a load-bearing convention:
   be stateless. A stateful tool (one holding a connection, a rate limiter,
   a cache) is built per-instance in `__init__` and passed via `toolbox=`,
   exactly as above.
-- **`model=None` means "the system default".** Don't hardcode a model name in
-  the class; let callers (and the one loaded default) decide, and accept a
-  `model=` override for when they do.
+- **`model=None` means "the run's default model".** A model here is a pure
+  *name*, looked up in the run's catalog (`run_one(models=[...])`) when the
+  loop runs; the Model objects themselves are defined once, at the front
+  door. Don't hardcode a model name in the class; let callers decide, and
+  accept a `model=` override for when they do.
 
 Now run it for real (this one needs the key):
 
@@ -411,29 +412,33 @@ uv run --env-file .env python tag_one.py
 ```
 
 **Specimen:** the RecursiveResearch constructor builds its own child researcher
-and fetch tool the same way, including the `model=`/`client=` pass-through.
+and fetch tool the same way, including the `model=` pass-through.
 
 ## Step 5: The Guard Rails
 
 A Commission is safe to delegate to because the caller can bound it. The
 bounds are already on your Commission; this step is about knowing them.
 
-- **Budget.** The `budget_usd=0.10` you passed above bounds the run. If
-  the loop's spending reaches it, you get `status="failure"` with
-  `error.kind == "budget_exceeded"` and the true cost of what was spent,
-  not an exception and not a surprise bill. The loop also declines a turn
-  up front when the turn's input cost alone would already break the
-  ceiling, so a run over a huge transcript fails before that money is
-  spent, not after. Be precise about what the bound promises: enforcement
-  is per-turn, and a turn's exact cost is unknowable before it runs (the
-  input estimate is a deliberate undercount, and output tokens are the
-  model's choice), so the true spend can overshoot the grant by up to
-  about one turn's cost per tree level. The result always reports the
-  true spend, overshoot included. Size the grant to the work: budget
-  behavior only degrades gracefully when the grant is several multiples
-  of a single turn's cost, and a turn re-reads everything fetched so far,
-  so a transcript holding a few 50k-char pages can cost more per turn
-  than a tight grant leaves for wrapping up.
+- **Budget.** The `budget_usd=0.10` you passed above bounds the run twice
+  over: it is the root's allocated grant, debited down the tree, and it
+  arms the run's spend fuse, a running observed total at the provider
+  door. If real spend reaches it, you get `status="failure"` with
+  `error.kind == "run_halted"`, a detail naming the fuse and the numbers,
+  and the true cost of what was spent, not an exception and not a
+  surprise bill. The loop also declines a turn up front when the turn's
+  input cost alone would already break the ceiling; a run stopped short
+  that way, before spend reaches the grant, reports
+  `error.kind == "budget_exceeded"` instead (so does a mid-tree branch
+  that merely exhausted its own slice). Be precise about what the bound
+  promises: a call's exact cost is unknowable before it runs (the input
+  estimate is a deliberate undercount, and output tokens are the model's
+  choice), so the true spend can overshoot the grant by calls already in
+  flight when the fuse trips. The result always reports the true spend,
+  overshoot included. Size the grant to the work: budget behavior only
+  degrades gracefully when the grant is several multiples of a single
+  turn's cost, and a turn re-reads everything fetched so far, so a
+  transcript holding a few 50k-char pages can cost more per turn than a
+  tight grant leaves for wrapping up.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
@@ -474,14 +479,17 @@ stating exactly what the policy does and does not protect.
 
 ## Step 6: Contract Tests
 
-Prove the boundary without spending a cent. The trick: inject a client whose
-"model" is a script you wrote, via the same `client=` parameter every
-Commission constructor takes. The model's intelligence is not under test;
-your Commission's behavior around the responses is.
+Prove the boundary without spending a cent. The trick: register a model in
+the run's catalog whose "provider" is a script you wrote, through the same
+`models=` parameter every run takes. The model's intelligence is not under
+test; your Commission's behavior around the responses is.
 
 The doubles for this are supported library surface, in `vibrantine.testing`:
 
-- `ScriptedLLM(responses)`: the injectable client. Pops one response per LLM
+- `scripted_model(scripted)`: a catalog entry served by your fake. Register
+  it in `run_one(models=[...])`; as the run's only entry it is the default
+  model, so the Commission under test needs no `model=` at all.
+- `ScriptedLLM(responses)`: the fake provider. Pops one response per LLM
   call, in order, and records every request it received in `calls` so you
   can assert on exactly what your Commission sent. Running past the end of
   the script fails the test loudly.
@@ -491,20 +499,18 @@ The doubles for this are supported library surface, in `vibrantine.testing`:
   your Commission checks before doing the work.
 - `FIXTURE_MODEL`: a frozen, priced model (fixed context window and rates)
   for tests that assert on cost or size-gate numbers. It is deliberately not
-  in the catalog, so repricing or renaming a real model never silently
-  changes your expected values.
+  a real model id, so repricing or renaming a real model never silently
+  changes your expected values; `scripted_model` reuses its id and rates by
+  default.
 
 ```python
 # src/doctag/tests/test_commission.py
 """Contract tests: scripted LLM, no API key, no network."""
 
 from pathlib import Path
-from typing import cast
-
-from openai import AsyncOpenAI
 
 from vibrantine import invoke_sync
-from vibrantine.testing import ScriptedLLM, llm_response
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 from doctag.commission import DocTagCommission
 from doctag.types import DocTagInput
@@ -526,8 +532,9 @@ def test_concludes_with_typed_output(tmp_path: Path) -> None:
     )
 
     result = invoke_sync(
-        DocTagCommission(client=cast(AsyncOpenAI, scripted)),
+        DocTagCommission(),
         DocTagInput(file_path=doc),
+        models=[scripted_model(scripted)],
     )
 
     assert result.status == "success", result.error
@@ -542,9 +549,10 @@ uv run pytest
 
 Notice what happened in that script: the double replaced only the *LLM*. The
 `read` tool call went through the real `ReadTool` against a real temp file.
-You scripted the model's decisions and everything else was live machinery.
+You scripted the model's decisions and everything else, dispatch, the run's
+fuses and call log, tool execution, cost math, was live machinery.
 
-This one test proves import, construction, injection, dispatch, tool
+This one test proves import, construction, the catalog seam, dispatch, tool
 execution, conclusion, and the envelope. The full coverage bar for a shipped
 Commission (validation failures, cancellation, malformed model responses,
 budget behavior, tool menu shape) is listed in
@@ -1243,11 +1251,10 @@ Constructor kwargs (all keyword-only):
 
 | kwarg | Default | Purpose |
 |---|---|---|
-| `model` | `None`, resolving to `DEFAULT_MODEL` | Which LLM the default loop uses |
-| `client` | `None`, lazy OpenRouter client | Inject an alternative `AsyncOpenAI`, or `vibrantine.testing.ScriptedLLM` in tests |
+| `model` | `None`, the run's default model | Which catalog entry the default loop uses: a pure name, looked up in `run_one(models=[...])` when the loop runs. Unknown names fail fast |
 | `max_iterations` | `10` | LLM-loop cap |
 | `toolbox` | class default | Dependency-injection override |
-| `max_input_tokens` | model context window, else `None` | Input size gate |
+| `max_input_tokens` | unset: the catalog entry's context window, at run time | Input size gate; explicit `None` disables it, an int pins it |
 | `target_input_fraction` | `0.75` | Fraction of the window the gate allows |
 | `persistence_mode` / `max_output_tokens` / `overflow_policy` | class default | Per-instance policy override (sentinel-based, so omission is not `None`) |
 
@@ -1261,10 +1268,7 @@ provisional until the authoring-surface freeze (see
 | `self._succeed(output, *, provenance, cost)` | Build a success result, the common return |
 | `self._fail(kind, detail, *, retryable, provenance, cost)` | Build a structured failure result |
 | `self._emit(ctx, phase, detail=None)` | Emit a `ProgressEvent` (no-op without a callback) |
-| `self._cost(in_tokens, out_tokens)` | Model-priced `CostMetrics` |
-| `self._prices()` | `(in, out)` USD per million tokens for the model |
-| `self._resolved_client` | The lazily-built LLM client |
-| `self.fits(estimated_tokens)` | Size-gate check |
+| `self.fits(estimated_tokens)` | Size-gate check against the explicit constructor cap (an unset cap resolves from the run catalog entry at run time) |
 | `estimate_tokens(text)` | Module-level chars/4 heuristic; `from vibrantine import estimate_tokens`. Unlike the underscore helpers above, this is frozen surface (the heuristic itself may be refined; the name and signature hold) |
 | `deposit_llm_trace(messages)` | Module-level; `from vibrantine import deposit_llm_trace`. Frozen surface, like `estimate_tokens`. A custom `_run` that runs its own LLM calls deposits each message history so it lands in the run's persisted record; without a deposit, the record's `llm_trace` stays empty. The default loop deposits automatically |
 
@@ -1296,7 +1300,8 @@ a member is a major version bump):
 
 - `status`: `success`, `partial`, `failure`
 - `ErrorState.kind` (`ErrorKind`): `validation`, `internal`, `rate_limit`,
-  `timeout`, `budget_exceeded`, `cancelled`, `output_too_large`
+  `timeout`, `budget_exceeded`, `cancelled`, `output_too_large`,
+  `run_halted` (spoken only by the root result when a run fuse tripped)
 - `confidence` (`ConfidenceLevel`): `verified`, `grounded`, `speculative`
 
 ## Runtime conditions: CallContext
@@ -1308,12 +1313,15 @@ with `dataclasses.replace` to hand a child a modified one.
 |---|---|---|
 | `budget_usd` | `None` | Yes: the LLM loop halts with `budget_exceeded` after a turn that overruns (and pre-flight, before a turn whose input cost alone would break the grant), dispatches each child with the remaining budget (never the full grant), and shows the model a `[budget]` spend line after each turn's tool results so it can wind down before the stop |
 | `capabilities` | `CapabilitySet()` | Yes: the LLM's tool menu is `toolbox` intersected with `capabilities.tools` (`None` = unrestricted) |
-| `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled` |
+| `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled`. Also the run's breaker: a fuse trip (`max_llm_calls`, `time_limit_seconds`, the `budget_usd` spend fuse) flips this same signal |
 | `on_progress` | `None` | Observability callback (`ProgressEvent`) |
-| `concurrency` | `4` | Per-coordinator hint; not tree-wide yet |
 | `parent_run_id` | `None` | Threaded by `dispatch`; read-only to bodies |
 | `backend` | `None` | `PersistenceBackend` to write through |
 | `record` | `None` | Recording default for every node whose `persistence_mode` is `None`; a node's explicit mode wins |
+
+Provider-call concurrency is not a context field: it is a run-wide bound
+(`run_one(concurrency=)`), one room of chairs shared by the whole tree and
+held around each provider call only, so coordinators may fan out freely.
 
 ## The meanings of None
 
@@ -1324,8 +1332,8 @@ table is the one consolidated view, for re-entry after time away:
 
 | Knob | `None` means | Leaving it unset means |
 |---|---|---|
-| `model=` | The system default (`DEFAULT_MODEL`) | Same |
-| `max_input_tokens=` | Size gate disabled (the standard tool shape) | Auto-resolve from the model's context window |
+| `model=` | The run's default model | Same |
+| `max_input_tokens=` | Size gate disabled (the standard tool shape) | Auto-resolve from the run catalog entry's context window, at run time |
 | `max_output_tokens=` | No output cap | The class default (itself `None` unless the class says otherwise) |
 | `persistence_mode=` | No opinion: follow the caller's `record` | The class default (itself `None` unless the class says otherwise) |
 | `system_prompt` | This Commission needs none (tools, coordinators) | n/a: a class attribute, not a kwarg |
@@ -1348,14 +1356,14 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_one` | `async run_one(commission, input, *, budget_usd=None, backend=None, record=None)` | The normal async path; builds a default `CallContext` |
-| `invoke_sync` | sync wrapper over `run_one` | Scripts, REPL, tests |
-| `dispatch` | `async dispatch(commission, input, ctx)` | Inside a custom `_run`, or when you build the `CallContext` yourself (capabilities, cancellation, progress) |
+| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, capabilities=None, cancel=None, on_progress=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, model catalog) and the root `CallContext`. Refuses when called inside a run |
+| `invoke_sync` | sync wrapper over `run_one`, same kwargs | Scripts, REPL, tests |
+| `dispatch` | `async dispatch(commission, input, ctx)` | The only way around inside a run: called from a custom `_run` with the ctx it received (or a `replace()` of it). Refuses outside a run, and refuses a hand-built context |
 
 ## The authoring factory
 
 `create_commission(*, name, description, input, output, toolbox=(),
-system_prompt=None, model=None, client=None, max_iterations=10)` returns an
+system_prompt=None, model=None, max_iterations=10)` returns an
 ordinary basic Commission riding the default loop; run it through the entry
 points like any other.
 
@@ -1365,8 +1373,9 @@ points like any other.
 - The default system prompt is the description plus the input schema's
   field descriptions and the `conclude` instruction; pass `system_prompt=`
   to replace it. The opening user message is the input serialized as JSON.
-- `model` resolves through the standard catalog (None is the system
-  default); `client=` is the usual testing seam.
+- `model` is a name resolved against the run's catalog when the loop runs
+  (None is the run default); tests script the model through the catalog
+  (`vibrantine.testing.scripted_model`).
 - Construction is deterministic: no network, no spend, no LLM involved in
   building the Commission itself.
 - The exit ramp is subclassing `Commission` (Part I); the factory covers
@@ -1405,12 +1414,16 @@ written as a selection prompt.
 
 ## Models and cost
 
-- `DEFAULT_MODEL` is the system default seam; every Commission uses it
-  unless its caller passes `model=`. Never hardcode a model in a Commission
-  body.
-- A bare string resolves through `KNOWN_MODELS` to identity, endpoint, and
-  pricing. For uncatalogued targets use `openai_compatible(name, address)`
-  for any OpenAI-format endpoint, or `ollama(id)` for a local Ollama server.
+- The run's models are defined once, at the front door:
+  `run_one(models=[...])` is the run's catalog, and it vends the provider
+  clients. A Commission carries only a *name* (`model=`, None = the run
+  default) resolved against the catalog when its loop runs; a name not in
+  the catalog fails fast. Never hardcode a model in a Commission body.
+- An empty catalog auto-registers the system default (`DEFAULT_MODEL`, a
+  `KNOWN_MODELS` entry), so hello world configures nothing. Build entries
+  with `Model(id=...)` for OpenRouter targets, `openai_compatible(name,
+  address)` for any OpenAI-format endpoint, or `ollama(id)` for a local
+  Ollama server.
 - Pricing states: *priced*, *free* (a real $0, like local Ollama), or
   *unpriced* (unknown). Setting `budget_usd` on an unpriced model fails
   fast: the framework refuses to run a budget it cannot enforce.

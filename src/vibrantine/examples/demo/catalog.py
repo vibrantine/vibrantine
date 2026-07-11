@@ -33,17 +33,16 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.models import Model
 
 # The one file guaranteed to exist on any install: the ask example's own source.
 _ASK_SOURCE = Path(str(_ask_module.__file__))
 
 
-def make_ask(model: str | Model | None = None) -> AskCommission:
+def make_ask(model: str | None = None) -> AskCommission:
     return AskCommission(model=model)
 
 
-def build_ask(model: str | Model | None = None) -> tuple[AskCommission, AskInput]:
+def build_ask(model: str | None = None) -> tuple[AskCommission, AskInput]:
     """Proof-of-life run: ask the example module about its own source file.
 
     Self-contained by construction; the file it reads ships with the package,
@@ -61,12 +60,12 @@ def build_ask(model: str | Model | None = None) -> tuple[AskCommission, AskInput
     )
 
 
-def make_synthesize(model: str | Model | None = None) -> SynthesizeCommission:
+def make_synthesize(model: str | None = None) -> SynthesizeCommission:
     return SynthesizeCommission(model=model)
 
 
 def build_synthesize(
-    model: str | Model | None = None,
+    model: str | None = None,
 ) -> tuple[SynthesizeCommission, SynthesizeInput]:
     """Merge two overlapping fictional accounts of one event into cited claims.
 
@@ -107,7 +106,7 @@ def build_synthesize(
     )
 
 
-def make_morning_briefing(model: str | Model | None = None) -> MorningBriefingCommission:
+def make_morning_briefing(model: str | None = None) -> MorningBriefingCommission:
     """One weather leaf plus two single-source digests.
 
     The sources are live public URLs (wttr.in, BBC World RSS, Hacker News
@@ -135,7 +134,7 @@ def make_morning_briefing(model: str | Model | None = None) -> MorningBriefingCo
 
 
 def build_morning_briefing(
-    model: str | Model | None = None,
+    model: str | None = None,
 ) -> tuple[MorningBriefingCommission, MorningBriefingInput]:
     """The canned run writes today's edition to the working directory."""
     return (
@@ -144,13 +143,13 @@ def build_morning_briefing(
     )
 
 
-def make_recursive_research(model: str | Model | None = None) -> RecursiveResearchCommission:
+def make_recursive_research(model: str | None = None) -> RecursiveResearchCommission:
     """Depth and iterations stay low so a demo run finishes inside budget."""
     return RecursiveResearchCommission(max_depth=1, model=model, max_iterations=8)
 
 
 def build_recursive_research(
-    model: str | Model | None = None,
+    model: str | None = None,
 ) -> tuple[RecursiveResearchCommission, ResearchInput]:
     """A cross-organization comparison sized to force decomposition.
 

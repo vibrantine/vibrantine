@@ -12,11 +12,17 @@ overflow enforcement, and persistence happen uniformly from the top.
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import cast
 
-from vibrantine._gatekeeper import Gatekeeper, RunCancel, current_gatekeeper
+from vibrantine._gatekeeper import (
+    Gatekeeper,
+    RunCancel,
+    RunConfigError,
+    build_catalog,
+    current_gatekeeper,
+)
 from vibrantine.contract import (
     NEVER_CANCELLED,
     CallContext,
@@ -32,6 +38,7 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.dispatch import dispatch
+from vibrantine.models import Model
 
 # The always-on LLM-call backstop: high enough that no legitimate run has
 # hit it, low enough that a runaway loop (including one on a free or local
@@ -51,6 +58,9 @@ async def run_one[InputT, OutputT](
     *,
     # money: one number, two jobs (root grant AND spend fuse)
     budget_usd: float | None = None,
+    # the model catalog: defined once, referenced by name from every node
+    models: Sequence[Model] = (),
+    default_model: str | None = None,
     # fuses
     max_llm_calls: int | None = DEFAULT_MAX_LLM_CALLS,
     time_limit_seconds: float | None = None,
@@ -66,8 +76,12 @@ async def run_one[InputT, OutputT](
 ) -> CommissionResult[OutputT]:
     """Run one Commission as a complete, governed run.
 
-    Hello world stays one line: `run_one(commission, input)` gets the
-    call-count backstop, a room of 16, no budget, no deadline. `budget_usd`
+    Hello world stays one line: `run_one(commission, input)` gets the system
+    default model, the call-count backstop, a room of 16, no budget, no
+    deadline. `models=` is the run's catalog: define each model once; every
+    Commission references an entry by name or takes the run default (the
+    single entry when there is exactly one, else the system default unless
+    `default_model=` names another; unknown names fail fast). `budget_usd`
     is one number doing two jobs: the root's allocated grant (debited down
     the tree as today) and the run's spend fuse (a running observed total
     used only as a trip, never as a ledger nodes read). A fuse trip flips
@@ -97,8 +111,14 @@ async def run_one[InputT, OutputT](
     )
     if config_error is not None:
         return _config_failure(commission, config_error)
+    try:
+        catalog, default = build_catalog(models, default_model)
+    except RunConfigError as exc:
+        return _config_failure(commission, str(exc))
 
     gatekeeper = Gatekeeper(
+        catalog=catalog,
+        default_model=default,
         max_llm_calls=max_llm_calls,
         time_limit_seconds=time_limit_seconds,
         spend_limit_usd=budget_usd,
@@ -143,6 +163,8 @@ def invoke_sync[InputT, OutputT](
     input: InputT,
     *,
     budget_usd: float | None = None,
+    models: Sequence[Model] = (),
+    default_model: str | None = None,
     max_llm_calls: int | None = DEFAULT_MAX_LLM_CALLS,
     time_limit_seconds: float | None = None,
     concurrency: int = DEFAULT_CONCURRENCY,
@@ -158,6 +180,8 @@ def invoke_sync[InputT, OutputT](
             commission,
             input,
             budget_usd=budget_usd,
+            models=models,
+            default_model=default_model,
             max_llm_calls=max_llm_calls,
             time_limit_seconds=time_limit_seconds,
             concurrency=concurrency,

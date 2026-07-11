@@ -34,13 +34,15 @@ def test_construction_requires_field_and_sources() -> None:
 
 
 async def test_success_returns_cited_digest_with_summed_cost() -> None:
-    digest, _ = make_digest(
+    digest, _, entry = make_digest(
         field="international",
         pages=PAGES,
         claims=CLAIMS,
         summary="A steady morning internationally.",
     )
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), budget_usd=0.50)
+    result = await run_one(
+        digest, NewsDigestInput(briefing_date=DATE), budget_usd=0.50, models=[entry]
+    )
 
     assert result.status == "success"
     assert result.output is not None
@@ -57,9 +59,9 @@ async def test_success_returns_cited_digest_with_summed_cost() -> None:
 async def test_partial_when_a_source_fails_lists_it() -> None:
     pages = dict(PAGES)
     pages["https://news.test/world/b"] = (404, "gone")
-    digest, _ = make_digest(field="world", pages=pages, claims=CLAIMS[:1])
+    digest, _, entry = make_digest(field="world", pages=pages, claims=CLAIMS[:1])
 
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE))
+    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "partial"
     assert result.output is not None
@@ -70,9 +72,9 @@ async def test_partial_when_a_source_fails_lists_it() -> None:
 
 async def test_all_sources_failing_fails_before_any_llm_call() -> None:
     pages = {url: (500, "boom") for url in PAGES}
-    digest, fake = make_digest(field="tech", pages=pages, claims=[])
+    digest, fake, entry = make_digest(field="tech", pages=pages, claims=[])
 
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE))
+    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "failure"
     assert result.error is not None
@@ -82,13 +84,13 @@ async def test_all_sources_failing_fails_before_any_llm_call() -> None:
 
 
 async def test_synthesize_failure_propagates_its_error_kind() -> None:
-    digest, _ = make_digest(
+    digest, _, entry = make_digest(
         field="world",
         pages=PAGES,
         claims=[],
         synth_payload="not valid json at all",
     )
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE))
+    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "failure"
     assert result.error is not None
@@ -97,11 +99,12 @@ async def test_synthesize_failure_propagates_its_error_kind() -> None:
 
 
 async def test_cancellation_before_fetches_returns_cancelled() -> None:
-    digest, fake = make_digest(field="world", pages=PAGES, claims=[])
+    digest, fake, entry = make_digest(field="world", pages=PAGES, claims=[])
 
     result = await run_one(
         digest,
         NewsDigestInput(briefing_date=DATE),
+        models=[entry],
         cancel=AlwaysCancelled(),
     )
 

@@ -32,13 +32,15 @@ claim to prevent. See docs/design.md for the canonical statement.
 
 import asyncio
 import contextvars
+import os
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from vibrantine.contract import CancelToken, ErrorState
+from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, UnknownModelError
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -62,6 +64,54 @@ class RunHaltedError(Exception):
     ride the ordinary cancellation path). Only the root speaks `run_halted`:
     `run_one` rewrites the root result from the trip state directly.
     """
+
+
+class RunConfigError(ValueError):
+    """A run configuration the Gatekeeper cannot honor, named.
+
+    Internal: raised by `build_catalog`, converted by `run_one` into a
+    validation failure result (errors are values at that boundary too).
+    """
+
+
+def build_catalog(
+    models: Sequence[Model],
+    default_model: str | None,
+) -> tuple[dict[str, Model], str]:
+    """The run's model catalog and its default entry name, validated.
+
+    Define the run's models once, at the front door; every Commission
+    references one by name or takes the default resolved here. An empty
+    catalog auto-registers the system default so hello world configures
+    nothing; a single entry is its own default (naming it twice is busywork);
+    several entries need `default_model=` unless the system default is one
+    of them.
+    """
+    catalog: dict[str, Model] = {}
+    for model in models:
+        if model.id in catalog:
+            raise RunConfigError(
+                f"models= names {model.id!r} more than once; the catalog "
+                f"defines each model exactly once."
+            )
+        catalog[model.id] = model
+    if not catalog:
+        catalog[DEFAULT_MODEL] = KNOWN_MODELS[DEFAULT_MODEL]
+    if default_model is not None:
+        if default_model not in catalog:
+            raise RunConfigError(
+                f"default_model {default_model!r} is not in models= "
+                f"(registered: {', '.join(sorted(catalog))})."
+            )
+        return catalog, default_model
+    if len(catalog) == 1:
+        return catalog, next(iter(catalog))
+    if DEFAULT_MODEL not in catalog:
+        raise RunConfigError(
+            f"models= has several entries and none is the system default "
+            f"{DEFAULT_MODEL!r}; name one with default_model=."
+        )
+    return catalog, DEFAULT_MODEL
 
 
 class RunCancel:
@@ -111,11 +161,21 @@ class Gatekeeper:
     def __init__(
         self,
         *,
+        catalog: dict[str, Model],
+        default_model: str,
         max_llm_calls: int | None,
         time_limit_seconds: float | None,
         spend_limit_usd: float | None,
         concurrency: int,
     ) -> None:
+        # The run's model catalog (see build_catalog): one registry of
+        # entries per run, defined at the front door. Model *choice* stays
+        # distributed (each node carries which entry it uses, a value on the
+        # context); only the definitions live here.
+        self.catalog = catalog
+        self.default_model = default_model
+        # One client per distinct endpoint, built lazily on first use.
+        self._clients: dict[tuple[str, str | None], AsyncOpenAI] = {}
         self.max_llm_calls = max_llm_calls
         self.spend_limit_usd = spend_limit_usd
         self._time_limit_seconds = time_limit_seconds
@@ -143,6 +203,62 @@ class Gatekeeper:
         # One row per provider call, always on: the fuses read the same
         # counters, so the trust promise never depends on a config flag.
         self.calls: list[dict[str, Any]] = []
+
+    # --- the model catalog ---------------------------------------------------
+
+    def resolve_model(self, name: str | None) -> Model:
+        """The catalog entry for `name`; None means the run default.
+
+        Unknown names fail fast and loud (`UnknownModelError`, converted to
+        a validation failure at the Commission boundary). The pre-catalog
+        silent fallback to a bare OpenRouter model retired with the catalog.
+        """
+        effective = name if name is not None else self.default_model
+        entry = self.catalog.get(effective)
+        if entry is None:
+            registered = ", ".join(sorted(self.catalog))
+            raise UnknownModelError(
+                f"model {effective!r} is not in this run's catalog "
+                f"(registered: {registered}). Register it in "
+                f"run_one(models=[...])."
+            )
+        return entry
+
+    def client_for(self, entry: Model) -> "AsyncOpenAI":
+        """The provider client for a catalog entry, built lazily and shared.
+
+        One client per distinct endpoint (base_url, api_key_env), so several
+        models on one provider share a connection pool. Because the catalog
+        vends the clients, the framework owns provider access by
+        construction, which is what makes this seam structural rather than
+        advisory. A keyed endpoint whose key is absent fails here, before
+        any network call or spend, with the env var named; a keyless
+        endpoint (api_key_env=None, e.g. local Ollama) never blocks. The
+        testing seam rides the same door: a scripted entry
+        (testing.scripted_model) carries its fake client and is returned
+        as-is, uncached.
+        """
+        scripted = getattr(entry, "scripted_client", None)
+        if scripted is not None:
+            return cast("AsyncOpenAI", scripted)
+        endpoint = (entry.base_url, entry.api_key_env)
+        client = self._clients.get(endpoint)
+        if client is None:
+            key_env = entry.api_key_env
+            # A keyless endpoint ignores the key, but the OpenAI client
+            # refuses a falsy one, so send a non-empty placeholder.
+            api_key = "unused" if key_env is None else os.environ.get(key_env, "")
+            if not api_key:
+                raise RuntimeError(
+                    f"No API key: environment variable {key_env!r} is not "
+                    f"set (model {entry.id!r} at {entry.base_url}). Set it, "
+                    f"or register a keyless Model (api_key_env=None)."
+                )
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(base_url=entry.base_url, api_key=api_key)
+            self._clients[endpoint] = client
+        return client
 
     # --- fuses -------------------------------------------------------------
 
@@ -250,27 +366,35 @@ class Gatekeeper:
     async def provider_call(
         self,
         *,
-        client: "AsyncOpenAI",
-        model: str,
+        entry: Model,
         commission_name: str,
         grant_usd: float | None,
-        prices: tuple[float, float],
     ) -> AsyncGenerator[_ProviderTicket]:
         """The provider door: every governed LLM call passes through here.
 
-        Refuses when a fuse has tripped or is due (raising `RunHaltedError`
-        after logging a refused row), holds the call until a room chair
-        frees, re-checks the fuses after the wait, and settles on exit:
-        cost lands in the observed total, the row lands in the log
-        (completed or failed), and the spend fuse is checked. The chair is
-        held around the provider call only and released at exit, before the
-        caller dispatches children: count leaf work, not coordinators, so
-        the room is deadlock-free even at a limit of 1.
+        Takes a catalog entry (from `resolve_model`), vends the client for
+        it, and prices the settle from its per-token rates. Refuses when a
+        fuse has tripped or is due (raising `RunHaltedError` after logging a
+        refused row), holds the call until a room chair frees, re-checks the
+        fuses after the wait, and settles on exit: cost lands in the
+        observed total, the row lands in the log (completed or failed), and
+        the spend fuse is checked. The chair is held around the provider
+        call only and released at exit, before the caller dispatches
+        children: count leaf work, not coordinators, so the room is
+        deadlock-free even at a limit of 1.
         """
+        model = entry.id
+        prices = (
+            entry.input_usd_per_million or 0.0,
+            entry.output_usd_per_million or 0.0,
+        )
         run_id = _current_call_run_id()
         self._refuse_if_due(
             commission_name=commission_name, model=model, run_id=run_id, grant_usd=grant_usd
         )
+        # Vend before taking a chair: a missing-key raise should not occupy
+        # the room, and it is not a refusal, so no log row.
+        client = self.client_for(entry)
         async with self._room:
             # Re-check after the (possibly long) wait: a fuse may have
             # tripped while this call sat in the queue.

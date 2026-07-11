@@ -3,8 +3,8 @@
 The Gatekeeper is internal (no public name); these tests exercise it the
 way a caller experiences it, through `run_one` kwargs and the root result,
 plus the conftest `open_test_run` harness where the in-memory log itself is
-inspected. Fake clients keep every run offline: the framework's behavior
-around the provider is what is under test, never the provider.
+inspected. Scripted catalog entries keep every run offline: the framework's
+behavior around the provider is what is under test, never the provider.
 """
 
 import asyncio
@@ -14,7 +14,6 @@ from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from vibrantine.contract import (
@@ -25,8 +24,15 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.dispatch import dispatch
+from vibrantine.models import Model
 from vibrantine.orchestrator import run_one
-from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import (
+    FIXTURE_MODEL,
+    AlwaysCancelled,
+    ScriptedLLM,
+    llm_response,
+    scripted_model,
+)
 
 # FIXTURE_MODEL pricing: $0.50/M in, $3.00/M out. The default llm_response
 # token counts (100 in, 50 out) therefore cost exactly $0.0002 per call.
@@ -106,16 +112,13 @@ def _conclude(answer: str = "done", *, in_tokens: int = 100, out_tokens: int = 5
     )
 
 
-def _probe(responses: list[Any], **kwargs: Any) -> _Probe:
-    return _Probe(client=cast(AsyncOpenAI, ScriptedLLM(responses)), model=FIXTURE_MODEL, **kwargs)
-
-
-def _child(responses: list[Any]) -> _Child:
-    return _Child(client=cast(AsyncOpenAI, ScriptedLLM(responses)), model=FIXTURE_MODEL)
+def _scripted(responses: list[Any], *, id: str = FIXTURE_MODEL.id) -> Model:
+    """A catalog entry served by a fresh ScriptedLLM with these responses."""
+    return scripted_model(ScriptedLLM(responses), id=id)
 
 
 class _Gauge:
-    """Shared concurrency meter across the paced fake clients."""
+    """Shared concurrency meter across the paced fake providers."""
 
     def __init__(self) -> None:
         self.current = 0
@@ -142,29 +145,40 @@ class _PacedCompletions:
         return self._responses.pop(0)
 
 
-def _paced_client(responses: list[Any], *, delay: float, gauge: _Gauge | None = None) -> Any:
-    return SimpleNamespace(
+def _paced_entry(
+    responses: list[Any],
+    *,
+    delay: float,
+    gauge: _Gauge | None = None,
+    id: str = FIXTURE_MODEL.id,
+) -> Model:
+    """A catalog entry whose fake provider holds each call open for `delay`."""
+    fake = SimpleNamespace(
         chat=SimpleNamespace(completions=_PacedCompletions(responses, delay, gauge))
     )
+    return scripted_model(cast(ScriptedLLM, fake), id=id)
 
 
 # --- Hello world and configuration ----------------------------------------
 
 
 async def test_defaults_run_one_line_and_succeed() -> None:
-    result = await run_one(_probe([_conclude("42")]), _Q(question="?"))
+    result = await run_one(_Probe(), _Q(question="?"), models=[_scripted([_conclude("42")])])
     assert result.status == "success"
     assert result.error is None
     assert result.output is not None and result.output.answer == "42"
 
 
 async def test_bad_run_configuration_is_a_validation_failure() -> None:
-    probe = _probe([_conclude()])
+    probe = _Probe()
     for kwargs, needle in (
         ({"concurrency": 0}, "concurrency"),
         ({"max_llm_calls": 0}, "max_llm_calls"),
         ({"time_limit_seconds": 0}, "time_limit_seconds"),
         ({"budget_usd": -1.0}, "budget_usd"),
+        ({"models": [FIXTURE_MODEL, FIXTURE_MODEL]}, "more than once"),
+        ({"default_model": "fixture/absent"}, "not in models="),
+        ({"models": [FIXTURE_MODEL, Model(id="other/model")]}, "default_model"),
     ):
         result = await run_one(probe, _Q(question="?"), **cast(dict[str, Any], kwargs))
         assert result.status == "failure"
@@ -173,10 +187,24 @@ async def test_bad_run_configuration_is_a_validation_failure() -> None:
         assert needle in result.error.detail
 
 
+async def test_unknown_model_name_fails_fast_and_loud() -> None:
+    # The Commission names a model the run never registered: an immediate
+    # validation failure naming the id and the catalog, before anything is
+    # sent or spent. The silent bare-OpenRouter fallback is gone.
+    probe = _Probe(model="fixture/not-registered")
+    result = await run_one(probe, _Q(question="?"), models=[_scripted([_conclude()])])
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert "fixture/not-registered" in result.error.detail
+    assert "not in this run's catalog" in result.error.detail
+    assert result.cost.estimated_usd == 0.0
+
+
 async def test_caller_cancellation_is_not_relabelled_run_halted() -> None:
     # The caller's token and the breaker share one signal, but a pure caller
     # cancellation is not a fuse trip: no rewrite, the ordinary kind stands.
-    result = await run_one(_probe([_conclude()]), _Q(question="?"), cancel=AlwaysCancelled())
+    result = await run_one(_Probe(), _Q(question="?"), cancel=AlwaysCancelled())
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
@@ -190,11 +218,9 @@ async def test_llm_call_fuse_trips_and_root_speaks_run_halted() -> None:
     # refused at the 1-call limit. The node reports an ordinary cancellation;
     # only the root speaks run_halted, with the fuse named for a reader who
     # has no other context.
-    probe = _probe(
-        [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
-        toolbox=(_EchoTool(),),
-    )
-    result = await run_one(probe, _Q(question="?"), max_llm_calls=1)
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(probe, _Q(question="?"), models=[script], max_llm_calls=1)
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -211,7 +237,9 @@ async def test_spend_fuse_trips_and_reports_true_total_spend() -> None:
     # One turn costing $0.0002 against a $0.0001 budget: the node's own
     # allocation check fails it, the fuse trips at settle, and the root is
     # rewritten to run_halted with the observed total in the cost field.
-    result = await run_one(_probe([_conclude()]), _Q(question="?"), budget_usd=0.0001)
+    result = await run_one(
+        _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], budget_usd=0.0001
+    )
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -224,18 +252,12 @@ async def test_time_fuse_trips_at_the_dispatch_seam() -> None:
     # The first provider call is held open well past the deadline (well past
     # Windows' coarse monotonic tick, too); the trip then fires at the next
     # dispatch (the echo child), between LLM calls, not only at the door.
-    probe = _Probe(
-        client=cast(
-            AsyncOpenAI,
-            _paced_client(
-                [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
-                delay=0.2,
-            ),
-        ),
-        model=FIXTURE_MODEL,
-        toolbox=(_EchoTool(),),
+    probe = _Probe(toolbox=(_EchoTool(),))
+    entry = _paced_entry(
+        [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
+        delay=0.2,
     )
-    result = await run_one(probe, _Q(question="?"), time_limit_seconds=0.05)
+    result = await run_one(probe, _Q(question="?"), models=[entry], time_limit_seconds=0.05)
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -247,7 +269,9 @@ async def test_time_fuse_trips_at_the_dispatch_seam() -> None:
 async def test_exactly_n_calls_do_not_trip_the_count_fuse() -> None:
     # The count check reads "this call would be call N+1": a run that makes
     # exactly N calls and concludes has not tripped anything.
-    result = await run_one(_probe([_conclude()]), _Q(question="?"), max_llm_calls=1)
+    result = await run_one(
+        _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], max_llm_calls=1
+    )
     assert result.status == "success"
 
 
@@ -279,8 +303,17 @@ async def test_a_root_that_concludes_despite_a_trip_keeps_its_success() -> None:
                 ),
             )
 
-    coordinator = _MakesDo(_child([_conclude()]), _child([_conclude()]))
-    result = await run_one(coordinator, _Q(question="?"), max_llm_calls=1)
+    coordinator = _MakesDo(_Child(model="fixture/a"), _Child(model="fixture/b"))
+    result = await run_one(
+        coordinator,
+        _Q(question="?"),
+        models=[
+            _scripted([_conclude()], id="fixture/a"),
+            _scripted([_conclude()], id="fixture/b"),
+        ],
+        default_model="fixture/a",
+        max_llm_calls=1,
+    )
     assert result.status == "success"
     assert result.error is None
     assert result.output is not None and result.output.answer == "made do"
@@ -291,16 +324,8 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
     # spend limit and trips, the slow one finishes afterwards and still
     # counts. The root detail reports the in-flight completion and the true
     # total, which is what makes "every dollar reported" checkable.
-    fast = _Child(
-        client=cast(
-            AsyncOpenAI, _paced_client([_conclude(in_tokens=100, out_tokens=50)], delay=0.02)
-        ),
-        model=FIXTURE_MODEL,
-    )
-    slow = _Child(
-        client=cast(AsyncOpenAI, _paced_client([_conclude(in_tokens=10, out_tokens=5)], delay=0.2)),
-        model=FIXTURE_MODEL,
-    )
+    fast = _Child(model="fixture/fast")
+    slow = _Child(model="fixture/slow")
 
     class _FailsAfter(Commission[_Q, _A]):
         name: ClassVar[str] = "fails_after"
@@ -320,7 +345,16 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
 
     # The fast call alone reaches the limit exactly, so its own node check
     # ($0.0002 > $0.0002 is false) passes and only the fuse notices.
-    result = await run_one(_FailsAfter(), _Q(question="?"), budget_usd=COST_PER_DEFAULT_CALL)
+    result = await run_one(
+        _FailsAfter(),
+        _Q(question="?"),
+        models=[
+            _paced_entry([_conclude(in_tokens=100, out_tokens=50)], delay=0.02, id="fixture/fast"),
+            _paced_entry([_conclude(in_tokens=10, out_tokens=5)], delay=0.2, id="fixture/slow"),
+        ],
+        default_model="fixture/fast",
+        budget_usd=COST_PER_DEFAULT_CALL,
+    )
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -335,13 +369,7 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
 
 async def test_room_bounds_provider_calls_across_the_tree() -> None:
     gauge = _Gauge()
-    children = [
-        _Child(
-            client=cast(AsyncOpenAI, _paced_client([_conclude()], delay=0.05, gauge=gauge)),
-            model=FIXTURE_MODEL,
-        )
-        for _ in range(4)
-    ]
+    children = [_Child(model=f"fixture/c{i}") for i in range(4)]
 
     class _Fan(Commission[_Q, _A]):
         name: ClassVar[str] = "fan"
@@ -356,7 +384,16 @@ async def test_room_bounds_provider_calls_across_the_tree() -> None:
                 _A(answer="fanned"), provenance=_prov("fan"), cost=CostMetrics(estimated_usd=0.0)
             )
 
-    result = await run_one(_Fan(), _Q(question="?"), concurrency=2)
+    result = await run_one(
+        _Fan(),
+        _Q(question="?"),
+        models=[
+            _paced_entry([_conclude()], delay=0.05, gauge=gauge, id=f"fixture/c{i}")
+            for i in range(4)
+        ],
+        default_model="fixture/c0",
+        concurrency=2,
+    )
     assert result.status == "success"
     assert gauge.peak <= 2
 
@@ -365,12 +402,23 @@ async def test_room_of_one_with_a_nested_llm_tree_completes() -> None:
     # The chair is released before children dispatch (count leaf work, not
     # coordinators), so even a room of 1 cannot deadlock a parent that
     # delegates to an LLM child mid-loop.
-    child = _child([_conclude("from child")])
-    parent = _probe(
-        [llm_response(tool_calls=[("t1", "child", {"question": "sub?"})]), _conclude("done")],
-        toolbox=(child,),
+    child = _Child(model="fixture/child")
+    parent = _Probe(toolbox=(child,))
+    result = await asyncio.wait_for(
+        run_one(
+            parent,
+            _Q(question="?"),
+            models=[
+                _scripted(
+                    [llm_response(tool_calls=[("t1", "child", {"question": "sub?"})]), _conclude()]
+                ),
+                _scripted([_conclude("from child")], id="fixture/child"),
+            ],
+            default_model=FIXTURE_MODEL.id,
+            concurrency=1,
+        ),
+        timeout=10,
     )
-    result = await asyncio.wait_for(run_one(parent, _Q(question="?"), concurrency=1), timeout=10)
     assert result.status == "success"
 
 
@@ -441,11 +489,9 @@ ROW_KEYS = {
 
 
 async def test_log_keeps_one_row_per_call_including_refusals(open_test_run: Any) -> None:
-    probe = _probe(
-        [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
-        toolbox=(_EchoTool(),),
-    )
-    async with open_test_run(max_llm_calls=1) as ctx:
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    async with open_test_run(models=[script], max_llm_calls=1) as ctx:
         result = await dispatch(probe, _Q(question="?"), ctx)
         rows = ctx._gatekeeper.calls  # pyright: ignore[reportPrivateUsage]
     assert result.status == "failure"
@@ -464,8 +510,8 @@ async def test_log_keeps_one_row_per_call_including_refusals(open_test_run: Any)
 
 
 async def test_log_row_carries_the_node_grant_at_call_time(open_test_run: Any) -> None:
-    async with open_test_run(budget_usd=0.05) as ctx:
-        await dispatch(_probe([_conclude()]), _Q(question="?"), ctx)
+    async with open_test_run(models=[_scripted([_conclude()])], budget_usd=0.05) as ctx:
+        await dispatch(_Probe(), _Q(question="?"), ctx)
         rows = ctx._gatekeeper.calls  # pyright: ignore[reportPrivateUsage]
     assert len(rows) == 1
     assert rows[0]["grant_usd"] == 0.05

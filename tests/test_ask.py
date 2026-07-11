@@ -1,21 +1,20 @@
 """Tests for AskCommission.
 
-Tests inject a fake AsyncOpenAI-shaped client that returns a scripted
-sequence of tool-call responses. ReadTool is real so the dispatch loop
-exercises end-to-end through to a deterministic in-process tool.
+Tests register a ScriptedLLM fake as the run's model catalog entry
+(`scripted_model`), so every LLM call is served from a scripted sequence of
+tool-call responses while dispatch, cost, and budget math run for real.
+ReadTool is real so the dispatch loop exercises end-to-end through to a
+deterministic in-process tool.
 """
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
-
-from openai import AsyncOpenAI
+from typing import Any
 
 from vibrantine import run_one
 from vibrantine.contract import CapabilitySet, ProgressEvent
 from vibrantine.examples.ask import AskCommission, AskInput
-from vibrantine.models import Model
-from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools.read import ReadTool
 
 
@@ -23,14 +22,9 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_iterations: int = 10,
-    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[AskCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
-    commission = AskCommission(
-        client=cast(AsyncOpenAI, fake),
-        max_iterations=max_iterations,
-        model=model,
-    )
+    commission = AskCommission(max_iterations=max_iterations)
     return commission, fake
 
 
@@ -50,6 +44,7 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
     result = await run_one(
         commission,
         AskInput(question="What is the capital of France?", file_path=file),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success", result.error
@@ -78,6 +73,7 @@ async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> Non
     result = await run_one(
         commission,
         AskInput(question="How many lines?", file_path=file),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success", result.error
@@ -95,11 +91,12 @@ async def test_ask_exceeds_iteration_cap_returns_internal_failure(tmp_path: Path
         llm_response(tool_calls=[("c", "read", {"path": str(file), "offset": 0, "limit": 10})])
         for _ in range(3)
     ]
-    commission, _fake = _commission(responses, max_iterations=3)
+    commission, fake = _commission(responses, max_iterations=3)
 
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"
@@ -114,7 +111,7 @@ async def test_ask_no_tool_call_returns_internal_failure(tmp_path: Path) -> None
 
     # The first free-text reply earns a corrective nudge; only the second
     # fails the run (see run_llm_loop), so two are scripted here.
-    commission, _fake = _commission(
+    commission, fake = _commission(
         [
             llm_response(tool_calls=None, content="I refuse to use a tool."),
             llm_response(tool_calls=None, content="I still refuse."),
@@ -124,6 +121,7 @@ async def test_ask_no_tool_call_returns_internal_failure(tmp_path: Path) -> None
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"
@@ -153,6 +151,7 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
         budget_usd=0.001,
     )
 
@@ -173,6 +172,7 @@ async def test_ask_cancellation_at_entry_makes_no_llm_call(tmp_path: Path) -> No
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
         cancel=AlwaysCancelled(),
     )
 
@@ -199,6 +199,7 @@ async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) ->
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success", result.error
@@ -215,11 +216,12 @@ async def test_ask_emits_loop_start_progress_event(tmp_path: Path) -> None:
     file.write_text("hello", encoding="utf-8")
     events: list[ProgressEvent] = []
 
-    commission, _fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
+    commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
     await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake)],
         on_progress=events.append,
     )
 
@@ -230,7 +232,7 @@ def test_ask_toolbox_holds_injected_read() -> None:
     # Single source of truth: the same ReadTool the loop sees lives in toolbox.
     # The toolbox= kwarg overrides the class-attribute default for DI/tests.
     read = ReadTool()
-    ask = AskCommission(toolbox=(read,), client=cast(AsyncOpenAI, ScriptedLLM([])))
+    ask = AskCommission(toolbox=(read,))
 
     assert ask.toolbox == (read,)
 
@@ -247,6 +249,7 @@ async def test_ask_unrestricted_capabilities_offer_read(tmp_path: Path) -> None:
     await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
+        models=[scripted_model(fake)],
     )
 
     assert _tool_names(fake.calls[0]) == {"read", "conclude"}
@@ -261,6 +264,7 @@ async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
     await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
+        models=[scripted_model(fake)],
         capabilities=CapabilitySet(tools=frozenset()),
     )
 
@@ -282,6 +286,7 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
     result = await run_one(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
+        models=[scripted_model(fake)],
         capabilities=CapabilitySet(tools=frozenset()),
     )
 
@@ -297,42 +302,43 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
 async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
     tmp_path: Path,
 ) -> None:
-    # budget_usd set + model absent from KNOWN_MODELS → the budget can't be
-    # priced, so the call fails fast rather than running it unenforced.
+    # budget_usd set + a catalog entry registered without USD rates → the
+    # budget can't be priced, so the call fails fast rather than running it
+    # unenforced.
     file = tmp_path / "f.txt"
     file.write_text("hello", encoding="utf-8")
     commission, fake = _commission(
         [llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])],
-        model="unregistered/model",
     )
 
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
         budget_usd=1.0,
     )
 
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "validation"
-    assert "KNOWN_MODELS" in result.error.detail
+    assert "USD rates" in result.error.detail
     assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
 async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> None:
-    # The refusal bites only at budget+unpriced; an unregistered model with no
-    # budget runs normally; pointing at any OpenRouter model stays permitted.
+    # The refusal bites only at budget+unpriced; an unpriced catalog entry
+    # with no budget runs normally.
     file = tmp_path / "f.txt"
     file.write_text("hello", encoding="utf-8")
     commission, fake = _commission(
         [llm_response(tool_calls=[("c", "conclude", {"answer": "ok"})])],
-        model="unregistered/model",
     )
 
     result = await run_one(
         commission,
         AskInput(question="?", file_path=file),
+        models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
     )
 
     assert result.status == "success", result.error

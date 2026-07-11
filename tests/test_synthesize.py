@@ -1,17 +1,14 @@
 """Tests for the Synthesize Commission.
 
-Tests inject a fake AsyncOpenAI-shaped client via the constructor. The fake
-records every call so we can assert that the size gate skips the LLM and that
-cancellation lands before any network work.
+Tests register a ScriptedLLM fake as the run's model catalog entry
+(`scripted_model`). The fake records every call so we can assert that the
+size gate skips the LLM and that cancellation lands before any network work.
 """
 
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
-
-from openai import AsyncOpenAI
 
 from vibrantine import run_one
 from vibrantine.contract import ProgressEvent, Provenance
@@ -20,9 +17,8 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.models import Model
 from vibrantine.persistence import FilesystemBackend
-from vibrantine.testing import FIXTURE_MODEL, AlwaysCancelled, ScriptedLLM, llm_response
+from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 
 def _src(idx: int, content: str = "fact") -> SynthesisSource:
@@ -40,14 +36,9 @@ def _commission(
     responses: list[SimpleNamespace],
     *,
     max_input_tokens: int | None = None,
-    model: str | Model = FIXTURE_MODEL,
 ) -> tuple[SynthesizeCommission, ScriptedLLM]:
     fake = ScriptedLLM(responses)
-    commission = SynthesizeCommission(
-        client=cast(AsyncOpenAI, fake),
-        max_input_tokens=max_input_tokens,
-        model=model,
-    )
+    commission = SynthesizeCommission(max_input_tokens=max_input_tokens)
     return commission, fake
 
 
@@ -62,13 +53,14 @@ _VALID_STRUCTURED = json.dumps(
 
 
 async def test_synthesize_success_returns_at_least_one_claim() -> None:
-    commission, _fake = _commission(
+    commission, fake = _commission(
         [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
     )
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success"
@@ -81,13 +73,14 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
 
 async def test_synthesize_record_carries_both_pass_transcripts(tmp_path: Path) -> None:
     backend = FilesystemBackend(tmp_path)
-    commission, _fake = _commission(
+    commission, fake = _commission(
         [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
     )
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
         backend=backend,
         record="always",
     )
@@ -112,13 +105,12 @@ async def test_synthesize_failed_run_still_carries_transcripts(tmp_path: Path) -
     # A structured pass that emits junk fails the run; the record still holds
     # both conversations, which is the autopsy the trace exists for.
     backend = FilesystemBackend(tmp_path)
-    commission, _fake = _commission(
-        [llm_response(content="free"), llm_response(content="not json")]
-    )
+    commission, fake = _commission([llm_response(content="free"), llm_response(content="not json")])
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0)]),
+        models=[scripted_model(fake)],
         backend=backend,
         record="always",
     )
@@ -142,11 +134,11 @@ async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> Non
         }
     )
     sources = [_src(0), _src(1), _src(2)]
-    commission, _fake = _commission(
-        [llm_response(content="free"), llm_response(content=structured)]
-    )
+    commission, fake = _commission([llm_response(content="free"), llm_response(content=structured)])
 
-    result = await run_one(commission, SynthesizeInput(sources=sources))
+    result = await run_one(
+        commission, SynthesizeInput(sources=sources), models=[scripted_model(fake)]
+    )
 
     assert result.status == "success"
     assert result.output is not None
@@ -158,8 +150,8 @@ async def test_synthesize_claim_sources_are_subset_of_input_provenances() -> Non
 
 
 async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
-    # FIXTURE_MODEL: $0.50/M input, $3.00/M output.
-    commission, _fake = _commission(
+    # The scripted entry keeps FIXTURE_MODEL's pricing: $0.50/M in, $3.00/M out.
+    commission, fake = _commission(
         [
             llm_response(content="free", in_tokens=1000, out_tokens=200),
             llm_response(content=_VALID_STRUCTURED, in_tokens=500, out_tokens=100),
@@ -169,6 +161,7 @@ async def test_synthesize_cost_reflects_token_usage_and_pricing() -> None:
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "success"
@@ -186,6 +179,7 @@ async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0)]),
+        models=[scripted_model(fake)],
         cancel=AlwaysCancelled(),
     )
 
@@ -198,13 +192,14 @@ async def test_synthesize_cancellation_before_llm_call_makes_no_call() -> None:
 
 async def test_synthesize_emits_progress_events_for_each_phase() -> None:
     events: list[ProgressEvent] = []
-    commission, _fake = _commission(
+    commission, fake = _commission(
         [llm_response(content="free"), llm_response(content=_VALID_STRUCTURED)]
     )
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
         on_progress=events.append,
     )
 
@@ -222,6 +217,7 @@ async def test_synthesize_budget_too_small_blocks_before_any_llm_call() -> None:
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
         budget_usd=1e-7,
     )
 
@@ -248,6 +244,7 @@ async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> No
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
         budget_usd=0.0005,
     )
 
@@ -272,6 +269,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
     result = await run_one(
         commission,
         SynthesizeInput(sources=[bulky_source]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"
@@ -285,7 +283,7 @@ async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() ->
 async def test_synthesize_empty_sources_fails_validation_before_llm() -> None:
     commission, fake = _commission([])
 
-    result = await run_one(commission, SynthesizeInput(sources=[]))
+    result = await run_one(commission, SynthesizeInput(sources=[]), models=[scripted_model(fake)])
 
     assert result.status == "failure"
     assert result.error is not None
@@ -303,13 +301,12 @@ async def test_synthesize_negative_source_index_is_rejected() -> None:
             "claims": [{"value": "A", "source_indices": [-1], "confidence": "grounded"}],
         }
     )
-    commission, _fake = _commission(
-        [llm_response(content="free"), llm_response(content=structured)]
-    )
+    commission, fake = _commission([llm_response(content="free"), llm_response(content=structured)])
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"
@@ -328,13 +325,12 @@ async def test_synthesize_claim_with_no_source_indices_is_rejected() -> None:
             "claims": [{"value": "A", "source_indices": [], "confidence": "grounded"}],
         }
     )
-    commission, _fake = _commission(
-        [llm_response(content="free"), llm_response(content=structured)]
-    )
+    commission, fake = _commission([llm_response(content="free"), llm_response(content=structured)])
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"
@@ -346,42 +342,42 @@ async def test_synthesize_claim_with_no_source_indices_is_rejected() -> None:
 
 def test_synthesize_has_empty_toolbox() -> None:
     # A Python coordinator with no sub-Commissions: empty toolbox by default.
-    synth = SynthesizeCommission(client=cast(AsyncOpenAI, ScriptedLLM([])))
+    synth = SynthesizeCommission()
     assert synth.toolbox == ()
 
 
 async def test_synthesize_budget_with_unpriced_model_refuses_before_any_call() -> None:
-    # budget_usd set + model not in KNOWN_MODELS → fail fast: cost can't be
-    # priced, so the budget can't be honored.
+    # budget_usd set + a catalog entry registered without USD rates → fail
+    # fast: cost can't be priced, so the budget can't be honored.
     commission, fake = _commission(
         [llm_response(content="unused"), llm_response(content="unused")],
-        model="unregistered/model",
     )
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
         budget_usd=1.0,
     )
 
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "validation"
-    assert "KNOWN_MODELS" in result.error.detail
+    assert "USD rates" in result.error.detail
     assert len(fake.calls) == 0
     assert result.cost.estimated_usd == 0.0
 
 
 async def test_synthesize_unpriced_model_without_budget_still_runs() -> None:
-    # No budget → an unregistered model runs to completion as before.
+    # No budget → an unpriced catalog entry runs to completion as before.
     commission, fake = _commission(
         [llm_response(content="free"), llm_response(content=_VALID_STRUCTURED)],
-        model="unregistered/model",
     )
 
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
     )
 
     assert result.status == "success", result.error
@@ -401,6 +397,7 @@ async def test_synthesize_empty_provider_choices_fail_as_value() -> None:
     result = await run_one(
         commission,
         SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
     )
 
     assert result.status == "failure"

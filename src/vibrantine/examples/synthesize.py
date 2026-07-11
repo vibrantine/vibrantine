@@ -5,9 +5,10 @@ structured-output pass converts that prose into typed claims. The LLM emits
 source indices, not full provenances; provenances are re-attached on the way
 out so the call's output stays grounded in its inputs.
 
-The model resolves through `models.resolve` (None means the system default),
-accessed through the `openai` SDK with `base_url` swapped. Tests inject a
-scripted client through the constructor's `client` parameter.
+The model is a name resolved against the run's catalog (None means the run
+default), and both passes go through the run's provider door like the
+default loop's calls. Tests script the model through the catalog
+(`testing.scripted_model`).
 """
 
 import json
@@ -30,6 +31,7 @@ from vibrantine.contract import (
     estimate_tokens,
 )
 from vibrantine.dispatch import deposit_llm_trace
+from vibrantine.models import Model, UnknownModelError
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are a research analyst. Read the provided sources and write a concise, "
@@ -118,12 +120,34 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         input: SynthesizeInput,
         ctx: CallContext,
     ) -> CommissionResult[SynthesizeOutput]:
+        zero_cost = CostMetrics(estimated_usd=0.0)
+
+        # Resolve the model choice against the run's catalog up front: the
+        # custom path mirrors the default loop (an unknown name is a loud
+        # validation failure, and provenance, pricing, and the size gate all
+        # hang off the entry).
+        gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+        assert gatekeeper is not None, "synthesize runs inside a run; dispatch refuses outside one"
+        try:
+            entry = gatekeeper.resolve_model(self._model)
+        except UnknownModelError as exc:
+            return self._fail(
+                "validation",
+                str(exc),
+                retryable=False,
+                provenance=Provenance(
+                    source=f"synthesize:{self._model}",
+                    fetched_at=datetime.now(UTC),
+                    confidence=_overall_confidence(input.sources),
+                ),
+                cost=zero_cost,
+            )
+
         provenance = Provenance(
-            source=f"synthesize:{self._model}",
+            source=f"synthesize:{entry.id}",
             fetched_at=datetime.now(UTC),
             confidence=_overall_confidence(input.sources),
         )
-        zero_cost = CostMetrics(estimated_usd=0.0)
 
         if not input.sources:
             return self._fail(
@@ -143,7 +167,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 cost=zero_cost,
             )
 
-        budget_failure = self._budget_unenforceable_failure(ctx, provenance)
+        budget_failure = self._budget_unenforceable_failure(ctx, provenance, entry)
         if budget_failure is not None:
             return budget_failure
 
@@ -151,11 +175,11 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         estimated_tokens = estimate_tokens(
             _SYNTHESIS_SYSTEM_PROMPT + _STRUCTURED_SYSTEM_PROMPT + user_prompt,
         )
-        if not self.fits(estimated_tokens):
+        if not self._fits_cap(estimated_tokens, self._effective_input_cap(entry)):
             return self._fail(
                 "validation",
                 f"Estimated input of {estimated_tokens} tokens exceeds the size gate "
-                f"for model {self._model}.",
+                f"for model {entry.id}.",
                 retryable=False,
                 provenance=provenance,
                 cost=zero_cost,
@@ -163,7 +187,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
 
         # Pre-flight budget check using estimated input cost. Cheap lower bound;
         # the post-call check below enforces against actual cost.
-        in_price, _out_price = self._prices()
+        in_price = entry.input_usd_per_million or 0.0
         estimated_in_cost = (estimated_tokens * in_price) / 1_000_000
         if ctx.budget_usd is not None and estimated_in_cost > ctx.budget_usd:
             return self._fail(
@@ -186,8 +210,9 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         first_text, first_in, first_out, first_err = await self._call(
             synth_messages,
             provenance,
-            self._cost(in_tokens, out_tokens),
+            self._cost(in_tokens, out_tokens, entry),
             ctx,
+            entry,
             json_mode=False,
         )
         if first_err is not None:
@@ -201,11 +226,11 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 "Cancelled between synthesis and structured-output passes.",
                 retryable=False,
                 provenance=provenance,
-                cost=self._cost(in_tokens, out_tokens),
+                cost=self._cost(in_tokens, out_tokens, entry),
             )
 
         # Post-first-call budget check against real usage.
-        cost_so_far = self._cost(in_tokens, out_tokens)
+        cost_so_far = self._cost(in_tokens, out_tokens, entry)
         if ctx.budget_usd is not None and cost_so_far.estimated_usd > ctx.budget_usd:
             return self._fail(
                 "budget_exceeded",
@@ -230,8 +255,9 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         second_text, second_in, second_out, second_err = await self._call(
             structured_messages,
             provenance,
-            self._cost(in_tokens, out_tokens),
+            self._cost(in_tokens, out_tokens, entry),
             ctx,
+            entry,
             json_mode=True,
         )
         if second_err is not None:
@@ -242,7 +268,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         # Post-second-call check, mirroring the framework loop's post-turn
         # rule: overshoot is reported as budget_exceeded, never returned as
         # a quiet success costing more than the grant.
-        cost_after_structured = self._cost(in_tokens, out_tokens)
+        cost_after_structured = self._cost(in_tokens, out_tokens, entry)
         if ctx.budget_usd is not None and cost_after_structured.estimated_usd > ctx.budget_usd:
             return self._fail(
                 "budget_exceeded",
@@ -261,7 +287,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 f"Structured output failed to parse: {exc}",
                 retryable=True,
                 provenance=provenance,
-                cost=self._cost(in_tokens, out_tokens),
+                cost=self._cost(in_tokens, out_tokens, entry),
             )
 
         try:
@@ -272,14 +298,14 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 f"Claim failed to ground in its sources: {exc}",
                 retryable=True,
                 provenance=provenance,
-                cost=self._cost(in_tokens, out_tokens),
+                cost=self._cost(in_tokens, out_tokens, entry),
             )
 
         return CommissionResult[SynthesizeOutput](
             status="success",
             output=SynthesizeOutput(summary_text=raw.summary_text, claims=claims),
             provenance=provenance,
-            cost=self._cost(in_tokens, out_tokens),
+            cost=self._cost(in_tokens, out_tokens, entry),
         )
 
     async def _call(
@@ -288,6 +314,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         provenance: Provenance,
         cost_so_far: CostMetrics,
         ctx: CallContext,
+        entry: Model,
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
@@ -298,7 +325,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         reply: list[dict[str, Any]] = []
         try:
             return await self._call_inner(
-                messages, provenance, cost_so_far, ctx, reply, json_mode=json_mode
+                messages, provenance, cost_so_far, ctx, entry, reply, json_mode=json_mode
             )
         finally:
             deposit_llm_trace([*cast("list[dict[str, Any]]", messages), *reply])
@@ -309,32 +336,31 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         provenance: Provenance,
         cost_so_far: CostMetrics,
         ctx: CallContext,
+        entry: Model,
         reply: list[dict[str, Any]],
         *,
         json_mode: bool,
     ) -> tuple[str, int, int, CommissionResult[SynthesizeOutput] | None]:
         # A custom _run's own LLM calls pass the run's provider door like the
-        # default loop's: the fuses, the room, and the call log govern the
-        # whole tree or they govern nothing.
+        # default loop's: the fuses, the room, the client vending, and the
+        # call log govern the whole tree or they govern nothing.
         gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
         assert gatekeeper is not None, "synthesize runs inside a run; dispatch refuses outside one"
         try:
             async with gatekeeper.provider_call(
-                client=self._resolved_client,
-                model=self._model,
+                entry=entry,
                 commission_name=self.name,
                 grant_usd=ctx.budget_usd,
-                prices=self._prices(),
             ) as ticket:
                 if json_mode:
                     response: ChatCompletion = await ticket.client.chat.completions.create(
-                        model=self._model,
+                        model=entry.id,
                         messages=messages,
                         response_format={"type": "json_object"},
                     )
                 else:
                     response = await ticket.client.chat.completions.create(
-                        model=self._model,
+                        model=entry.id,
                         messages=messages,
                     )
                 if response.usage is not None:
@@ -388,7 +414,7 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         if not response.choices:
             cost = CostMetrics(
                 estimated_usd=cost_so_far.estimated_usd
-                + self._cost(in_tokens, out_tokens).estimated_usd,
+                + self._cost(in_tokens, out_tokens, entry).estimated_usd,
                 in_tokens=(cost_so_far.in_tokens or 0) + in_tokens,
                 out_tokens=(cost_so_far.out_tokens or 0) + out_tokens,
             )

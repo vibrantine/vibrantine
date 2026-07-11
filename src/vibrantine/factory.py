@@ -2,9 +2,9 @@
 
 Authoring a Commission splits into two kinds of work. Crafting: choosing the
 input and output types, the name, the description, the tools. Manufacturing:
-client construction, model resolution, prompt scaffolding, and the
-provenance/cost plumbing, identical every time. This factory absorbs the
-manufacturing so authoring shrinks to the crafting.
+prompt scaffolding, catalog wiring, and the provenance/cost plumbing,
+identical every time. This factory absorbs the manufacturing so authoring
+shrinks to the crafting.
 
 The factory is deliberately deterministic: no LLM is involved in building
 the Commission, nothing is fetched, nothing is spent. What comes back is an
@@ -14,7 +14,7 @@ a Commission outgrows the factory the exit is subclassing `Commission`,
 where nothing learned here changes.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -24,10 +24,6 @@ from vibrantine.contract import (
     Commission,
     ContentPart,
 )
-from vibrantine.models import Model
-
-if TYPE_CHECKING:
-    from openai import AsyncOpenAI
 
 
 def _default_system_prompt(description: str, input_type: type[BaseModel]) -> str:
@@ -64,8 +60,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     output: type[OutputT],
     toolbox: "tuple[Commission[Any, Any], ...]" = (),
     system_prompt: str | None = None,
-    model: str | Model | None = None,
-    client: "AsyncOpenAI | None" = None,
+    model: str | None = None,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
 ) -> Commission[InputT, OutputT]:
     """Build a basic LLM-loop Commission from its irreducible decisions.
@@ -80,8 +75,9 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     Everything else is manufactured: the system prompt defaults to the
     description plus the input schema's field descriptions (pass
     `system_prompt=` to replace it), the opening user message is the input
-    serialized as JSON, and `model` resolves through the standard catalog
-    (None means the system default). `client=` is the usual testing seam.
+    serialized as JSON, and `model` is a name resolved against the run's
+    catalog when the loop runs (None means the run default). Tests script
+    the model through the catalog: `testing.scripted_model`.
 
     Returns an ordinary `Commission[InputT, OutputT]`; run it through
     `run_one` / `invoke_sync` / `dispatch` like any other.
@@ -109,7 +105,6 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
 
     return _FromFactory(
         model=model,
-        client=client,
         toolbox=toolbox,
         max_iterations=max_iterations,
     )

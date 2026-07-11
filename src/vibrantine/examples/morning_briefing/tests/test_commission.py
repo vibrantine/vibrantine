@@ -1,8 +1,8 @@
 """Tests for MorningBriefingCommission: the heterogeneous coordinator tree.
 
 Every child runs against its own scripted fake (fetches through
-httpx.MockTransport, LLM children through fake clients), so the whole
-three-level tree executes without network or API keys and the partial
+httpx.MockTransport, LLM children through scripted catalog entries), so the
+whole three-level tree executes without network or API keys and the partial
 semantics and cost arithmetic are exact assertions.
 """
 
@@ -23,8 +23,14 @@ from vibrantine.examples.morning_briefing.tests.fakes import (
     make_summarize,
     make_weather,
 )
+from vibrantine.models import Model
 from vibrantine.orchestrator import run_one
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM
+
+# Every LLM seat in the tree names its own scripted entry, so the run default
+# is never consulted; the catalog still requires one when several entries are
+# registered, so the weather entry stands in.
+DEFAULT = "fixture/weather"
 
 WORLD_PAGES = {
     "https://news.test/world/a": (200, "world story a"),
@@ -50,21 +56,21 @@ def _briefing(
     world_pages: dict[str, tuple[int, str]] | None = None,
     tech_pages: dict[str, tuple[int, str]] | None = None,
     world_claims: list[dict[str, Any]] | None = None,
-) -> tuple[MorningBriefingCommission, dict[str, ScriptedLLM]]:
-    weather, weather_fake = make_weather(fails=weather_fails)
-    world, world_fake = make_digest(
+) -> tuple[MorningBriefingCommission, dict[str, ScriptedLLM], list[Model]]:
+    weather, weather_fake, weather_entry = make_weather(fails=weather_fails)
+    world, world_fake, world_entry = make_digest(
         field="international",
         pages=world_pages or WORLD_PAGES,
         claims=world_claims if world_claims is not None else WORLD_CLAIMS,
         summary="A steady morning internationally.",
     )
-    tech, tech_fake = make_digest(
+    tech, tech_fake, tech_entry = make_digest(
         field="tech",
         pages=tech_pages or TECH_PAGES,
         claims=TECH_CLAIMS,
         summary="One big tech story.",
     )
-    summarize, summarize_fake = make_summarize(fails=summarize_fails)
+    summarize, summarize_fake, summarize_entry = make_summarize(fails=summarize_fails)
     briefing = MorningBriefingCommission(weather=weather, news=(world, tech), summarize=summarize)
     fakes = {
         "weather": weather_fake,
@@ -72,17 +78,18 @@ def _briefing(
         "tech": tech_fake,
         "summarize": summarize_fake,
     }
-    return briefing, fakes
+    models = [weather_entry, world_entry, tech_entry, summarize_entry]
+    return briefing, fakes, models
 
 
 def test_construction_requires_at_least_one_news_digest() -> None:
-    weather, _ = make_weather()
+    weather, _, _ = make_weather()
     with pytest.raises(ValueError, match="news digest"):
         MorningBriefingCommission(weather=weather, news=(), summarize=make_summarize()[0])
 
 
 def test_toolbox_lists_every_child_in_order() -> None:
-    briefing, _ = _briefing()
+    briefing, _, _ = _briefing()
     assert [child.name for child in briefing.toolbox] == [
         "weather",
         "news_digest",
@@ -92,10 +99,16 @@ def test_toolbox_lists_every_child_in_order() -> None:
 
 
 async def test_success_writes_briefing_with_all_sections(tmp_path: Path) -> None:
-    briefing, _ = _briefing()
+    briefing, _, models = _briefing()
     out_path = tmp_path / "briefing.md"
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=out_path), budget_usd=0.50)
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        budget_usd=0.50,
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "success"
     assert result.error is None
@@ -125,12 +138,16 @@ async def test_success_writes_briefing_with_all_sections(tmp_path: Path) -> None
 
 
 async def test_total_cost_sums_every_child(tmp_path: Path) -> None:
-    briefing, _ = _briefing()
+    briefing, _, models = _briefing()
     # weather turn + two digests (Synthesize runs) + summarize turn.
     expected = TURN_COST + 2 * SYNTH_COST + TURN_COST
 
     result = await run_one(
-        briefing, MorningBriefingInput(output_path=tmp_path / "b.md"), budget_usd=0.50
+        briefing,
+        MorningBriefingInput(output_path=tmp_path / "b.md"),
+        budget_usd=0.50,
+        models=models,
+        default_model=DEFAULT,
     )
 
     assert abs(result.cost.estimated_usd - expected) < 1e-12
@@ -142,9 +159,14 @@ async def test_failed_source_inside_a_section_makes_the_briefing_partial(
     pages = dict(WORLD_PAGES)
     pages["https://news.test/world/b"] = (404, "gone")
     # Only one source survives, so the scripted claims may cite index 0 only.
-    briefing, _ = _briefing(world_pages=pages, world_claims=WORLD_CLAIMS[:1])
+    briefing, _, models = _briefing(world_pages=pages, world_claims=WORLD_CLAIMS[:1])
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=tmp_path / "b.md"))
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=tmp_path / "b.md"),
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "partial"
     assert result.output is not None
@@ -158,10 +180,15 @@ async def test_failed_source_inside_a_section_makes_the_briefing_partial(
 
 
 async def test_whole_section_failing_is_skipped_and_named(tmp_path: Path) -> None:
-    briefing, _ = _briefing(weather_fails=True)
+    briefing, _, models = _briefing(weather_fails=True)
     out_path = tmp_path / "b.md"
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=out_path))
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "partial"
     assert result.output is not None
@@ -176,14 +203,19 @@ async def test_whole_section_failing_is_skipped_and_named(tmp_path: Path) -> Non
 
 
 async def test_all_sections_failing_fails_without_writing(tmp_path: Path) -> None:
-    briefing, fakes = _briefing(
+    briefing, fakes, models = _briefing(
         weather_fails=True,
         world_pages={url: (500, "boom") for url in WORLD_PAGES},
         tech_pages={url: (500, "boom") for url in TECH_PAGES},
     )
     out_path = tmp_path / "b.md"
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=out_path))
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "failure"
     assert result.output is None
@@ -197,10 +229,15 @@ async def test_all_sections_failing_fails_without_writing(tmp_path: Path) -> Non
 async def test_executive_summary_failure_degrades_instead_of_killing(
     tmp_path: Path,
 ) -> None:
-    briefing, _ = _briefing(summarize_fails=True)
+    briefing, _, models = _briefing(summarize_fails=True)
     out_path = tmp_path / "b.md"
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=out_path))
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "partial"
     assert result.output is not None
@@ -213,12 +250,17 @@ async def test_executive_summary_failure_degrades_instead_of_killing(
 
 
 async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) -> None:
-    briefing, _ = _briefing()
+    briefing, _, models = _briefing()
     blocker = tmp_path / "blocker"
     blocker.write_text("a file where a directory is needed", encoding="utf-8")
     out_path = blocker / "briefing.md"  # parent is a file, so mkdir raises
 
-    result = await run_one(briefing, MorningBriefingInput(output_path=out_path))
+    result = await run_one(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        models=models,
+        default_model=DEFAULT,
+    )
 
     assert result.status == "failure"
     assert result.error is not None
@@ -228,11 +270,13 @@ async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) 
 
 
 async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) -> None:
-    briefing, fakes = _briefing()
+    briefing, fakes, models = _briefing()
 
     result = await run_one(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
+        models=models,
+        default_model=DEFAULT,
         cancel=AlwaysCancelled(),
     )
 
@@ -243,13 +287,15 @@ async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) ->
 
 
 async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:
-    briefing, _ = _briefing()
+    briefing, _, models = _briefing()
     events: list[ProgressEvent] = []
 
     result = await run_one(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         budget_usd=0.50,
+        models=models,
+        default_model=DEFAULT,
         on_progress=events.append,
     )
 

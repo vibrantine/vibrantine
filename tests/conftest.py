@@ -9,12 +9,12 @@ run ContextVar, a context carrying both) without the entry point, because
 touch internals, the library may not.
 """
 
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import pytest
 
-from vibrantine._gatekeeper import Gatekeeper, RunCancel, current_gatekeeper
+from vibrantine._gatekeeper import Gatekeeper, RunCancel, build_catalog, current_gatekeeper
 from vibrantine.contract import (
     NEVER_CANCELLED,
     CallContext,
@@ -24,6 +24,7 @@ from vibrantine.contract import (
     PersistenceMode,
     ProgressEvent,
 )
+from vibrantine.models import Model
 
 
 @asynccontextmanager
@@ -31,6 +32,8 @@ async def open_run(
     *,
     budget_usd: float | None = None,
     spend_limit_usd: float | None = None,
+    models: Sequence[Model] = (),
+    default_model: str | None = None,
     max_llm_calls: int | None = None,
     time_limit_seconds: float | None = None,
     concurrency: int = 16,
@@ -45,9 +48,14 @@ async def open_run(
     Deliberately unlike run_one, every fuse defaults to off (`budget_usd`
     here is only the root allocation grant; arm the spend fuse explicitly
     with `spend_limit_usd`), so an interior test never trips a fuse it
-    didn't arm and allocation tests stay pure.
+    didn't arm and allocation tests stay pure. `models=` builds the run's
+    catalog exactly like run_one (empty auto-registers the system default);
+    register `testing.scripted_model(...)` entries here for fake providers.
     """
+    catalog, default = build_catalog(models, default_model)
     gatekeeper = Gatekeeper(
+        catalog=catalog,
+        default_model=default,
         max_llm_calls=max_llm_calls,
         time_limit_seconds=time_limit_seconds,
         spend_limit_usd=spend_limit_usd,
