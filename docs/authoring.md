@@ -422,7 +422,7 @@ bounds are already on your Commission; this step is about knowing them.
 - **Budget.** The `budget_usd=0.10` you passed above bounds the run twice
   over: it is the root's allocated grant, debited down the tree, and it
   arms the run's spend fuse, a running observed total at the provider
-  door. If real spend reaches it, you get `status="failure"` with
+  door. If real spend passes it, you get `status="failure"` with
   `error.kind == "run_halted"`, a detail naming the fuse and the numbers,
   and the true cost of what was spent, not an exception and not a
   surprise bill. The loop also declines a turn up front when the turn's
@@ -442,6 +442,27 @@ bounds are already on your Commission; this step is about knowing them.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
+- **The other run fuses.** `run_one(max_llm_calls=)` is an always-on
+  backstop (default 1,000) that stops a runaway loop even on a free or
+  local model the spend fuse cannot see; pass `None` to disable it.
+  `run_one(time_limit_seconds=)` is an opt-in wall-clock bound for
+  unattended runs. Both halt the run the same way the spend fuse does:
+  new provider calls are refused, in-flight calls finish and count, and
+  the root reports `run_halted`.
+- **Tool exposure.** `run_one(tool_ceiling=["fetch", "read"])` caps what
+  any model anywhere in the tree may be *offered*: the effective menu is
+  always the Commission's toolbox, intersected with the branch's
+  capability grant, intersected with this ceiling. Unlike a capability
+  grant (which a coordinator may widen for its own children), the ceiling
+  is run-wide and immutable, so it holds even through custom interiors.
+  It is name-based: it bounds what a tool is called, not what its code
+  does.
+- **The call log.** Every provider call in the run lands in a log, one
+  plain dict per settled or refused call (who called, which model,
+  tokens, cost, how it ended). `run_one(on_llm_call=rows.append)` streams
+  the rows to you live; with a `SqliteBackend` on the run they also land
+  in a `calls` table beside the run records at run end. This is where a
+  halted run's story stays reconstructable.
 - **Output size.** `max_output_tokens` plus an `overflow_policy` say what
   happens when the deliverable is oversized. DocTag's output is tiny, so the
   defaults are fine; when you do set a policy, know that `"partial"` flags
@@ -1356,7 +1377,7 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, capabilities=None, cancel=None, on_progress=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, model catalog) and the root `CallContext`. Refuses when called inside a run |
+| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, model catalog) and the root `CallContext`. Refuses when called inside a run |
 | `invoke_sync` | sync wrapper over `run_one`, same kwargs | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | The only way around inside a run: called from a custom `_run` with the ctx it received (or a `replace()` of it). Refuses outside a run, and refuses a hand-built context |
 
