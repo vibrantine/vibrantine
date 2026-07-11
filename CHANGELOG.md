@@ -50,6 +50,11 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   provider is a `ScriptedLLM`, defaulting to `FIXTURE_MODEL`'s id and
   pricing so cost assertions keep their dollars. The testing seam now
   rides the same client-vending door as production.
+- `Model.cost_usd(in_tokens, out_tokens)`: the one pricing formula in the
+  library. Node cost rollups, the run's observed spend, and the budget
+  gates all price through it, so their numbers can never drift apart; an
+  unpriced side rates as $0 (gate on `is_priced` before trusting it for
+  enforcement).
 - `AudioPart` joins the `ContentPart` union: base64 `data` plus a `format`
   tag (`"wav"` or `"mp3"`), conforming to the provider's `input_audio`
   content-part shape. Exported from `vibrantine.__all__`; provisional in

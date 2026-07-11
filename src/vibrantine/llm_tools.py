@@ -157,8 +157,6 @@ async def run_llm_loop[OutputT: BaseModel](
         entry = gatekeeper.resolve_model(model)
     except UnknownModelError as exc:
         return _loop_error("validation", str(exc), retryable=False, in_tokens=0, out_tokens=0)
-    in_price = entry.input_usd_per_million or 0.0
-    out_price = entry.output_usd_per_million or 0.0
     # The effective menu: toolbox ∩ branch grant ∩ run ceiling. The branch
     # grant (ctx.capabilities) is the caller's distributed allow-list; the
     # ceiling is the run's immutable tree-wide bound, held on the shared
@@ -239,8 +237,8 @@ async def run_llm_loop[OutputT: BaseModel](
             # not pennies. Floor means underestimate: the gate never kills a
             # turn the post-turn check might have allowed.
             if ctx.budget_usd is not None:
-                spent = (in_tokens * in_price + out_tokens * out_price) / 1_000_000 + children_cost
-                input_floor = _estimate_transcript_tokens(messages) * in_price / 1_000_000
+                spent = entry.cost_usd(in_tokens, out_tokens) + children_cost
+                input_floor = entry.cost_usd(_estimate_transcript_tokens(messages), 0)
                 if spent + input_floor > ctx.budget_usd:
                     return _loop_error(
                         "budget_exceeded",
@@ -345,7 +343,7 @@ async def run_llm_loop[OutputT: BaseModel](
             # its whole subtree, not just its own turns. May still overshoot by
             # one turn: the pre-turn gate above declines only calls whose input
             # floor alone breaks the grant, and output tokens are unguessable.
-            own_cost = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
+            own_cost = entry.cost_usd(in_tokens, out_tokens)
             cost_so_far = own_cost + children_cost
             if ctx.budget_usd is not None and cost_so_far > ctx.budget_usd:
                 return _loop_error(

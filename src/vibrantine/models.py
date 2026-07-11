@@ -54,6 +54,19 @@ class Model:
         """True when both per-token prices are known (a free `0.0` counts)."""
         return self.input_usd_per_million is not None and self.output_usd_per_million is not None
 
+    def cost_usd(self, in_tokens: int, out_tokens: int) -> float:
+        """The USD cost of a call at this model's per-token rates.
+
+        The one pricing formula in the library: node cost rollups, the
+        run's observed spend, and the budget gates all price through here,
+        so their numbers can never drift apart. An unpriced side rates as
+        $0; a caller that needs to *trust* the number for budget
+        enforcement gates on `is_priced` first.
+        """
+        in_price = self.input_usd_per_million or 0.0
+        out_price = self.output_usd_per_million or 0.0
+        return (in_tokens * in_price + out_tokens * out_price) / 1_000_000
+
 
 KNOWN_MODELS: dict[str, Model] = {
     "google/gemini-3.5-flash": Model(

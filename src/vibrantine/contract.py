@@ -684,9 +684,7 @@ class Commission[InputT, OutputT](ABC):
         before trusting that for budgeting; see
         `_budget_unenforceable_failure`).
         """
-        in_price = entry.input_usd_per_million or 0.0
-        out_price = entry.output_usd_per_million or 0.0
-        usd = (in_tokens * in_price + out_tokens * out_price) / 1_000_000
+        usd = entry.cost_usd(in_tokens, out_tokens)
         return CostMetrics(estimated_usd=usd, in_tokens=in_tokens, out_tokens=out_tokens)
 
     def _succeed(
