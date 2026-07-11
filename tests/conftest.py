@@ -79,6 +79,7 @@ async def open_run(
         yield ctx
     finally:
         current_gatekeeper.reset(token)
+        await gatekeeper.aclose()
 
 
 @pytest.fixture

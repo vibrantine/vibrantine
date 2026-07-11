@@ -647,6 +647,23 @@ async def test_a_scoped_cancel_narrows_one_branch_only() -> None:
     assert result.status == "success"
 
 
+# --- Teardown -----------------------------------------------------------------
+
+
+async def test_run_end_closes_vended_clients(open_test_run: Any) -> None:
+    # The catalog builds one real client per endpoint per run; the run's
+    # exit closes it. Keyless entry (the local-Ollama shape), so the vend
+    # builds a real AsyncOpenAI without needing a key or a network call.
+    from vibrantine.models import ollama
+
+    async with open_test_run(models=[ollama("test/local")]) as ctx:
+        gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+        assert gatekeeper is not None
+        client = gatekeeper.client_for(gatekeeper.resolve_model(None))
+        assert not client.is_closed()
+    assert client.is_closed()
+
+
 # --- The log ------------------------------------------------------------------
 
 ROW_KEYS = {

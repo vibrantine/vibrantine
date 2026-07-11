@@ -289,6 +289,25 @@ class Gatekeeper:
             self._clients[endpoint] = client
         return client
 
+    async def aclose(self) -> None:
+        """Close every provider client this run vended.
+
+        The catalog builds clients per run, so the run tears them down:
+        `run_one` awaits this in its finally, making the lifetime explicit
+        and symmetric. Scripted entries carry their own fakes and are never
+        cached here, so nothing test-owned is touched. A failing close is
+        hygiene trouble, never the run's: swallowed to a warning.
+        """
+        clients = list(self._clients.values())
+        self._clients.clear()
+        for client in clients:
+            try:
+                await client.close()
+            except Exception as exc:
+                logger.warning(
+                    "provider client close failed (ignored): %s: %s", type(exc).__name__, exc
+                )
+
     # --- fuses -------------------------------------------------------------
 
     def check_time(self) -> None:

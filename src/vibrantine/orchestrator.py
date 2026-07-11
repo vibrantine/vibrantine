@@ -152,6 +152,10 @@ async def run_one[InputT, OutputT](
         result = await dispatch(commission, input, ctx)
     finally:
         current_gatekeeper.reset(token)
+        # The run vended its provider clients; the run closes them. After
+        # dispatch returns, every in-flight call has settled, so nothing
+        # still needs a connection.
+        await gatekeeper.aclose()
 
     # The root rewrite: only the root speaks run_halted; mid-tree nodes ride
     # the ordinary cancellation path. A root that still concluded (success,
