@@ -41,6 +41,7 @@ async def open_run(
     capabilities: CapabilitySet | None = None,
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
+    on_llm_call: Callable[[dict[str, object]], None] | None = None,
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> AsyncGenerator[CallContext]:
@@ -62,6 +63,7 @@ async def open_run(
         spend_limit_usd=spend_limit_usd,
         concurrency=concurrency,
         tool_ceiling=tool_ceiling,
+        on_call=on_llm_call,
     )
     ctx = CallContext(
         budget_usd=budget_usd,

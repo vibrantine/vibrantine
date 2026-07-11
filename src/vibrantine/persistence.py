@@ -181,6 +181,16 @@ class SqliteBackend:
     the full PersistedRecord JSON and is the source of truth. Ask questions
     with any SQL tool; the library deliberately ships no query API on top,
     because SQL already is one.
+
+    Beside `records` sits `calls`: one row per provider call in a run, as
+    kept by the run's Gatekeeper and handed over at run end through
+    `store_calls`. The two tables absorb rather than replace each other:
+    they join on run_id and answer different questions ("every provider
+    call summarize made this week, and what it cost" is a simple query on
+    `calls`; "what exactly did summarize receive and return in run X" is a
+    lookup in `records`). `store_calls` is an optional extension the
+    framework discovers by duck typing, so a third-party
+    `PersistenceBackend` without it keeps working unchanged.
     """
 
     def __init__(
@@ -210,6 +220,26 @@ class SqliteBackend:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_records_parent ON records(parent_run_id)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS calls (
+                    root_run_id TEXT NOT NULL,
+                    run_id TEXT,
+                    commission_name TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT NOT NULL,
+                    in_tokens INTEGER,
+                    out_tokens INTEGER,
+                    cost_usd REAL NOT NULL,
+                    grant_usd REAL,
+                    run_calls_before INTEGER NOT NULL,
+                    run_spend_before_usd REAL NOT NULL,
+                    status TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_root ON calls(root_run_id)")
 
     async def store(self, record: PersistedRecord) -> None:
         await asyncio.to_thread(self._store_sync, record)
@@ -226,6 +256,16 @@ class SqliteBackend:
     async def delete_older_than(self, cutoff: datetime) -> int:
         _require_aware(cutoff)
         return await asyncio.to_thread(self._delete_older_than_sync, cutoff)
+
+    async def store_calls(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
+        """Write a run's provider-call log, one row per call.
+
+        Called by `run_one` at run end with the Gatekeeper's rows;
+        `root_run_id` is the run's root run_id, the natural handle for
+        "this run's calls" (each row's own `run_id` names the calling node
+        and joins `records`).
+        """
+        await asyncio.to_thread(self._store_calls_sync, root_run_id, calls)
 
     # --- sync helpers run in threadpool ---
 
@@ -284,6 +324,36 @@ class SqliteBackend:
                 (_timestamp(cutoff),),
             )
             return cursor.rowcount
+
+    def _store_calls_sync(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
+        with closing(self._connect()) as conn, conn:
+            conn.executemany(
+                """
+                INSERT INTO calls
+                    (root_run_id, run_id, commission_name, model, started_at,
+                     ended_at, in_tokens, out_tokens, cost_usd, grant_usd,
+                     run_calls_before, run_spend_before_usd, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        root_run_id,
+                        row["run_id"],
+                        row["commission_name"],
+                        row["model"],
+                        row["started_at"],
+                        row["ended_at"],
+                        row["in_tokens"],
+                        row["out_tokens"],
+                        row["cost_usd"],
+                        row["grant_usd"],
+                        row["run_calls_before"],
+                        row["run_spend_before_usd"],
+                        row["status"],
+                    )
+                    for row in calls
+                ],
+            )
 
     def _prune_for_mode_sync(self, conn: sqlite3.Connection, mode: PersistenceMode) -> None:
         if mode == "dev":

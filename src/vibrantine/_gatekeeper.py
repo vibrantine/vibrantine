@@ -32,9 +32,10 @@ claim to prevent. See docs/design.md for the canonical statement.
 
 import asyncio
 import contextvars
+import logging
 import os
 import time
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -44,6 +45,8 @@ from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, UnknownModelEr
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
+
+logger = logging.getLogger(__name__)
 
 # The run in progress for the current task tree. Set by `run_one` around the
 # root dispatch, reset in its finally; ContextVars propagate through await
@@ -168,6 +171,7 @@ class Gatekeeper:
         spend_limit_usd: float | None,
         concurrency: int,
         tool_ceiling: frozenset[str] | None = None,
+        on_call: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         # The run's model catalog (see build_catalog): one registry of
         # entries per run, defined at the front door. Model *choice* stays
@@ -211,6 +215,19 @@ class Gatekeeper:
         # One row per provider call, always on: the fuses read the same
         # counters, so the trust promise never depends on a config flag.
         self.calls: list[dict[str, Any]] = []
+        # The caller's live view of the log (run_one's on_llm_call kwarg),
+        # invoked once per row. Observational only, so a raising callback is
+        # swallowed loudly rather than allowed to tear the settle path.
+        self._on_call = on_call
+
+    def _append_row(self, row: dict[str, Any]) -> None:
+        self.calls.append(row)
+        if self._on_call is None:
+            return
+        try:
+            self._on_call(row)
+        except Exception as exc:
+            logger.warning("on_llm_call callback raised %s (ignored): %s", type(exc).__name__, exc)
 
     # --- the model catalog ---------------------------------------------------
 
@@ -345,7 +362,7 @@ class Gatekeeper:
                 self._trip(self._spend_detail())
         if self.tripped is not None:
             now = _utcnow_iso()
-            self.calls.append(
+            self._append_row(
                 self._row(
                     run_id=run_id,
                     commission_name=commission_name,
@@ -436,7 +453,7 @@ class Gatekeeper:
                 self.observed_spend_usd += cost
                 if was_tripped:
                     self._settled_after_trip += 1
-                self.calls.append(
+                self._append_row(
                     self._row(
                         run_id=run_id,
                         commission_name=commission_name,

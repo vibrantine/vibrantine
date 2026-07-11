@@ -579,3 +579,78 @@ async def test_log_row_carries_the_node_grant_at_call_time(open_test_run: Any) -
     assert len(rows) == 1
     assert rows[0]["grant_usd"] == 0.05
     assert rows[0]["status"] == "completed"
+
+
+async def test_on_llm_call_receives_every_row_including_refusals() -> None:
+    # The live accessor: one callback per settled or refused row, and
+    # collecting them is the after-the-run retrieval story.
+    rows: list[dict[str, Any]] = []
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(
+        probe, _Q(question="?"), models=[script], max_llm_calls=1, on_llm_call=rows.append
+    )
+    assert result.status == "failure"
+    assert [row["status"] for row in rows] == ["completed", "refused"]
+    assert all(set(row) == ROW_KEYS for row in rows)
+
+
+async def test_a_raising_on_llm_call_never_breaks_the_run() -> None:
+    def boom(row: dict[str, Any]) -> None:
+        raise RuntimeError("observer bug")
+
+    result = await run_one(
+        _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], on_llm_call=boom
+    )
+    assert result.status == "success"
+
+
+async def test_calls_land_beside_records_in_sqlite(tmp_path: Any) -> None:
+    import sqlite3
+
+    from vibrantine.persistence import SqliteBackend
+
+    backend = SqliteBackend(tmp_path / "runs.db")
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(
+        probe, _Q(question="?"), models=[script], backend=backend, record="always"
+    )
+    assert result.status == "success"
+
+    with sqlite3.connect(tmp_path / "runs.db") as conn:
+        calls = conn.execute(
+            "SELECT root_run_id, run_id, commission_name, model, status, cost_usd FROM calls"
+        ).fetchall()
+        # The join the two-table design exists for: a call row's run_id
+        # names the calling node's record.
+        joined = conn.execute(
+            """
+            SELECT calls.commission_name, records.commission_name
+            FROM calls JOIN records ON calls.run_id = records.run_id
+            """
+        ).fetchall()
+    assert len(calls) == 2
+    for root_run_id, run_id, commission_name, model, status, cost_usd in calls:
+        assert root_run_id == result.run_id
+        assert run_id is not None
+        assert commission_name == "probe"
+        assert model == FIXTURE_MODEL.id
+        assert status == "completed"
+        assert cost_usd == pytest.approx(COST_PER_DEFAULT_CALL)  # pyright: ignore[reportUnknownMemberType]
+    assert joined and all(a == b for a, b in joined)
+
+
+async def test_a_backend_without_store_calls_is_skipped_gracefully(tmp_path: Any) -> None:
+    # The Protocol is untouched: a backend that never heard of the call log
+    # (FilesystemBackend, any third-party implementation) keeps working.
+    from vibrantine.persistence import FilesystemBackend
+
+    result = await run_one(
+        _Probe(),
+        _Q(question="?"),
+        models=[_scripted([_conclude()])],
+        backend=FilesystemBackend(tmp_path),
+        record="always",
+    )
+    assert result.status == "success"

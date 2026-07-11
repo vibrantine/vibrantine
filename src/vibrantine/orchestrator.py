@@ -12,9 +12,10 @@ overflow enforcement, and persistence happen uniformly from the top.
 """
 
 import asyncio
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 from vibrantine._gatekeeper import (
     Gatekeeper,
@@ -39,6 +40,8 @@ from vibrantine.contract import (
 )
 from vibrantine.dispatch import dispatch
 from vibrantine.models import Model
+
+logger = logging.getLogger(__name__)
 
 # The always-on LLM-call backstop: high enough that no legitimate run has
 # hit it, low enough that a runaway loop (including one on a free or local
@@ -72,6 +75,7 @@ async def run_one[InputT, OutputT](
     # control and observability
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
+    on_llm_call: Callable[[dict[str, Any]], None] | None = None,
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
@@ -129,6 +133,10 @@ async def run_one[InputT, OutputT](
         # bounds what a model may be offered; branch-varying authority stays
         # with capabilities, the distributed grant.
         tool_ceiling=None if tool_ceiling is None else frozenset(tool_ceiling),
+        # The provider-call log's live accessor: one dict per settled or
+        # refused call. Retrieval after the run is `rows = []` plus
+        # `on_llm_call=rows.append`; no new public type.
+        on_call=on_llm_call,
     )
     ctx = CallContext(
         budget_usd=budget_usd,
@@ -161,6 +169,28 @@ async def run_one[InputT, OutputT](
                 "cost": CostMetrics(estimated_usd=gatekeeper.observed_spend_usd),
             }
         )
+
+    # Persist the provider-call log beside the run records when the backend
+    # can take it. Duck-typed rather than a Protocol change: third-party
+    # backends keep working untouched, and SqliteBackend's `calls` table
+    # joins `records` on run_id (absorb, not replace). Like record
+    # persistence, a failing write is observability trouble, never the
+    # run's: swallowed to a warning.
+    if backend is not None and gatekeeper.calls:
+        store_calls = cast(
+            "Callable[[str | None, list[dict[str, Any]]], Awaitable[None]] | None",
+            getattr(backend, "store_calls", None),
+        )
+        if callable(store_calls):
+            try:
+                await store_calls(result.run_id, gatekeeper.calls)
+            except Exception as exc:
+                logger.warning(
+                    "call-log persistence failed for run %s: %s: %s",
+                    result.run_id,
+                    type(exc).__name__,
+                    exc,
+                )
     return result
 
 
@@ -178,6 +208,7 @@ def invoke_sync[InputT, OutputT](
     capabilities: CapabilitySet | None = None,
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
+    on_llm_call: Callable[[dict[str, Any]], None] | None = None,
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
@@ -196,6 +227,7 @@ def invoke_sync[InputT, OutputT](
             capabilities=capabilities,
             cancel=cancel,
             on_progress=on_progress,
+            on_llm_call=on_llm_call,
             backend=backend,
             record=record,
         )
