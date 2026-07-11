@@ -474,6 +474,26 @@ async def test_the_persisted_root_record_speaks_run_halted_too(tmp_path: Any) ->
     assert math.isclose(cast(float, cost_usd), result.cost.estimated_usd)
 
 
+async def test_run_halted_does_not_claim_a_call_log_that_failed_to_persist() -> None:
+    class FailingCallLogBackend:
+        async def store_calls(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
+            raise OSError("disk full")
+
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(
+        probe,
+        _Q(question="?"),
+        models=[script],
+        max_llm_calls=1,
+        backend=cast(Any, FailingCallLogBackend()),
+    )
+
+    assert result.error is not None and result.error.kind == "run_halted"
+    assert "call-log persistence failed" in result.error.detail
+    assert "full call log under run" not in result.error.detail
+
+
 async def test_a_bubbled_halt_from_a_custom_run_reports_cancelled(open_test_run: Any) -> None:
     # A custom _run that lets the provider door's refusal escape is not a
     # contract breach: dispatch translates it to the same node-level

@@ -13,7 +13,7 @@ overflow enforcement, and persistence happen uniformly from the top.
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -161,27 +161,6 @@ async def run_one[InputT, OutputT](
     # trip-descended failures only, before the record is persisted), so the
     # result returned here already tells the final story.
 
-    # Persist the provider-call log beside the run records when the backend
-    # can take it. Duck-typed rather than a Protocol change: third-party
-    # backends keep working untouched, and SqliteBackend's `calls` table
-    # joins `records` on run_id (absorb, not replace). Like record
-    # persistence, a failing write is observability trouble, never the
-    # run's: swallowed to a warning.
-    if backend is not None and gatekeeper.calls:
-        store_calls = cast(
-            "Callable[[str | None, list[dict[str, Any]]], Awaitable[None]] | None",
-            getattr(backend, "store_calls", None),
-        )
-        if callable(store_calls):
-            try:
-                await store_calls(result.run_id, gatekeeper.calls)
-            except Exception as exc:
-                logger.warning(
-                    "call-log persistence failed for run %s: %s: %s",
-                    result.run_id,
-                    type(exc).__name__,
-                    exc,
-                )
     return result
 
 

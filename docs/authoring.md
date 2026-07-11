@@ -901,10 +901,11 @@ Beyond watching: `on_progress` on the `CallContext` streams typed
 `ProgressEvent`s to a callback for building live UIs, and the persistence
 layer stores full structured records (input, result, cost, the LLM
 transcript) for programmatic autopsy. The transcript lands automatically
-on the default loop; a custom `_run` that runs its own LLM calls
-deposits each message history via `deposit_llm_trace` (a top-level
-`vibrantine` export), or its records carry no trace. `SynthesizeCommission`
-is the worked example of depositing from a custom interior. Switching records on is also one
+on the default loop. External custom `_run` methods dispatch an LLM-bearing
+child Commission rather than calling a provider directly: a raw call would
+bypass the run's private Gatekeeper. Library-owned custom provider flows use
+`deposit_llm_trace` internally; `SynthesizeCommission` is that internal
+worked example. Switching records on is also one
 line: `run_one(..., backend=FilesystemBackend(root), record="always")`
 reaches every node in the call tree, including children spawned mid-run.
 Three tiers, all optional: log lines to watch, events to react, records
@@ -1291,7 +1292,7 @@ provisional until the authoring-surface freeze (see
 | `self._emit(ctx, phase, detail=None)` | Emit a `ProgressEvent` (no-op without a callback) |
 | `self.fits(estimated_tokens)` | Size-gate check against the explicit constructor cap (an unset cap resolves from the run catalog entry at run time) |
 | `estimate_tokens(text)` | Module-level chars/4 heuristic; `from vibrantine import estimate_tokens`. Unlike the underscore helpers above, this is frozen surface (the heuristic itself may be refined; the name and signature hold) |
-| `deposit_llm_trace(messages)` | Module-level; `from vibrantine import deposit_llm_trace`. Frozen surface, like `estimate_tokens`. A custom `_run` that runs its own LLM calls deposits each message history so it lands in the run's persisted record; without a deposit, the record's `llm_trace` stays empty. The default loop deposits automatically |
+| `deposit_llm_trace(messages)` | Module-level; `from vibrantine import deposit_llm_trace`. Frozen surface, like `estimate_tokens`. The default loop deposits automatically. Library-owned custom provider flows deposit each message history so it lands in the run's persisted record; external custom `_run` methods dispatch an LLM-bearing child rather than calling the provider directly |
 
 ## The result envelope
 

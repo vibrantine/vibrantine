@@ -32,6 +32,7 @@ through here.
 import contextvars
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -182,6 +183,13 @@ async def dispatch[InputT, OutputT](
     # detail can name the run_id the full output is persisted under.
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
 
+    # The root owns the complete provider-call log, so it persists the rows
+    # after its whole subtree has returned and before composing any diagnostic
+    # that claims where they live.
+    log_persistence = "unavailable"
+    if parent is None:
+        log_persistence = await _persist_call_log(ctx.backend, my_run_id, gatekeeper.calls)
+
     # Only the root speaks run_halted; mid-tree nodes ride the ordinary
     # cancellation path. The rewrite is causal, not coincidental: it claims
     # a failure that descended from the trip and never an unrelated failure
@@ -196,13 +204,14 @@ async def dispatch[InputT, OutputT](
         and result.status == "failure"
         and _trip_descended(result.error, ctx_for_run.cancel, gatekeeper)
     ):
-        log_persisted = ctx.backend is not None and callable(
-            getattr(ctx.backend, "store_calls", None)
-        )
         result = result.model_copy(
             update={
                 "output": None,
-                "error": gatekeeper.final_error(my_run_id, log_persisted=log_persisted),
+                "error": gatekeeper.final_error(
+                    my_run_id,
+                    log_persisted=log_persistence == "persisted",
+                    log_persistence_failed=log_persistence == "failed",
+                ),
                 # True total spend, from the door's settled observations:
                 # this is what makes "every dollar reported" checkable
                 # even when parts of the tree were torn down mid-flight.
@@ -281,6 +290,35 @@ async def dispatch[InputT, OutputT](
                 )
 
     return result
+
+
+async def _persist_call_log(
+    backend: object | None,
+    root_run_id: str,
+    calls: list[dict[str, Any]],
+) -> str:
+    """Persist the complete run log and report whether the claim is safe."""
+    if backend is None or not calls:
+        return "unavailable"
+    store_calls = cast(
+        "Callable[[str | None, list[dict[str, Any]]], Awaitable[None]] | None",
+        getattr(backend, "store_calls", None),
+    )
+    if not callable(store_calls):
+        return "unavailable"
+    try:
+        await store_calls(root_run_id, calls)
+    except Exception as exc:
+        # Observability trouble never destroys the work, but the final error
+        # must not claim the rows exist when this write failed.
+        logger.warning(
+            "call-log persistence failed for run %s: %s: %s",
+            root_run_id,
+            type(exc).__name__,
+            exc,
+        )
+        return "failed"
+    return "persisted"
 
 
 # --- The root rewrite -------------------------------------------------------

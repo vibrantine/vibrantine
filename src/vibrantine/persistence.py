@@ -260,7 +260,7 @@ class SqliteBackend:
     async def store_calls(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
         """Write a run's provider-call log, one row per call.
 
-        Called by `run_one` at run end with the Gatekeeper's rows;
+        Called by the root dispatch at run end with the Gatekeeper's rows;
         `root_run_id` is the run's root run_id, the natural handle for
         "this run's calls" (each row's own `run_id` names the calling node
         and joins `records`).

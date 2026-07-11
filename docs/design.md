@@ -123,6 +123,11 @@ What one Commission is.
   subtype or hook multiplies what an author can get wrong; one default path
   plus one escape hatch keeps the guarantees automatic on the common path
   and explicit on the custom one.
+- **Provider boundary.** An external custom `_run` that needs LLM work
+  dispatches an LLM-bearing child Commission. Direct provider calls are
+  library-internal machinery because they must pass through the private run
+  Gatekeeper; a raw call would bypass the run's fuses, room, cancellation,
+  and call log.
 - **Rules out.**
   - Subtype hierarchies, plugin hooks, per-feature mixins.
   - Any second way to change what a Commission does.

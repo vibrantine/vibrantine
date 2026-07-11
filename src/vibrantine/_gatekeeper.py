@@ -337,15 +337,21 @@ class Gatekeeper:
     def _time_due(self) -> bool:
         return self._deadline is not None and time.monotonic() >= self._deadline
 
-    def final_error(self, root_run_id: str | None, *, log_persisted: bool) -> ErrorState:
+    def final_error(
+        self,
+        root_run_id: str | None,
+        *,
+        log_persisted: bool,
+        log_persistence_failed: bool = False,
+    ) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
 
         Written for an AI-agent reader with no other context: the fuse, the
         numbers, what the in-flight calls added, and where the full log
-        lives, but only when it lives somewhere (`log_persisted` says the
-        backend will take the rows; a live `on_llm_call` already delivered
-        them; with neither, the honest pointer is how to wire one next
-        time). Composed at run end rather than trip time so calls that were
+        lives, but only when it lives somewhere (`log_persisted` confirms the
+        backend took the rows; a live `on_llm_call` already delivered them;
+        with neither, the honest pointer is how to wire one next time).
+        Composed at run end rather than trip time so calls that were
         in flight at the trip report their settled cost, which is what makes
         "every dollar reported" checkable.
         """
@@ -361,6 +367,8 @@ class Gatekeeper:
             detail += f"; full call log under run {root_run_id}."
         elif self._on_call is not None:
             detail += "; the full call log was delivered live via on_llm_call."
+        elif log_persistence_failed:
+            detail += "; call-log persistence failed; inspect the framework warning for details."
         else:
             detail += (
                 ". Wire backend= (SqliteBackend) or on_llm_call= to capture the full call log."
