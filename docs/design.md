@@ -294,10 +294,16 @@ What the invoker holds.
   and the numbers, true spend always reported) rather than steering. The
   spend fuse is honest, not absolute: it refuses new calls at the limit
   and lets in-flight calls finish, so overshoot is bounded in calls, not
-  dollars. The `run_halted` rewrite claims failed roots only: a root that
+  dollars. The `run_halted` rewrite is causal and claims failed roots
+  only (ratified 2026-07-12): a root failure that descended from the trip
+  (its calls were refused, or the spend fuse and the root grant are one
+  number read two ways) is rewritten before the record is persisted, so
+  the stored record and the returned envelope tell one story; a root that
   still concluded despite a trip keeps its result, because winding down
   and concluding with what it has is the designed response to a trip, not
-  a failure to override (the trip stays visible in the call log). And it
+  a failure to override; and an unrelated failure that merely happened
+  during a trip keeps its own error rather than being masked by the fuse
+  story (the trip stays visible in the call log either way). And it
   is an in-process guardrail, not a sandbox: custom Python
   can step around it, a deliberate escape the library does not claim to
   close.

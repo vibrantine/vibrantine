@@ -230,7 +230,9 @@ async def test_llm_call_fuse_trips_and_root_speaks_run_halted() -> None:
     assert result.error.retryable is False
     assert "llm-call fuse tripped" in result.error.detail
     assert "1-call limit" in result.error.detail
-    assert "full call log under run" in result.error.detail
+    # No backend and no on_llm_call: the detail must not point at a call
+    # log nobody can retrieve; it says how to capture one instead.
+    assert "Wire backend=" in result.error.detail
     # True total spend: the one completed call, reported even though the
     # run was torn down.
     assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
@@ -359,15 +361,18 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
 
     class _FailsAfter(Commission[_Q, _A]):
         name: ClassVar[str] = "fails_after"
-        description: ClassVar[str] = "Gathers two children, then fails on purpose."
+        description: ClassVar[str] = "Gathers two children, then stops on the shared signal."
         input_type: ClassVar[type] = _Q
         output_type: ClassVar[type] = _A
 
         async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
             await asyncio.gather(dispatch(fast, input, ctx), dispatch(slow, input, ctx))
+            # The trip flipped the shared stop signal; failing on it is the
+            # trip-descended shape the causal root rewrite claims.
+            assert ctx.cancel.is_cancelled
             return self._fail(
-                "internal",
-                "failing on purpose so the root rewrite can be observed",
+                "cancelled",
+                "stopping: the run's stop signal is set after fan-out",
                 retryable=False,
                 provenance=_prov("fails_after"),
                 cost=CostMetrics(estimated_usd=0.0),
@@ -393,6 +398,103 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
     assert "1 in-flight call(s) completed" in result.error.detail
     slow_cost = (10 * 0.50 + 5 * 3.00) / 1_000_000
     assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL + slow_cost)
+
+
+async def test_an_unrelated_root_failure_is_not_masked_by_a_trip() -> None:
+    # A fuse trips, and the root then fails for its own, unrelated reason:
+    # the rewrite is causal, so the root's own error, detail, and cost
+    # survive instead of being overwritten by the fuse story. The trip
+    # stays visible in the call log.
+    child = _Child()
+
+    class _OwnBug(Commission[_Q, _A]):
+        name: ClassVar[str] = "own_bug"
+        description: ClassVar[str] = "Fails for its own reason after a trip."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            first = await dispatch(child, input, ctx)  # admitted: call 1 of 1
+            second = await dispatch(child, input, ctx)  # refused: trips the fuse
+            assert first.status == "success" and second.status == "failure"
+            return self._fail(
+                "internal",
+                "a bug of my own, nothing to do with the fuse",
+                retryable=False,
+                provenance=_prov("own_bug"),
+                cost=CostMetrics(estimated_usd=first.cost.estimated_usd),
+            )
+
+    result = await run_one(
+        _OwnBug(),
+        _Q(question="?"),
+        models=[_scripted([_conclude(), _conclude()])],
+        max_llm_calls=1,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "a bug of my own" in result.error.detail
+    assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+
+
+async def test_the_persisted_root_record_speaks_run_halted_too(tmp_path: Any) -> None:
+    # The rewrite happens inside the root's dispatch, before persistence:
+    # the stored record and the returned envelope must tell one story
+    # (kind, detail, and true total spend), not two.
+    import json
+    import sqlite3
+
+    from vibrantine.persistence import SqliteBackend
+
+    backend = SqliteBackend(tmp_path / "runs.db")
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(
+        probe,
+        _Q(question="?"),
+        models=[script],
+        max_llm_calls=1,
+        backend=backend,
+        record="always",
+    )
+    assert result.error is not None and result.error.kind == "run_halted"
+    # With a call-log-capable backend wired, the pointer is real.
+    assert "full call log under run" in result.error.detail
+
+    with sqlite3.connect(tmp_path / "runs.db") as conn:
+        row = conn.execute(
+            "SELECT status, cost_usd, record FROM records WHERE parent_run_id IS NULL"
+        ).fetchone()
+    status, cost_usd, record_json = row
+    stored_result = json.loads(record_json)["result"]
+    assert status == "failure"
+    assert stored_result["error"]["kind"] == "run_halted"
+    assert stored_result["error"]["detail"] == result.error.detail
+    assert math.isclose(cast(float, cost_usd), result.cost.estimated_usd)
+
+
+async def test_a_bubbled_halt_from_a_custom_run_reports_cancelled(open_test_run: Any) -> None:
+    # A custom _run that lets the provider door's refusal escape is not a
+    # contract breach: dispatch translates it to the same node-level
+    # cancellation the framework loop reports, not an `internal` failure.
+    from vibrantine._gatekeeper import RunHaltedError
+
+    class _Bubbles(Commission[_EchoIn, _EchoOut]):
+        name: ClassVar[str] = "bubbles"
+        description: ClassVar[str] = "Lets a door refusal escape. Test double."
+        input_type: ClassVar[type] = _EchoIn
+        output_type: ClassVar[type] = _EchoOut
+
+        async def _run(self, input: _EchoIn, ctx: CallContext) -> CommissionResult[_EchoOut]:
+            raise RunHaltedError("llm-call fuse tripped: call 2 refused at the 1-call limit")
+
+    async with open_test_run() as ctx:
+        result = await dispatch(_Bubbles(), _EchoIn(text="hi"), ctx)
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "cancelled"
+    assert "stop signal" in result.error.detail
 
 
 # --- The room ---------------------------------------------------------------
@@ -724,6 +826,10 @@ async def test_on_llm_call_receives_every_row_including_refusals() -> None:
     assert result.status == "failure"
     assert [row["status"] for row in rows] == ["completed", "refused"]
     assert all(set(row) == ROW_KEYS for row in rows)
+    # The rows were delivered live, and the root detail says so instead of
+    # pointing at a persisted log that does not exist.
+    assert result.error is not None
+    assert "delivered live via on_llm_call" in result.error.detail
 
 
 async def test_a_raising_on_llm_call_never_breaks_the_run() -> None:

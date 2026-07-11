@@ -157,22 +157,9 @@ async def run_one[InputT, OutputT](
         # still needs a connection.
         await gatekeeper.aclose()
 
-    # The root rewrite: only the root speaks run_halted; mid-tree nodes ride
-    # the ordinary cancellation path. A root that still concluded (success,
-    # or partial with usable output) keeps its result: winding down and
-    # concluding with what it has is the designed response to a trip, not a
-    # failure to override. The trip stays observable in the call log.
-    if gatekeeper.tripped is not None and result.status == "failure":
-        result = result.model_copy(
-            update={
-                "output": None,
-                "error": gatekeeper.final_error(result.run_id),
-                # True total spend, from the door's settled observations:
-                # this is what makes "every dollar reported" checkable even
-                # when parts of the tree were torn down mid-flight.
-                "cost": CostMetrics(estimated_usd=gatekeeper.observed_spend_usd),
-            }
-        )
+    # The run_halted rewrite happens inside the root's own dispatch (causal,
+    # trip-descended failures only, before the record is persisted), so the
+    # result returned here already tells the final story.
 
     # Persist the provider-call log beside the run records when the backend
     # can take it. Duck-typed rather than a Protocol change: third-party

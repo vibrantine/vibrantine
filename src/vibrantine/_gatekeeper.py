@@ -64,8 +64,10 @@ class RunHaltedError(Exception):
 
     Internal: raised by the provider door, caught by the LLM machinery and
     converted into a node-level `cancelled` failure value (mid-tree nodes
-    ride the ordinary cancellation path). Only the root speaks `run_halted`:
-    `run_one` rewrites the root result from the trip state directly.
+    ride the ordinary cancellation path; a custom `_run` that lets it bubble
+    gets the same translation from dispatch's backstop). Only the root
+    speaks `run_halted`: dispatch rewrites a trip-descended root failure
+    before persistence.
     """
 
 
@@ -137,6 +139,16 @@ class RunCancel:
     @property
     def is_cancelled(self) -> bool:
         return self._caller.is_cancelled or self._gatekeeper.tripped is not None
+
+    @property
+    def caller_cancelled(self) -> bool:
+        """The caller's own token, seen alone.
+
+        Distinguishes a user stop from a fuse trip when both share the
+        combined signal: the root rewrite must never relabel a cancellation
+        the caller asked for as `run_halted`.
+        """
+        return self._caller.is_cancelled
 
 
 class _ProviderTicket:
@@ -213,6 +225,10 @@ class Gatekeeper:
         # window), not in dollars, and every dollar is reported.
         self.observed_spend_usd = 0.0
         self.tripped: ErrorState | None = None
+        # Which fuse tripped ("llm_calls" | "time" | "spend"), for the root
+        # rewrite's causal test: a root budget_exceeded is the spend fuse's
+        # own number read through the grant, but never the time fuse's story.
+        self.tripped_fuse: str | None = None
         self._spend_at_trip = 0.0
         self._settled_after_trip = 0
         self._in_flight = 0
@@ -321,14 +337,17 @@ class Gatekeeper:
             and self._deadline is not None
             and time.monotonic() >= self._deadline
         ):
-            self._trip(self._time_detail())
+            self._trip(self._time_detail(), fuse="time")
 
-    def final_error(self, root_run_id: str | None) -> ErrorState:
+    def final_error(self, root_run_id: str | None, *, log_persisted: bool) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
 
         Written for an AI-agent reader with no other context: the fuse, the
         numbers, what the in-flight calls added, and where the full log
-        lives. Composed at run end rather than trip time so calls that were
+        lives, but only when it lives somewhere (`log_persisted` says the
+        backend will take the rows; a live `on_llm_call` already delivered
+        them; with neither, the honest pointer is how to wire one next
+        time). Composed at run end rather than trip time so calls that were
         in flight at the trip report their settled cost, which is what makes
         "every dollar reported" checkable.
         """
@@ -339,16 +358,22 @@ class Gatekeeper:
             detail += (
                 f"; {self._settled_after_trip} in-flight call(s) completed for ${extra:.4f} more"
             )
-        detail += (
-            f"; true total spend ${self.observed_spend_usd:.4f}; "
-            f"full call log under run {root_run_id}."
-        )
+        detail += f"; true total spend ${self.observed_spend_usd:.4f}"
+        if log_persisted:
+            detail += f"; full call log under run {root_run_id}."
+        elif self._on_call is not None:
+            detail += "; the full call log was delivered live via on_llm_call."
+        else:
+            detail += (
+                ". Wire backend= (SqliteBackend) or on_llm_call= to capture the full call log."
+            )
         return ErrorState(kind="run_halted", detail=detail, retryable=False)
 
-    def _trip(self, detail: str) -> None:
+    def _trip(self, detail: str, *, fuse: str) -> None:
         """Flip the stop signal. First trip wins; later trips are no-ops."""
         if self.tripped is not None:
             return
+        self.tripped_fuse = fuse
         self._spend_at_trip = self.observed_spend_usd
         self._settled_after_trip = 0
         self.tripped = ErrorState(kind="run_halted", detail=detail, retryable=False)
@@ -375,14 +400,15 @@ class Gatekeeper:
             if self.max_llm_calls is not None and self.calls_admitted >= self.max_llm_calls:
                 self._trip(
                     f"llm-call fuse tripped: call {self.calls_admitted + 1} "
-                    f"refused at the {self.max_llm_calls}-call limit"
+                    f"refused at the {self.max_llm_calls}-call limit",
+                    fuse="llm_calls",
                 )
             elif self._deadline is not None and time.monotonic() >= self._deadline:
-                self._trip(self._time_detail())
+                self._trip(self._time_detail(), fuse="time")
             elif (
                 self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
             ):
-                self._trip(self._spend_detail())
+                self._trip(self._spend_detail(), fuse="spend")
         if self.tripped is not None:
             now = _utcnow_iso()
             self._append_row(
@@ -503,7 +529,7 @@ class Gatekeeper:
                     and self.spend_limit_usd is not None
                     and self.observed_spend_usd > self.spend_limit_usd
                 ):
-                    self._trip(self._spend_detail())
+                    self._trip(self._spend_detail(), fuse="spend")
 
     def _row(
         self,

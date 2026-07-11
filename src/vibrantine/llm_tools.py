@@ -277,7 +277,7 @@ async def run_llm_loop[OutputT: BaseModel](
             except RunHaltedError as exc:
                 # The run's stop signal refused the call. Report an ordinary
                 # cancellation: mid-tree nodes ride the cancel path, and only
-                # the root speaks run_halted (run_one rewrites it there).
+                # the root speaks run_halted (dispatch rewrites it there).
                 return _loop_error(
                     "cancelled",
                     f"Provider call refused by the run's stop signal: {exc}",

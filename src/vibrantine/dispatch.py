@@ -38,9 +38,10 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from vibrantine._gatekeeper import RunCancel, current_gatekeeper
+from vibrantine._gatekeeper import Gatekeeper, RunCancel, RunHaltedError, current_gatekeeper
 from vibrantine.contract import (
     CallContext,
+    CancelToken,
     Commission,
     CommissionResult,
     CommissionStatus,
@@ -148,6 +149,13 @@ async def dispatch[InputT, OutputT](
         # Dispatch is the hook's one sanctioned caller; the protected access
         # is the design, not a shortcut.
         result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
+    except RunHaltedError as exc:
+        # A custom _run let the provider door's refusal bubble instead of
+        # catching it. Not a contract breach: translate it to the same
+        # node-level cancellation the framework loop reports, so one trip
+        # speaks one vocabulary all the way up the tree.
+        logger.info("%s halted by the run's stop signal: %s", commission.name, exc)
+        result = _halt_to_failure(commission, exc)
     except Exception as exc:
         # Errors are values: a Commission that *raises* instead of returning a
         # failure (a custom-_run bug, a third-party Commission) has broken the
@@ -173,6 +181,34 @@ async def dispatch[InputT, OutputT](
     # Stamp before the overflow policy runs, so a truncate_with_reference
     # detail can name the run_id the full output is persisted under.
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
+
+    # Only the root speaks run_halted; mid-tree nodes ride the ordinary
+    # cancellation path. The rewrite is causal, not coincidental: it claims
+    # a failure that descended from the trip and never an unrelated failure
+    # that merely happened during one, whose own error would otherwise be
+    # masked. It runs here, before persistence, so the stored record and the
+    # returned envelope tell one story. A root that concluded despite a trip
+    # keeps its result: winding down and concluding with what it has is the
+    # designed response, not a failure to override.
+    if (
+        parent is None
+        and gatekeeper.tripped is not None
+        and result.status == "failure"
+        and _trip_descended(result.error, ctx_for_run.cancel, gatekeeper)
+    ):
+        log_persisted = ctx.backend is not None and callable(
+            getattr(ctx.backend, "store_calls", None)
+        )
+        result = result.model_copy(
+            update={
+                "output": None,
+                "error": gatekeeper.final_error(my_run_id, log_persisted=log_persisted),
+                # True total spend, from the door's settled observations:
+                # this is what makes "every dollar reported" checkable
+                # even when parts of the tree were torn down mid-flight.
+                "cost": CostMetrics(estimated_usd=gatekeeper.observed_spend_usd),
+            }
+        )
     result, full_result = _apply_overflow_policy(result, commission, ctx_for_run)
     logger.info(
         "%s finished status=%s cost=$%.6f run_id=%s",
@@ -247,7 +283,64 @@ async def dispatch[InputT, OutputT](
     return result
 
 
+# --- The root rewrite -------------------------------------------------------
+
+
+def _trip_descended(
+    error: ErrorState | None,
+    cancel: CancelToken,
+    gatekeeper: Gatekeeper,
+) -> bool:
+    """Did this root failure descend from the fuse trip?
+
+    Two shapes qualify: a cancellation that was the breaker's doing (not
+    the caller's own token, which must keep its plain `cancelled`), and a
+    root `budget_exceeded` when the *spend* fuse tripped (the root grant
+    and the fuse are the same number read two ways, so the fuse story with
+    true total spend is strictly more informative). Anything else is the
+    root's own story: an unrelated internal or validation failure keeps its
+    error, its cost, and its detail even when a fuse happened to trip.
+    """
+    if error is None:
+        return False
+    if error.kind == "cancelled":
+        caller_cancelled = isinstance(cancel, RunCancel) and cancel.caller_cancelled
+        return not caller_cancelled
+    if error.kind == "budget_exceeded":
+        return gatekeeper.tripped_fuse == "spend"
+    return False
+
+
 # --- Exception handling ---------------------------------------------------
+
+
+def _halt_to_failure[OutputT](
+    commission: Commission[Any, OutputT],
+    exc: RunHaltedError,
+) -> CommissionResult[OutputT]:
+    """Translate a bubbled provider-door refusal into the node vocabulary.
+
+    Mid-tree nodes ride the ordinary cancellation path whether the refusal
+    was caught by the framework loop or escaped a custom `_run`; without
+    this branch the generic backstop would call the same trip `internal`.
+    """
+    return cast(
+        CommissionResult[OutputT],
+        CommissionResult(
+            status="failure",
+            error=ErrorState(
+                kind="cancelled",
+                detail=f"Provider call refused by the run's stop signal: {exc}",
+                retryable=False,
+            ),
+            provenance=Provenance(
+                source=f"{commission.name}:dispatch",
+                fetched_at=datetime.now(UTC),
+                confidence="grounded",
+            ),
+            cost=CostMetrics(estimated_usd=0.0),
+        ),
+    )
 
 
 def _exception_to_failure[OutputT](

@@ -23,8 +23,11 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   same `CallContext.cancel` every checkpoint already honors), refuses new
   provider calls, lets in-flight calls finish and count, and surfaces at
   the root as the new `run_halted` `ErrorKind` with the fuse and numbers
-  named and true total spend in the cost field; a root that still
-  concluded keeps its result. Node-level allocation exhaustion stays
+  named and true total spend in the cost field. The rewrite is causal and
+  runs before the root record is persisted: only a failure that descended
+  from the trip is claimed, a root that still concluded keeps its result,
+  an unrelated failure keeps its own error, and the stored record always
+  matches the returned envelope. Node-level allocation exhaustion stays
   `budget_exceeded`: the line between the kinds is scope, not resource
   type.
 - **The run model catalog**: `run_one(models=[...], default_model=...)`

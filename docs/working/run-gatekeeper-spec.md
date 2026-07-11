@@ -11,10 +11,13 @@ room at 16 as specified; the calls table's columns are the log row's keys
 plus `root_run_id`; the testing fake is `testing.scripted_model` (a catalog
 entry carrying its ScriptedLLM); the log accessor is the `on_llm_call`
 kwarg (plain dict rows, no new public type); client= was a straight
-removal. One refinement ratified at build time and promoted into design.md:
-the root rewrite to `run_halted` claims failed roots only; a root that
-still concluded despite a trip keeps its result, because winding down is
-the designed response to a trip.
+removal. One refinement ratified 2026-07-12 and promoted into design.md:
+the root rewrite to `run_halted` is causal and claims failed roots only.
+Only a failure that descended from the trip is rewritten (rewritten inside
+the root's dispatch, before the record is persisted, so record and envelope
+agree); a root that still concluded despite a trip keeps its result,
+because winding down is the designed response to a trip; an unrelated root
+failure coincident with a trip keeps its own error.
 
 Below is the settled decision record as built, kept for the reasoning.
 Settled 2026-07-11 after a full walkthrough with the author. This replaces
