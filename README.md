@@ -97,6 +97,10 @@ The envelope carries:
 Failures are values. Partial results are first-class. Cost and provenance are
 part of the structure, not an afterthought.
 
+The envelope is also the whole error channel: no exception crosses the call
+boundary. Whatever the interior raises arrives as a `failure` envelope, so
+the one `status` check above really is the complete error handling story.
+
 ## Composition
 
 Composition in Vibrantine is delegated work with receipts.
@@ -134,6 +138,10 @@ There is no fourth "workflow" or "traffic controller" type in the library.
 Larger behavior is built from Commissions, tools, and ordinary application
 code.
 
+The Commission/tool split is a contract fact, not a style note: a tool
+promises there is no LLM anywhere in its subtree, so a caller always knows
+which parts of a tree can exercise judgment and which cannot.
+
 ## Implementation Styles
 
 A Commission always has the same outside: typed task in, result envelope out.
@@ -145,6 +153,11 @@ hooks:
 - Override `build_user_message` to use the built-in **LLM loop**, where the
   model chooses steps from a toolbox until it can produce the declared output.
 - Override `_run` to own the control flow yourself.
+
+Whichever hook a Commission uses, the same boundary machinery runs outside
+it: inputs and outputs are validated, exceptions become failure envelopes,
+and every run is recordable. The guarantees belong to the boundary, not to
+the author's diligence.
 
 Those hooks are not a limit on patterns. A custom interior can be a pipeline,
 fan-out/gather, review loop, search process, external service call, verifier,
@@ -296,11 +309,14 @@ the environment before running them. Deterministic tools do not need a key.
 
 ## Current Status
 
-Vibrantine is early-stage software. The current release is v0.5.0, tagged in
-this repository and recorded in `CHANGELOG.md`; the project is not yet on
-PyPI.
+Vibrantine is early-stage software; releases are git tags recorded in
+`CHANGELOG.md`, and the project is not yet on PyPI. Right now the
+repository is in transition: `main` has moved past the latest tag, so this
+section keeps two honest lists, one per side of that gap: what pinning the
+latest tag gets you, and what has landed since and ships with the next
+release.
 
-Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
+In the latest tagged release:
 
 - Core `Commission` contract.
 - `CommissionResult` envelope.
@@ -314,6 +330,26 @@ Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
   grant, a pre-turn gate declines unaffordable turns up front, and a
   `[budget]` status line gives the model mid-run spend visibility so a
   prompt can instruct a graceful wind-down.
+- A working `truncate_with_reference` overflow policy: the author's typed
+  `truncate_output` hook shrinks the output, and the full result is
+  persisted under the run_id named in the error detail.
+- Deterministic tools for file, shell, fetch, search, and filesystem work.
+- Cost and provenance on results, with child cost rollup and raw token
+  counts.
+- Optional persistence with full LLM transcripts in the records; two shipped
+  backends (JSON files, SQLite).
+- Observability in three tiers: stdlib logging to watch, progress events to
+  react, persisted records to query.
+- A public testing seam: `vibrantine.testing`, which scripts the model so
+  the full machinery runs for real, without an API key.
+- Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
+  `MorningBriefing`, `RecursiveResearch`, the learning ladder
+  (`vibrantine.examples.learning_ladder`: four runnable rungs, each the
+  previous plus one idea), and an interactive demo runner
+  (`python -m vibrantine.examples`).
+
+On `main` since the latest tag, unreleased:
+
 - Run-wide governance at the provider seam: every LLM call in a run passes
   one internal control object created by `run_one`, carrying three resource
   fuses (an always-on LLM-call backstop, an opt-in time limit, and a spend
@@ -337,24 +373,16 @@ Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
   (`params`), so one model can serve several roles ("fast-cheap",
   "deep-thinker") that differ only in settings. The catalog vends the
   provider clients, unknown names fail fast, and an empty catalog
-  auto-registers the system default.
-- A working `truncate_with_reference` overflow policy: the author's typed
-  `truncate_output` hook shrinks the output, and the full result is
-  persisted under the run_id named in the error detail.
-- Deterministic tools for file, shell, fetch, search, and filesystem work.
-- Cost and provenance on results, with child cost rollup and raw token
-  counts.
-- Optional persistence with full LLM transcripts in the records; two shipped
-  backends (JSON files, SQLite).
-- Observability in three tiers: stdlib logging to watch, progress events to
-  react, persisted records to query.
-- A public testing seam: `vibrantine.testing`, whose `scripted_model` rides
-  the run catalog so the full machinery runs for real against a script.
-- Worked Commissions including `Ask`, `Summarize`, `Synthesize`,
-  `MorningBriefing`, `RecursiveResearch`, the learning ladder
-  (`vibrantine.examples.learning_ladder`: four runnable rungs, each the
-  previous plus one idea), and an interactive demo runner
-  (`python -m vibrantine.examples`).
+  auto-registers the system default. This retired the old `client=`
+  injection (breaking): scripted tests now register
+  `vibrantine.testing.scripted_model(...)` in the catalog like any other
+  profile.
+- Multimodal input matured: audio joins image as a typed content part, each
+  translated explicitly per modality at the provider boundary, both
+  verified live.
+- A cost-honesty check at the dispatch seam: when a hand-written
+  coordinator's envelope reports less cost than the provider spend its
+  subtree actually incurred, the run logs a warning naming the shortfall.
 
 Still settling:
 
@@ -365,9 +393,9 @@ The SemVer promise is deliberately tight: the public contract exported from
 `vibrantine.__all__` is the dependency surface. The worked example Commissions
 under `vibrantine.examples`, the tools, and authoring helpers are useful, but
 may remain provisional until more real consumers exercise them. One honest
-caveat inside the frozen surface: the model catalog's *shapes* are protected,
-but the *contents* of `DEFAULT_MODEL` (its id, pricing, context window) are
-catalog data that changes as models come and go, without a major version.
+caveat inside the frozen surface: model *shapes* are protected, but the
+*contents* of `DEFAULT_MODEL` (its id, pricing, context window) are data
+that changes as models come and go, without a major version.
 
 ## What Vibrantine Is Not
 
@@ -393,8 +421,10 @@ Start here:
   shaped the way it is, what that shape costs, and what is planned but not
   built.
 - [docs/authoring.md](docs/authoring.md): the one document about building
-  Commissions: a verified step-by-step tutorial, the composition patterns,
-  and the full contract reference.
+  Commissions: a step-by-step tutorial with every code block verified end to
+  end against a live model, the composition patterns, and the full contract
+  reference, machine-checked against the library in CI so the doc cannot
+  silently drift from the code.
 
 Working notes live in [docs/working/](docs/working/); they promote into the
 live docs or retire.
@@ -409,8 +439,8 @@ uv run ruff format .
 uv run basedpyright
 ```
 
-Unit tests mock model calls and do not require an API key. Integration tests
-are marked and skip when `OPENROUTER_API_KEY` is absent.
+Unit tests script model calls and do not require an API key. Integration
+tests are marked and skip when `OPENROUTER_API_KEY` is absent.
 
 ## Contributing
 
