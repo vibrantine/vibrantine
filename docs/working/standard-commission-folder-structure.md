@@ -162,10 +162,11 @@ Tests live inside the Commission package, not in the repository's flat
 - **Evaluation travels with behavior.** LLM-driven Commissions can keep small
   heuristic eval cases beside the prompt and code they protect.
 
-Follow-up: the packaging configuration must exclude in-package `tests/`
-directories from the built distribution. The repository's existing flat
-`tests/` continues to hold tests for module-sized Commissions and the
-framework itself.
+The packaging configuration excludes in-package `tests/` directories from
+the built distribution (verified at the v0.5.0 wheel inspection: zero test
+files, `prompts/*.md` carried). The repository's existing flat `tests/`
+continues to hold tests for module-sized Commissions and the framework
+itself.
 
 ## Promotion: Reuse Is The Trigger, Not Depth
 
@@ -251,143 +252,14 @@ Settled by the first package migration: prompts load from package resources
 with `importlib.resources`, and the wheel excludes colocated `tests/` while
 including `prompts/*.md`.
 
-## The Sketches
+## Sketch Findings
 
-Each existing Commission, sketched into the standard without moving code.
-The audit questions asked of every sketch:
-
-- What file would a human open first?
-- What file would an AI assistant edit for a prompt change?
-- Where would a new input field go?
-- Where would a new subcommission or private tool be declared?
-- Where would a known prompt failure be recorded?
-- Does the folder make the Commission easier to understand, or just wider?
-
-### MorningBriefing (custom coordinator)
-
-Originally one module with two payload types, the Commission class, and a
-private `_render_markdown` helper, with public siblings injected at
-construction. Reinterpreted 2026-07-06 as the substantive heterogeneous-tree
-example; it now owns private children and became the first user of
-`subcommissions/`:
-
-```text
-src/vibrantine/examples/morning_briefing/
-  __init__.py          # exports MorningBriefingCommission, children, I/O types
-  commission.py        # MorningBriefingCommission + _render_markdown
-  types.py             # MorningBriefingInput, MorningBriefingOutput, SectionReport
-  subcommissions/
-    weather.py         # WeatherCommission (basic LLM loop + its own I/O types)
-    news_digest.py     # NewsDigestCommission (one class, N configured instances)
-  tests/
-    fakes.py           # self-contained doubles (top-level conftest is out of scope)
-    test_commission.py
-    test_news_digest.py
-    test_weather.py
-  BRIEF.md
-```
-
-- No `prompts/`: the coordinator has no LLM of its own; Weather's prompt is
-  a small inline constant, below the threshold for the prompt slot.
-- No `tools/`: `FetchTool` is a public shared tool, not a private tool
-  owned by this package.
-- `subcommissions/` holds only the privately owned children (Weather,
-  NewsDigest); `SummarizeCommission` stays a public sibling injected at
-  construction.
-- `_render_markdown` stays in `commission.py`: a helper, not a Commission.
-
-Audit: a human opens BRIEF.md. A prompt change lands with the prompt's
-owner, because prompts are internal to their Commission: Weather's inline
-constant lives inside this package; the prompts of the injected public
-Commissions (Summarize behind the executive summary, Synthesize inside
-NewsDigest) live outside it, with those Commissions. A new input field
-goes in `types.py`. A new
-subcommission or private tool is declared in `commission.py`'s `__init__`
-(import, kwarg, toolbox entry) and lives under `subcommissions/` or
-`tools/` only if private. A known failure is recorded in BRIEF.md.
-
-Verdict: the package is barely earned. Owning children does not by itself
-justify the folder; the module form remains fine until the file stops
-being scannable.
-
-### RecursiveResearch (recursive LLM loop)
-
-Today: a folder-sized Commission package with the long prompt externalized
-to markdown, two payload types, a provisional model menu, and recursive
-construction (each instance builds a shallower child of the same class).
-
-```text
-src/vibrantine/examples/recursive_research/
-  __init__.py          # exports RecursiveResearchCommission + I/O types
-  commission.py        # RecursiveResearchCommission
-  types.py             # ResearchInput, ResearchOutput
-  models.py            # RecursiveResearchModelMenu (provisional slot, first consumer)
-  prompts/
-    system.md          # loaded via importlib.resources
-  tests/
-    test_commission.py
-  BRIEF.md
-```
-
-- No `subcommissions/`: the recursive child is this same class (no second
-  file), and `FetchTool` is a public sibling. Runtime depth N, one
-  package: the regime rule in the flesh.
-- No `tools/`: `FetchTool` is a shared public tool, not privately owned by
-  this package.
-- `prompts/system.md` is the library's first externalized prompt.
-
-Audit: a human opens BRIEF.md; an assistant edits `prompts/system.md` for
-a prompt change; a new input field goes in `types.py`; a new
-subcommission or private tool is declared in `commission.py`'s
-constructor; a known prompt failure goes in BRIEF.md.
-
-Verdict: the strongest fit; earns every slot except the private-owned
-`tools/` and `subcommissions/` slots.
-
-### EmailHandler (parent plus stub children)
-
-Today: one module holding three Commission classes and five payload
-types; its most important fact (provisional, handlers are stubs) lives in
-the module docstring.
-
-```text
-src/vibrantine/examples/email_handler/
-  __init__.py          # exports EmailHandlerCommission + I/O types only
-  commission.py        # EmailHandlerCommission
-  types.py             # IncomingEmail, EmailHandlerInput, Route, EmailHandlerOutput
-  prompts/
-    system.md          # today's _SYSTEM_PROMPT
-  tools/
-    __init__.py        # empty
-    notify_user.py     # NotifyUserTool + NotifyInput/Output
-  subcommissions/
-    __init__.py        # empty
-    draft_reply.py     # DraftReplyCommission + DraftReplyInput/Output
-  tests/
-    test_commission.py # today's tests/test_email_handler.py
-  BRIEF.md             # provisional status, and what each stub probes
-```
-
-- The only sketch that exercises both private-owned slots:
-  `subcommissions/` for the LLM-bearing `DraftReplyCommission`, and
-  `tools/` for the deterministic `NotifyUserTool`. Both are module-sized,
-  and each keeps its boundary types beside its class.
-- `IncomingEmail` is shared: it appears in the parent's input and inside
-  `DraftReplyInput`. It stays in the parent's `types.py` and the child
-  imports it. Fine while the child is private, but promoting
-  `draft_reply` would have to take the shared type along or split it.
-  First concrete case of promotion friction.
-
-Audit: same answers as above, with two sharpenings: the provisional
-framing moves from module docstring to BRIEF.md, and "where is a new
-subcommission or private tool declared" now has a two-part answer (a
-module under `subcommissions/` or `tools/`, plus the constructor wiring in
-`commission.py`).
-
-Verdict: the sketch where the layout adds the most: the stubs stop
-masquerading as one flat file of six equal classes.
-
-### Findings
+Before adoption, each existing Commission was sketched into the standard
+without moving code: MorningBriefing (custom coordinator), RecursiveResearch
+(recursive LLM loop), and EmailHandler (parent plus stub children). The
+verdicts all landed, so the full sketches retired to git history (pruned
+2026-07-13); the layouts they proposed are now visible in
+`src/vibrantine/examples/` itself. What the pass established:
 
 - **The escalation threshold sharpened.** Having children does not earn a
   package (MorningBriefing in its original shape); an owned prompt, private
@@ -403,5 +275,5 @@ masquerading as one flat file of six equal classes.
   moving or splitting it. Acceptable, but "promotion is one git mv"
   carries this caveat.
 - **`prompts/` cannot be adopted before the loading decision.** Both LLM
-  sketches hit it immediately; it is the next decision the standard
-  actually blocks on.
+  sketches hit it immediately; settled since by the first package
+  migration (`importlib.resources`, per What Bites Next above).
