@@ -31,8 +31,10 @@ Audience-facing guides, not architecture.
   at two levels: contract behavior with fake clients, and heuristic
   evaluation against explicit success/failure criteria.
 - [`pre-release-checklist.md`](pre-release-checklist.md): public-reference
-  release checklist covering security/privacy passes, Commission audits,
-  examples, external consumer proof, and final validation.
+  release checklist covering release posture, security/privacy passes,
+  validation gates, external consumer proof, and the final wrap. The
+  authoring-standard and per-Commission audit material it once carried now
+  lives with its owners; the checklist points instead of restating.
 
 ## Working notes ([`working/`](working/))
 

@@ -114,11 +114,13 @@ Vibrantine without relying on the checkout layout.
 
 ## Commission-By-Commission Audit
 
-Use the template below for every included Commission. The point is to review
-each Commission as a component: typed boundary, interior, dependencies, failure
-shape, costs, tests, and release status.
+Ruled 2026-07-10: the shipped Commissions live in `vibrantine.examples`,
+outside the frozen surface, so the per-Commission audit is opportunistic,
+run when an example is next touched, not a release gate. The retired
+per-Commission sections, and the decisions they recorded, are in git
+history (pruned 2026-07-13).
 
-### Audit Template
+Template for auditing one:
 
 ```md
 ## Commission Name
@@ -137,302 +139,38 @@ Known limitations:
 Release decision:
 ```
 
-### SummarizeCommission
+## Authoring Standards
 
-- [ ] Check that the prompt faithfully describes the target lengths.
-- [ ] Check the output schema is intentionally simple and uncited.
-- [ ] Check size-gate behavior through the base `Commission._run`.
-- [ ] Check cancellation before the LLM loop.
-- [ ] Check malformed provider response behavior through the default loop.
-- [ ] Check tests cover success, validation/size limits, budget behavior where
-  relevant, and injected-client execution.
-- [x] Decide whether British `Summarise` spelling is intentional for the public
-  surface or should be revisited before broader release. Decision (2026-07-05):
-  American spelling everywhere, consistent with typical coding conventions.
-  Renamed to `SummarizeCommission` and swept remaining British spellings
-  (behaviour, honour) across prose.
+Owned elsewhere; this checklist only points:
 
-### SynthesizeCommission
+- Folder layout, slots, `BRIEF.md`, colocated tests:
+  [`working/standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md).
+- Constructor injection, composition, and the nested-Commission pattern:
+  [`authoring.md`](authoring.md), Part II.
+- Test and evaluation coverage bars, including the cost-rollup recipe:
+  [`commission-testing.md`](commission-testing.md).
 
-- [ ] Check source grounding and provenance reattachment.
-- [ ] Check empty-source validation.
-- [ ] Check negative and out-of-range source indices fail structurally.
-- [ ] Check malformed provider responses fail as `CommissionResult` values.
-- [ ] Check budget pre-flight and post-call behavior.
-- [ ] Check cost accounting includes actual token usage on failures after a
-  provider call.
-- [ ] Check `_ClaimRaw` and `_SynthesizeRaw` keep `Field(description=...)`.
-- [ ] Check tests cover success, bad structured output, source-index issues,
-  budget exhaustion, cancellation, and unpriced-model behavior.
+## Examples
 
-### AskCommission
+Satisfied by `vibrantine.examples` (2026-07-05): the demo runner
+(`python -m vibrantine.examples`), the four-rung learning ladder, and the
+worked Commissions, importable but outside the frozen surface. Examples go
+through the entry points (never the `_run` hook), handle all three envelope
+statuses, and the no-key proof of life is authoring.md Step 0.
 
-- [ ] Check the user message clearly binds one `file_path` and one `question`.
-- [ ] Check `ReadTool` pagination instructions are strong enough for an LLM to
-  fetch more when `truncated=True`.
-- [ ] Check capability assumptions: `ReadTool` is the only declared tool.
-- [ ] Check file access behavior remains a tool concern, not an application
-  policy layer.
-- [ ] Check tests cover tool menu shape, conclusion, read failure, pagination,
-  budget, cancellation, and integration skip behavior.
+## External Consumer Proof
 
-### MorningBriefingCommission
+The 2026-07-10 fresh git-dependency smoke (Validation Gates above) proves
+the install mechanics. Base Coder, the tier-1 consumer in its own repo, is
+the standing proof beyond that. Before each release, confirm it still
+consumes the current surface cleanly:
 
-Reinterpreted 2026-07-06 as the substantive worked example for the
-author-decided pole of composition: a heterogeneous three-level tree (a
-Weather leaf, N configured NewsDigest coordinators, an executive-summary
-Summarize call) behind one contract boundary, living at
-`src/vibrantine/examples/morning_briefing/` under the folder standard with
-`subcommissions/` and colocated tests. See its BRIEF.md.
-
-- [ ] Check section fan-out behavior and two-level cost rollup (sections and
-  their fetches).
-- [ ] Check two-level partial semantics: failed source makes a section
-  partial; failed section is skipped and named; failed executive summary
-  degrades the briefing instead of killing it; all-sections-failed fails.
-- [ ] Check budget slicing: per-section shares with one reserved for the
-  executive summary; digests slice their share across fetches.
-- [ ] Check cancellation before sections and between sections and the
-  executive summary.
-- [ ] Check write failure returns a structured failure carrying real
-  accumulated cost.
-- [ ] Check progress events bubble from all three levels through the shared
-  callback.
-- [ ] Check the configured-reuse pattern reads well: one NewsDigest class,
-  N instances, parent labels the sections (instances share the class-level
-  name).
-- [x] Decide whether this remains a worked coordinator in the library or moves
-  toward examples later. Decision (2026-07-05): moved to `vibrantine.examples`
-  with all shipped Commissions.
-
-### RecursiveResearchCommission
-
-- [x] Check recursive construction terminates structurally at `max_depth=0`.
-- [x] Check leaf toolboxes omit `recursive_research` and include only fetch.
-- [x] Check recursive child costs roll up through the default LLM loop.
-- [x] Check output cap / overflow policy is appropriate for sub-answer
-  rendering. Decision: `truncate_with_reference` chops oversized sub-answers
-  (claims kept over prose) and persists the full version when a backend is
-  wired; without one it degrades to `partial` (full output, flagged). Covered
-  by `test_oversized_sub_answer_chopped_when_backend_wired` and
-  `test_oversized_sub_answer_reaches_parent_flagged_partial`.
-- [x] Check prompt guidance discourages unsupported claims.
-- [x] Check tests cover delegation, leaf behavior, cost rollup, and tool menu
-  shape.
-- [x] Decide whether this is a worked example, a provisional Commission, or a
-  future examples candidate. Decision: worked example. It demonstrates the
-  composition pattern (recursion through the toolbox, structural termination,
-  cost rollup) and is not a supported general-use surface. Moved to
-  `vibrantine.examples` on 2026-07-05, when the examples area landed and all
-  shipped Commissions moved into it. Renamed from DeepResearch to
-  RecursiveResearch on 2026-07-05 because the old name is claimed by other
-  AI research products; the new name states the pattern it demonstrates.
-- [x] Add heuristic eval cases for the efficacy bar in
-  `src/vibrantine/examples/recursive_research/BRIEF.md`. Three cases in
-  `tests/test_eval.py` (direct source, broad decomposable, source conflict)
-  run a live pinned model over fictional fixture sources served through the
-  real `FetchTool` via `httpx.MockTransport`; marked `eval`, skip without
-  credentials. All three passed live on 2026-07-05.
-
-### EmailHandlerCommission
-
-- [ ] Decide whether it should remain importable under `vibrantine.examples`
-  for the public reference cut.
-- [ ] If kept, make the provisional/stubbed status unmistakable in docs.
-- [ ] Check stub handlers cannot be mistaken for production email behavior.
-- [ ] Check tests continue to validate LLM-loop routing and child cost rollup.
-- [ ] Consider moving it to examples or a `probes` area if it reads too much
-  like a shipped standard Commission.
-
-## Standard Commission Format
-
-Create an authoring standard before the set of Commissions grows much larger.
-Done in `docs/working/standard-commission-folder-structure.md`, proven by the
-RecursiveResearch package migration, with testing/evaluation policy in
-`docs/commission-testing.md`.
-
-- [x] Define where input/output Pydantic models live.
-- [x] Define where system prompts live.
-- [x] Define how `description` is written for LLM tool selection.
-- [x] Define how nested Commissions and tools are declared.
-- [x] Define constructor injection conventions for child Commissions, tools,
-  `model`, and test clients.
-- [x] Define how tests are organized.
-- [x] Define how prompt/evaluation notes are recorded.
-
-Possible compact module layout:
-
-```text
-src/vibrantine/examples/my_commission.py
-tests/test_my_commission.py
-docs/commissions/my_commission.md
-```
-
-Possible folder layout for larger Commissions:
-
-```text
-src/vibrantine/examples/my_commission/
-  __init__.py
-  commission.py
-  types.py
-  models.py            # optional/provisional: model menu
-  prompts/
-    system.md
-  tools/              # optional: private deterministic tools
-    __init__.py
-  subcommissions/     # optional: private LLM-bearing children
-    __init__.py
-  tests/
-    test_commission.py
-  BRIEF.md
-```
-
-Use the folder layout only when the Commission has enough prompt, type, test,
-private tool, private child, or evaluation material to earn the extra files.
-
-## Nested Commission Pattern
-
-Commissions that own children should follow one consistent constructor pattern.
-Private deterministic tools live under the Commission package's `tools/`
-slot when they are too substantial to stay beside their consumer; private
-LLM-bearing children live under `subcommissions/`. Both are still wired in
-`commission.py`, and `toolbox` remains the source of truth for what an LLM
-loop can call.
-
-```python
-def __init__(
-    self,
-    *,
-    child: ChildCommission | None = None,
-    tool: SomeTool | None = None,
-    model: str | None = None,
-) -> None:
-    resolved_child = child or ChildCommission(model=model)
-    resolved_tool = tool or SomeTool()
-    super().__init__(toolbox=(resolved_child, resolved_tool), model=model)
-```
-
-Checklist for nested Commissions:
-
-- [ ] Parent owns its children.
-- [ ] Private deterministic tools live in `tools/`; private LLM-bearing
-  children live in `subcommissions/`.
-- [ ] Children are invoked through `dispatch`, not direct `invoke`.
-- [ ] Child dependencies are injectable for tests.
-- [ ] Child costs roll up structurally.
-- [ ] Child progress uses the same callback path.
-- [ ] No sibling messaging, shared state, or back-channel coordination.
-
-## Testing And Improvement Standard
-
-Every shipped or example Commission should have tests at the level of risk it
-carries. See [`commission-testing.md`](commission-testing.md) for the full
-standard.
-
-- [ ] Unit tests script the model through the run catalog
-  (`vibrantine.testing.scripted_model`) and require no API key.
-- [ ] Integration tests are marked `@pytest.mark.integration`.
-- [ ] Integration tests skip when credentials are absent.
-- [ ] Tests cover validation failures.
-- [ ] Tests cover cancellation.
-- [ ] Tests cover malformed provider responses for LLM-backed Commissions.
-- [ ] Tests cover budget behavior where the Commission spends money.
-- [ ] Tests cover cost rollup where child Commissions/tools are used.
-- [ ] Tests cover capability/tool menu shape for LLM-loop Commissions.
-- [ ] Tests cover partial results where partial is an expected state.
-- [ ] LLM-driven Commissions have heuristic evaluation cases with explicit
-  success and failure criteria.
-- [ ] Evaluation cases record their scoring method: deterministic check,
-  heuristic assertion, human review, or judge-model rubric.
-- [ ] Prompt changes update or add at least one targeted regression, scripted
-  fake conversation, or evaluation case when practical.
-
-Optional improvement notes per Commission:
-
-```text
-success criteria:
-failure criteria:
-known failures:
-prompt changes tried:
-example inputs:
-example bad outputs:
-candidate eval cases:
-```
-
-## Examples Folder
-
-Satisfied, but not by the repo-root `examples/` directory this section
-originally planned: runnable examples shipped inside `vibrantine.examples`
-instead, as the demo runner (`python -m vibrantine.examples`) and the
-learning ladder (`vibrantine.examples.learning_ladder`, four runnable
-rungs of one idea each), importable and colocated with the worked
-Commissions.
-
-- [x] Deterministic tool example that needs no API key (authoring.md
-  Step 0 runs `ReadTool` as proof of life).
-- [x] LLM-backed examples that clearly require `OPENROUTER_API_KEY`
-  (the ladder rungs; the demo runner checks for the key up front).
-- [x] Examples use `invoke_sync` / `run_one` / `dispatch`, not the
-  `_run` hook.
-- [x] Examples handle `success`, `partial`, and `failure` results
-  explicitly enough to teach the result envelope.
-- [x] Examples avoid protected helpers and frozen-internal assumptions.
-- [x] README and authoring.md link to the demo runner and the ladder.
-
-## External Consumer Repo
-
-Create a separate personal repo to prove external authoring works as intended.
-This is the best test that the frozen public surface is real.
-
-Possible shape:
-
-```text
-vibrantine-example-commissions/
-  pyproject.toml
-  src/example_commissions/
-    research_brief.py
-    classify_note.py
-  tests/
-    test_research_brief.py
-```
-
-Checklist:
-
-- [ ] Consume Vibrantine through a git dependency.
-- [ ] Author at least one custom LLM-backed Commission.
-- [ ] Author or wrap at least one deterministic tool-like Commission.
-- [ ] Import the frozen surface from `vibrantine`.
-- [ ] Import provisional tools from `vibrantine.tools` only when consciously
-  accepting provisional status.
-- [ ] Do not import underscore-prefixed modules or helpers.
-- [ ] Do not depend on `dispatch` internals.
-- [ ] Test with an injected `ScriptedLLM` from `vibrantine.testing`.
-- [ ] Run tests without any API key.
-- [ ] Add one optional integration test that skips without credentials.
-
-## Visualization Notes
-
-Do not block this public-reference cut on visualization. Capture it as future
-work.
-
-Useful future output:
-
-```text
-RecursiveResearch
-|-- RecursiveResearch(depth=1)
-|   |-- RecursiveResearch(depth=0)
-|   |   `-- FetchTool
-|   `-- FetchTool
-`-- FetchTool
-```
-
-Potential future tasks:
-
-- [ ] Generate a tree from `commission.toolbox`.
-- [ ] Include max depth and child names.
-- [ ] Mark tools vs LLM-backed Commissions.
-- [ ] Optionally show cost after a run using persisted records.
-- [ ] Consider Mermaid output for docs.
+- [ ] Consumes Vibrantine through a git dependency.
+- [ ] Imports the frozen surface from `vibrantine`; imports from
+  provisional areas (`vibrantine.tools`) are conscious choices.
+- [ ] No underscore-prefixed imports, no `dispatch` internals.
+- [ ] Tests script the model through the run catalog
+  (`vibrantine.testing.scripted_model`) and run without an API key.
 
 ## Final Wrap Checklist
 
@@ -440,15 +178,15 @@ Potential future tasks:
   the repository already public; repeat at each future sharing moment.)
 - [x] Commission-by-Commission audit complete or consciously deferred.
   (Consciously deferred 2026-07-10: the Commissions moved to
-  `vibrantine.examples`, outside the frozen surface, so the per-Commission
-  audit sections above are historical; audit opportunistically when an
-  example is next touched.)
+  `vibrantine.examples`, outside the frozen surface; audit opportunistically
+  when an example is next touched. The retired per-Commission sections are
+  in git history.)
 - [x] Examples folder exists or is explicitly deferred. `vibrantine.examples`
   landed 2026-07-05; all shipped Commissions live there, importable but not
   part of the frozen surface.
 - [x] External consumer repo smoke test complete or explicitly deferred.
-  (The 2026-07-10 fresh git-dependency smoke covers the mechanics; a
-  persistent external consumer repo remains future work.)
+  (The 2026-07-10 fresh git-dependency smoke covers the mechanics; Base
+  Coder is the persistent external consumer going forward.)
 - [x] README reflects current maturity. (Checked 2026-07-10.)
 - [x] Docs index points to this checklist.
 - [x] CI green after final push. (2026-07-10, both platforms.)
