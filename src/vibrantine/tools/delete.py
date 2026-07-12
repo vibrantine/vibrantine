@@ -49,6 +49,7 @@ class DeleteTool(Commission[DeleteInput, DeleteOutput]):
     )
     input_type: ClassVar[type] = DeleteInput
     output_type: ClassVar[type] = DeleteOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

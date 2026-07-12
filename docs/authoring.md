@@ -468,6 +468,20 @@ bounds are already on your Commission; this step is about knowing them.
   the rows to you live; with a `SqliteBackend` on the run they also land
   in a `calls` table beside the run records at run end. This is where a
   halted run's story stays reconstructable.
+- **The dispatch register.** Every invocation that crosses the contract
+  boundary (tools and Commissions alike) gets a metadata row: run ids,
+  Commission name, the node's self-declared `deterministic` flag, timing,
+  status. Always on, content-free (the row's run_id joins the run records
+  for the verbatim input and output). `run_one(on_dispatch=rows.append)`
+  streams it live; with a `SqliteBackend` it lands in a `dispatches`
+  table. A tool author sets `deterministic = True` in the class body to
+  mark "no LLM in my interior"; it is log metadata only, and nothing ever
+  branches on it.
+- **Stop means stop.** After a fuse trips, `dispatch` refuses to start
+  new invocations: the refused call comes back as an ordinary failure
+  value (your coordinator code keeps running and can still conclude),
+  in-flight work finishes and is counted, and the register records a
+  `refused` row for what never started.
 - **Output size.** `max_output_tokens` plus an `overflow_policy` say what
   happens when the deliverable is oversized. DocTag's output is tiny, so the
   defaults are fine; when you do set a policy, know that `"partial"` flags
@@ -1386,7 +1400,7 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, model catalog) and the root `CallContext`. Refuses when called inside a run |
+| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, on_dispatch=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, dispatch register, model catalog) and the root `CallContext`. Refuses when called inside a run |
 | `invoke_sync` | sync wrapper over `run_one`, same kwargs | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | The only way around inside a run: called from a custom `_run` with the ctx it received (or a `replace()` of it). Refuses outside a run, and refuses a hand-built context |
 

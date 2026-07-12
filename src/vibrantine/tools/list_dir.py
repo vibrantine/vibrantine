@@ -75,6 +75,7 @@ class ListDirTool(Commission[ListDirInput, ListDirOutput]):
     )
     input_type: ClassVar[type] = ListDirInput
     output_type: ClassVar[type] = ListDirOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

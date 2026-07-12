@@ -69,6 +69,7 @@ class EditTool(Commission[EditInput, EditOutput]):
     )
     input_type: ClassVar[type] = EditInput
     output_type: ClassVar[type] = EditOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

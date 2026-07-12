@@ -24,6 +24,14 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
   - a raised exception from a misbehaving `_run` is converted to an
     `internal` failure result, so errors-as-values holds at the boundary
     even when a Commission breaks the contract
+  - the dispatch register is kept: one always-on metadata row per
+    sanctioned invocation (run ids, commission name, the node's
+    self-declared `deterministic` flag, timing, status), the run's
+    complete node ledger, delivered live via `run_one(on_dispatch=...)`
+    and persisted at run end beside the provider-call log
+  - after a fuse trips, new invocations are refused here (a "refused"
+    register row, then a breaker-stamped failure value): stop means stop,
+    structurally, while in-flight work finishes and counts
 
 `Commission._run` is the author's override hook; this module is its one
 sanctioned caller. The underscore is what keeps everyone else routing
@@ -139,61 +147,94 @@ async def dispatch[InputT, OutputT](
     # its own (dispatch stamps that onto the result after _run returns).
     ctx_for_run = replace(ctx, parent_run_id=parent, cancel=cancel)
 
-    # A fresh mailbox for this call; whatever the interior deposits (the LLM
-    # loop's transcript, on success or failure) is collected after _run and
-    # written to the record. The finally re-hangs the caller's box, so a
-    # deposit from a parent's own loop still lands with the parent.
-    box: list[list[dict[str, Any]]] = []
-    trace_token = _trace_box.set(box)
-    token = _current_run_id.set(my_run_id)
-    logger.debug("%s started run_id=%s parent=%s", commission.name, my_run_id, parent)
-    try:
-        # Dispatch is the hook's one sanctioned caller; the protected access
-        # is the design, not a shortcut.
-        result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
-    except RunHaltedError as exc:
-        # A custom _run let the provider door's refusal bubble instead of
-        # catching it. Not a contract breach: translate it to the same
-        # node-level cancellation the framework loop reports, so one trip
-        # speaks one vocabulary all the way up the tree.
-        logger.info("%s halted by the run's stop signal: %s", commission.name, exc)
-        result = _halt_to_failure(
-            commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
+    started_at = gatekeeper.timestamp()
+    llm_trace: list[dict[str, Any]] | None = None
+    refused = gatekeeper.tripped is not None
+    if refused:
+        # Refuse-after-halt (ruled 2026-07-12): once a fuse trips, nothing
+        # new starts, whatever the interior looks like. In-flight work
+        # finishes and counts; this gate is for invocations that have not
+        # begun. The refusal is a value, not a kill: the caller's own code
+        # keeps running with an ordinary failure envelope, breaker-stamped
+        # so the root rewrite claims it causally.
+        tripped = cast(ErrorState, gatekeeper.tripped)
+        logger.info("%s refused by the run's stop signal before starting", commission.name)
+        result: CommissionResult[OutputT] = _dispatch_failure(
+            commission, _dispatch_refused_error(commission.name, tripped), 0.0
         )
-    except Exception as exc:
-        # Errors are values: a Commission that *raises* instead of returning a
-        # failure (a custom-_run bug, a third-party Commission) has broken the
-        # contract. Convert it here so the exception can't escape `run_one`, and
-        # so the failure still flows through stamping + persistence below.
-        # CancelledError is a BaseException, not an Exception; task
-        # cancellation deliberately propagates rather than being swallowed.
-        logger.warning(
-            "%s raised %s (converted to a failure result): %s",
-            commission.name,
-            type(exc).__name__,
-            exc,
-        )
-        result = _exception_to_failure(
-            commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
-        )
-    finally:
-        _current_run_id.reset(token)
-        _trace_box.reset(trace_token)
+    else:
+        # A fresh mailbox for this call; whatever the interior deposits (the
+        # LLM loop's transcript, on success or failure) is collected after
+        # _run and written to the record. The finally re-hangs the caller's
+        # box, so a deposit from a parent's own loop still lands with the
+        # parent.
+        box: list[list[dict[str, Any]]] = []
+        trace_token = _trace_box.set(box)
+        token = _current_run_id.set(my_run_id)
+        logger.debug("%s started run_id=%s parent=%s", commission.name, my_run_id, parent)
+        try:
+            # Dispatch is the hook's one sanctioned caller; the protected
+            # access is the design, not a shortcut.
+            result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
+        except RunHaltedError as exc:
+            # A custom _run let the provider door's refusal bubble instead of
+            # catching it. Not a contract breach: translate it to the same
+            # node-level cancellation the framework loop reports, so one trip
+            # speaks one vocabulary all the way up the tree.
+            logger.info("%s halted by the run's stop signal: %s", commission.name, exc)
+            result = _halt_to_failure(
+                commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
+            )
+        except Exception as exc:
+            # Errors are values: a Commission that *raises* instead of
+            # returning a failure (a custom-_run bug, a third-party
+            # Commission) has broken the contract. Convert it here so the
+            # exception can't escape `run_one`, and so the failure still
+            # flows through stamping + persistence below. CancelledError is a
+            # BaseException, not an Exception; task cancellation deliberately
+            # propagates rather than being swallowed.
+            logger.warning(
+                "%s raised %s (converted to a failure result): %s",
+                commission.name,
+                type(exc).__name__,
+                exc,
+            )
+            result = _exception_to_failure(
+                commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
+            )
+        finally:
+            _current_run_id.reset(token)
+            _trace_box.reset(trace_token)
 
-    # A custom _run may run several LLM loops in sequence; the raw-JSON v1
-    # trace is their message histories concatenated in run order.
-    llm_trace = [message for deposit in box for message in deposit] or None
+        # A custom _run may run several LLM loops in sequence; the raw-JSON
+        # v1 trace is their message histories concatenated in run order.
+        llm_trace = [message for deposit in box for message in deposit] or None
 
     # Stamp before the overflow policy runs, so a truncate_with_reference
     # detail can name the run_id the full output is persisted under.
     result = result.model_copy(update={"run_id": my_run_id, "parent_run_id": parent})
 
-    # The root owns the complete provider-call log, so it persists the rows
-    # after its whole subtree has returned and before composing any diagnostic
-    # that claims where they live.
+    # The register: one metadata row per sanctioned invocation, settled here
+    # for every node uniformly (the root's own row included, so the persist
+    # below lands the whole run in one write; ruled 2026-07-12). The row
+    # speaks the interior outcome; content lives in `records`, joined by
+    # run_id.
+    gatekeeper.log_dispatch(
+        run_id=my_run_id,
+        parent_run_id=parent,
+        commission_name=commission.name,
+        deterministic=commission.deterministic,
+        started_at=started_at,
+        status="refused" if refused else result.status,
+    )
+
+    # The root owns the complete provider-call log and the dispatch
+    # register, so it persists the rows after its whole subtree has returned
+    # and before composing any diagnostic that claims where they live.
     log_persistence = "unavailable"
     if parent is None:
         log_persistence = await _persist_call_log(ctx.backend, my_run_id, gatekeeper.calls)
+        await _persist_dispatch_log(ctx.backend, my_run_id, gatekeeper.dispatches)
 
     # Only the root speaks run_halted; mid-tree nodes ride the ordinary
     # cancellation path. The rewrite is causal, not coincidental: it claims
@@ -333,6 +374,38 @@ async def _persist_call_log(
     return "persisted"
 
 
+async def _persist_dispatch_log(
+    backend: object | None,
+    root_run_id: str,
+    dispatches: list[dict[str, Any]],
+) -> None:
+    """Persist the dispatch register, best-effort.
+
+    Same duck-typed shape as the call log (`store_dispatches`); a backend
+    without the method, or none at all, simply keeps the register in-memory
+    only (the `on_dispatch` accessor is the live retrieval path). Unlike the
+    call log there is no status vocabulary to compose: no root diagnostic
+    points at these rows yet.
+    """
+    if backend is None:
+        return
+    store_dispatches = cast(
+        "Callable[[str | None, list[dict[str, Any]]], Awaitable[None]] | None",
+        getattr(backend, "store_dispatches", None),
+    )
+    if not callable(store_dispatches):
+        return
+    try:
+        await store_dispatches(root_run_id, dispatches)
+    except Exception as exc:
+        logger.warning(
+            "dispatch-register persistence failed for run %s: %s: %s",
+            root_run_id,
+            type(exc).__name__,
+            exc,
+        )
+
+
 # --- The root rewrite -------------------------------------------------------
 
 
@@ -366,7 +439,7 @@ def _as_breaker_born(error: ErrorState) -> ErrorState:
 
     The stamp rides the instance up the tree (never serialized), so the
     root rewrite claims breaker-born failures causally instead of matching
-    the kind or the text. Only the two builders below stamp.
+    the kind or the text. Only the three builders below stamp.
     """
     error._breaker_born = True  # pyright: ignore[reportPrivateUsage]
     return error
@@ -383,6 +456,25 @@ def stop_signal_error(exc: BaseException) -> ErrorState:
         ErrorState(
             kind="cancelled",
             detail=f"Provider call refused by the run's stop signal: {exc}",
+            retryable=False,
+        )
+    )
+
+
+def _dispatch_refused_error(commission_name: str, tripped: ErrorState) -> ErrorState:
+    """The stop signal refused to start a new dispatch (refuse-after-halt).
+
+    The sibling of `stop_signal_error` for the dispatch seam: same stamp,
+    same kind, its own honest wording (nothing here is a provider call; the
+    invocation never started at all).
+    """
+    return _as_breaker_born(
+        ErrorState(
+            kind="cancelled",
+            detail=(
+                f"Dispatch of {commission_name!r} refused by the run's "
+                f"stop signal: {tripped.detail}"
+            ),
             retryable=False,
         )
     )

@@ -320,10 +320,17 @@ Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
   fuse armed by the budget), a tree-wide concurrency room, an immutable
   tool-exposure ceiling, and an always-on provider-call log (`on_llm_call`
   live, a queryable `calls` table beside the run records when SQLite is
-  wired). A tripped fuse halts the run loudly: a `run_halted` failure
-  naming the fuse, with all provider-reported spend included. A
-  dollar-accounted paid call that omits token usage fails instead of
-  counting as free.
+  wired). A tripped fuse halts the run loudly and structurally: new
+  invocations are refused at the dispatch seam, in-flight work finishes
+  and counts, and the root reports a `run_halted` failure naming the
+  fuse, with all provider-reported spend included. A dollar-accounted
+  paid call that omits token usage fails instead of counting as free.
+- The dispatch register: every invocation that crosses the contract
+  boundary (tools and Commissions alike) leaves an always-on metadata row
+  (lineage, the node's self-declared `deterministic` flag, timing,
+  status), the run's complete node ledger for forensics. Live via
+  `on_dispatch`, queryable in a `dispatches` table beside the run
+  records; content stays in the records, joined by run id.
 - The run model catalog: model profiles are defined once at
   `run_one(models=[...])` and referenced by name from Commissions; a profile
   bundles the wire id, endpoint, prices, and provider call settings

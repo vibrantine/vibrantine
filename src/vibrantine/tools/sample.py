@@ -178,6 +178,7 @@ class SampleTool(Commission[SampleInput, SampleOutput]):
     )
     input_type: ClassVar[type] = SampleInput
     output_type: ClassVar[type] = SampleOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

@@ -224,6 +224,7 @@ class Gatekeeper:
         concurrency: int,
         tool_ceiling: frozenset[str] | None = None,
         on_call: Callable[[dict[str, Any]], None] | None = None,
+        on_dispatch: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         # The run's model catalog (see build_catalog): one registry of
         # entries per run, defined at the front door. Model *choice* stays
@@ -270,10 +271,18 @@ class Gatekeeper:
         # One row per provider call, always on: the fuses read the same
         # counters, so the trust promise never depends on a config flag.
         self.calls: list[dict[str, Any]] = []
-        # The caller's live view of the log (run_one's on_llm_call kwarg),
-        # invoked once per row. Observational only, so a raising callback is
-        # swallowed loudly rather than allowed to tear the settle path.
+        # The dispatch register: one metadata row per sanctioned invocation
+        # (every dispatch, tools and Commissions alike), always on. The
+        # run's complete node ledger; content lives in `records`, joined by
+        # run_id. Rows are appended by `dispatch`, the one seam every
+        # sanctioned call passes.
+        self.dispatches: list[dict[str, Any]] = []
+        # The caller's live view of each log (run_one's on_llm_call /
+        # on_dispatch kwargs), invoked once per row. Observational only, so
+        # a raising callback is swallowed loudly rather than allowed to tear
+        # the settle path.
         self._on_call = on_call
+        self._on_dispatch = on_dispatch
 
     def _append_row(self, row: dict[str, Any]) -> None:
         self.calls.append(row)
@@ -285,6 +294,43 @@ class Gatekeeper:
             self._on_call(row.copy())
         except Exception as exc:
             logger.warning("on_llm_call callback raised %s (ignored): %s", type(exc).__name__, exc)
+
+    def log_dispatch(
+        self,
+        *,
+        run_id: str,
+        parent_run_id: str | None,
+        commission_name: str,
+        deterministic: bool,
+        started_at: str,
+        status: str,
+    ) -> None:
+        """Settle one register row: a dispatch that finished or was refused.
+
+        `status` speaks the envelope vocabulary (success / failure /
+        partial) plus "refused" for an invocation the halted run never
+        started. Keys are shared with the persisted `dispatches` table.
+        """
+        row = {
+            "run_id": run_id,
+            "parent_run_id": parent_run_id,
+            "commission_name": commission_name,
+            "deterministic": deterministic,
+            "started_at": started_at,
+            "ended_at": _utcnow_iso(),
+            "status": status,
+        }
+        self.dispatches.append(row)
+        if self._on_dispatch is None:
+            return
+        try:
+            self._on_dispatch(row.copy())
+        except Exception as exc:
+            logger.warning("on_dispatch callback raised %s (ignored): %s", type(exc).__name__, exc)
+
+    def timestamp(self) -> str:
+        """The run's one timestamp format, for callers stamping row starts."""
+        return _utcnow_iso()
 
     # --- the model catalog ---------------------------------------------------
 

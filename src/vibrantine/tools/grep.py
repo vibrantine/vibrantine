@@ -100,6 +100,7 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
     )
     input_type: ClassVar[type] = GrepInput
     output_type: ClassVar[type] = GrepOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

@@ -78,6 +78,7 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
     )
     input_type: ClassVar[type] = GlobInput
     output_type: ClassVar[type] = GlobOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

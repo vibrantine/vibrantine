@@ -149,7 +149,7 @@ src/
     __init__.py                       # public boundary: __all__ is the SemVer surface
     contract.py                       # core contract types, the Commission ABC, PersistenceBackend Protocol
     orchestrator.py                   # run_one + invoke_sync entry points
-    dispatch.py                       # wraps _run: run_id + parent_run_id + overflow + record + raise backstop
+    dispatch.py                       # wraps _run: run_id + parent_run_id + overflow + record + raise backstop + dispatch register + refuse-after-halt
     llm_tools.py                      # LLM-tool wrapper + the default LLM loop
     factory.py                        # create_commission authoring factory
     models.py                         # Model profiles (name + wire id + endpoint + pricing + params); DEFAULT_MODEL

@@ -77,6 +77,7 @@ async def run_one[InputT, OutputT](
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
     on_llm_call: Callable[[dict[str, Any]], None] | None = None,
+    on_dispatch: Callable[[dict[str, Any]], None] | None = None,
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
@@ -138,6 +139,9 @@ async def run_one[InputT, OutputT](
         # refused call. Retrieval after the run is `rows = []` plus
         # `on_llm_call=rows.append`; no new public type.
         on_call=on_llm_call,
+        # The dispatch register's live twin: one dict per finished or
+        # refused dispatch, the run's node ledger as it grows.
+        on_dispatch=on_dispatch,
     )
     ctx = CallContext(
         budget_usd=budget_usd,
@@ -180,6 +184,7 @@ def invoke_sync[InputT, OutputT](
     cancel: CancelToken | None = None,
     on_progress: Callable[[ProgressEvent], None] | None = None,
     on_llm_call: Callable[[dict[str, Any]], None] | None = None,
+    on_dispatch: Callable[[dict[str, Any]], None] | None = None,
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
@@ -199,6 +204,7 @@ def invoke_sync[InputT, OutputT](
             cancel=cancel,
             on_progress=on_progress,
             on_llm_call=on_llm_call,
+            on_dispatch=on_dispatch,
             backend=backend,
             record=record,
         )

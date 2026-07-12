@@ -62,6 +62,7 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
     )
     input_type: ClassVar[type] = MoveInput
     output_type: ClassVar[type] = MoveOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

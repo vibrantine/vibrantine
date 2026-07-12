@@ -58,6 +58,7 @@ class WriteTool(Commission[WriteInput, WriteOutput]):
     )
     input_type: ClassVar[type] = WriteInput
     output_type: ClassVar[type] = WriteOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

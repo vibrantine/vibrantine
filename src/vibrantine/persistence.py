@@ -241,6 +241,23 @@ class SqliteBackend:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_root ON calls(root_run_id)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS dispatches (
+                    root_run_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    parent_run_id TEXT,
+                    commission_name TEXT NOT NULL,
+                    deterministic INTEGER NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT NOT NULL,
+                    status TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_dispatches_root ON dispatches(root_run_id)"
+            )
 
     async def store(self, record: PersistedRecord) -> None:
         await asyncio.to_thread(self._store_sync, record)
@@ -267,6 +284,18 @@ class SqliteBackend:
         and joins `records`).
         """
         await asyncio.to_thread(self._store_calls_sync, root_run_id, calls)
+
+    async def store_dispatches(
+        self, root_run_id: str | None, dispatches: list[dict[str, Any]]
+    ) -> None:
+        """Write a run's dispatch register, one metadata row per invocation.
+
+        Called by the root dispatch at run end, in the same batch write as
+        the call log; each row's `run_id` names the dispatched node and
+        joins `records` for the content. Rows share the call log's
+        lifecycle: they die with the run's root record or by age.
+        """
+        await asyncio.to_thread(self._store_dispatches_sync, root_run_id, dispatches)
 
     # --- sync helpers run in threadpool ---
 
@@ -336,6 +365,11 @@ class SqliteBackend:
                 "AND root_run_id NOT IN (SELECT run_id FROM records)",
                 (_timestamp(cutoff),),
             )
+            conn.execute(
+                "DELETE FROM dispatches WHERE ended_at < ? "
+                "AND root_run_id NOT IN (SELECT run_id FROM records)",
+                (_timestamp(cutoff),),
+            )
             return len(run_ids)
 
     def _store_calls_sync(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
@@ -369,6 +403,32 @@ class SqliteBackend:
                 ],
             )
 
+    def _store_dispatches_sync(
+        self, root_run_id: str | None, dispatches: list[dict[str, Any]]
+    ) -> None:
+        with closing(self._connect()) as conn, conn:
+            conn.executemany(
+                """
+                INSERT INTO dispatches
+                    (root_run_id, run_id, parent_run_id, commission_name,
+                     deterministic, started_at, ended_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        root_run_id,
+                        row["run_id"],
+                        row["parent_run_id"],
+                        row["commission_name"],
+                        1 if row["deterministic"] else 0,
+                        row["started_at"],
+                        row["ended_at"],
+                        row["status"],
+                    )
+                    for row in dispatches
+                ],
+            )
+
     def _prune_for_mode_sync(self, conn: sqlite3.Connection, mode: PersistenceMode) -> None:
         if mode == "dev":
             rows = conn.execute(
@@ -396,16 +456,17 @@ class SqliteBackend:
         conn: sqlite3.Connection,
         run_ids: list[str],
     ) -> None:
-        """Delete records; call rows die only with their run's root.
+        """Delete records; call and dispatch rows die only with their run's root.
 
-        A call row belongs to the run, not to the node that made it (ruled
+        A log row belongs to the run, not to the node that made it (ruled
         2026-07-12): pruning or deleting a child record leaves the root's
-        call log whole, and deleting the root record removes the run's
-        entire log. Set-based so the calls delete rides the root_run_id
-        index instead of scanning per record.
+        logs whole, and deleting the root record removes the run's entire
+        call log and dispatch register together. Set-based so the deletes
+        ride the root_run_id indexes instead of scanning per record.
         """
         if not run_ids:
             return
         placeholders = ",".join("?" * len(run_ids))
         conn.execute(f"DELETE FROM calls WHERE root_run_id IN ({placeholders})", run_ids)
+        conn.execute(f"DELETE FROM dispatches WHERE root_run_id IN ({placeholders})", run_ids)
         conn.execute(f"DELETE FROM records WHERE run_id IN ({placeholders})", run_ids)

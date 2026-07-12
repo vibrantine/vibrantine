@@ -160,6 +160,7 @@ class ShellTool(Commission[ShellInput, ShellOutput]):
     )
     input_type: ClassVar[type] = ShellInput
     output_type: ClassVar[type] = ShellOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)

@@ -91,6 +91,7 @@ class _EchoTool(Commission[_EchoIn, _EchoOut]):
     description: ClassVar[str] = "Echoes its input text. Test double."
     input_type: ClassVar[type] = _EchoIn
     output_type: ClassVar[type] = _EchoOut
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)
@@ -949,8 +950,10 @@ class _PeeksAtCancel(Commission[_EchoIn, _EchoOut]):
 
 async def test_a_swapped_cancel_token_cannot_sever_the_breaker() -> None:
     # A coordinator hands its whole subtree a never-cancelled token; the fuse
-    # then trips. Dispatch re-wraps the swapped token with the run breaker,
-    # so even non-LLM work downstream still sees the halt.
+    # then trips. The halt is structural at the dispatch seam: the post-trip
+    # child is refused before it starts, so severing the token buys the
+    # subtree nothing (refuse-after-halt, ruled 2026-07-12; previously the
+    # child ran and the re-wrapped token merely *showed* it the halt).
     seen: list[bool] = []
     peeker = _PeeksAtCancel(seen)
     child = _Child()
@@ -964,10 +967,15 @@ async def test_a_swapped_cancel_token_cannot_sever_the_breaker() -> None:
         async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
             severed = replace(ctx, cancel=NEVER_CANCELLED)
             first = await dispatch(child, input, severed)  # admitted: call 1 of 1
-            second = await dispatch(child, input, severed)  # refused: trips the fuse
+            second = await dispatch(child, input, severed)  # its provider call trips the fuse
             assert first.status == "success"
             assert second.status == "failure"
-            await dispatch(peeker, _EchoIn(text="after the trip"), severed)
+            peeked = await dispatch(peeker, _EchoIn(text="after the trip"), severed)
+            # The refusal is a value: this coordinator's own code keeps
+            # running and still gets to conclude (the structured exit).
+            assert peeked.status == "failure"
+            assert peeked.error is not None
+            assert "refused by the run's stop signal" in peeked.error.detail
             return self._succeed(
                 _A(answer="kept working"),
                 provenance=_prov("severer"),
@@ -981,7 +989,7 @@ async def test_a_swapped_cancel_token_cannot_sever_the_breaker() -> None:
         max_llm_calls=1,
     )
     assert result.status == "success"  # the root concluded; wind-down stands
-    assert seen == [True]
+    assert seen == []  # the post-trip child never started at all
 
 
 async def test_a_scoped_cancel_narrows_one_branch_only() -> None:
@@ -1166,7 +1174,8 @@ async def test_calls_land_beside_records_in_sqlite(tmp_path: Any) -> None:
 
 async def test_a_backend_without_store_calls_is_skipped_gracefully(tmp_path: Any) -> None:
     # The Protocol is untouched: a backend that never heard of the call log
-    # (FilesystemBackend, any third-party implementation) keeps working.
+    # or the dispatch register (FilesystemBackend, any third-party
+    # implementation) keeps working.
     from vibrantine.persistence import FilesystemBackend
 
     result = await run_one(
@@ -1177,3 +1186,143 @@ async def test_a_backend_without_store_calls_is_skipped_gracefully(tmp_path: Any
         record="always",
     )
     assert result.status == "success"
+
+
+# --- The dispatch register ----------------------------------------------------
+
+DISPATCH_ROW_KEYS = {
+    "run_id",
+    "parent_run_id",
+    "commission_name",
+    "deterministic",
+    "started_at",
+    "ended_at",
+    "status",
+}
+
+
+async def test_register_keeps_one_row_per_dispatch_with_lineage(open_test_run: Any) -> None:
+    # Every sanctioned invocation gets a metadata row: the run's complete
+    # node ledger, children settling before their parents.
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    async with open_test_run(models=[script]) as ctx:
+        result = await dispatch(probe, _Q(question="?"), ctx)
+        rows = ctx._gatekeeper.dispatches  # pyright: ignore[reportPrivateUsage]
+    assert result.status == "success"
+    assert [row["commission_name"] for row in rows] == ["echo", "probe"]
+    for row in rows:
+        assert set(row) == DISPATCH_ROW_KEYS
+        assert row["started_at"] <= row["ended_at"]
+    echo_row, probe_row = rows
+    assert probe_row["run_id"] == result.run_id
+    assert probe_row["parent_run_id"] is None
+    assert probe_row["deterministic"] is False
+    assert probe_row["status"] == "success"
+    assert echo_row["parent_run_id"] == result.run_id
+    assert echo_row["deterministic"] is True
+    assert echo_row["status"] == "success"
+
+
+async def test_refused_dispatch_logs_a_row_and_the_root_speaks_run_halted() -> None:
+    # Refuse-after-halt: once a fuse trips, a new dispatch never starts.
+    # The refusal is a value the coordinator handles (or propagates, keeping
+    # the breaker stamp for the root's causal rewrite), and the register
+    # records what did not run and why.
+    rows: list[dict[str, Any]] = []
+    child = _Child()
+
+    class _Coordinator(Commission[_Q, _A]):
+        name: ClassVar[str] = "coordinator"
+        description: ClassVar[str] = "Dispatches children past a fuse trip. Test double."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            first = await dispatch(child, input, ctx)  # admitted: call 1 of 1
+            assert first.status == "success"
+            second = await dispatch(child, input, ctx)  # its provider call trips the fuse
+            assert second.status == "failure"
+            refused = await dispatch(child, input, ctx)  # refused at the dispatch seam
+            assert refused.status == "failure"
+            assert refused.error is not None
+            assert "refused by the run's stop signal" in refused.error.detail
+            assert refused.cost.estimated_usd == 0.0  # it never ran
+            return refused
+
+    result = await run_one(
+        _Coordinator(),
+        _Q(question="?"),
+        models=[_scripted([_conclude(), _conclude()])],
+        max_llm_calls=1,
+        on_dispatch=rows.append,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "run_halted"
+    assert [row["status"] for row in rows] == ["success", "failure", "refused", "failure"]
+    assert all(set(row) == DISPATCH_ROW_KEYS for row in rows)
+
+
+async def test_a_raising_on_dispatch_never_breaks_the_run() -> None:
+    def boom(row: dict[str, Any]) -> None:
+        raise RuntimeError("observer bug")
+
+    result = await run_one(
+        _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], on_dispatch=boom
+    )
+    assert result.status == "success"
+
+
+async def test_dispatches_land_beside_records_in_sqlite(tmp_path: Any) -> None:
+    import sqlite3
+
+    from vibrantine.persistence import SqliteBackend
+
+    backend = SqliteBackend(tmp_path / "runs.db")
+    probe = _Probe(toolbox=(_EchoTool(),))
+    script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
+    result = await run_one(
+        probe, _Q(question="?"), models=[script], backend=backend, record="always"
+    )
+    assert result.status == "success"
+
+    with sqlite3.connect(tmp_path / "runs.db") as conn:
+        rows = conn.execute(
+            "SELECT root_run_id, run_id, parent_run_id, commission_name, "
+            "deterministic, status FROM dispatches ORDER BY ended_at"
+        ).fetchall()
+        # The register's join: a row's run_id names the node's record, where
+        # the content lives (metadata here, verbatim input/output there).
+        joined = conn.execute(
+            """
+            SELECT dispatches.commission_name, records.commission_name
+            FROM dispatches JOIN records ON dispatches.run_id = records.run_id
+            """
+        ).fetchall()
+    assert len(rows) == 2
+    echo_row, probe_row = rows
+    assert echo_row[0] == result.run_id and probe_row[0] == result.run_id
+    # One write: the root's own row rides the same batch (ruled 2026-07-12).
+    assert probe_row[1] == result.run_id and probe_row[2] is None
+    assert echo_row[2] == result.run_id
+    assert (echo_row[3], echo_row[4], echo_row[5]) == ("echo", 1, "success")
+    assert (probe_row[3], probe_row[4], probe_row[5]) == ("probe", 0, "success")
+    assert len(joined) == 2 and all(a == b for a, b in joined)
+
+
+def test_the_flag_is_self_description_and_the_shipped_tools_declare_it() -> None:
+    # Base default False (the safe direction of error); every shipped tool
+    # declares True. Nothing verifies the claim, deliberately: it is the
+    # node's own word, log metadata only.
+    import vibrantine.tools as tools
+
+    assert Commission.deterministic is False
+    tool_classes: list[type[Commission[Any, Any]]] = [
+        cls
+        for cls in (getattr(tools, tool_name) for tool_name in tools.__all__)  # pyright: ignore[reportAny]
+        if isinstance(cls, type) and issubclass(cls, Commission)
+    ]
+    assert len(tool_classes) == 11
+    for cls in tool_classes:
+        assert cls.deterministic is True, cls.__name__

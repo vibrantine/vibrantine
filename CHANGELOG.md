@@ -10,6 +10,24 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Added
 
+- **The dispatch register**: every invocation that crosses the contract
+  boundary (top-level, a coordinator's children, the LLM loop's tool
+  calls) leaves one always-on metadata row at the dispatch seam: run_id,
+  parent_run_id, Commission name, the node's self-declared
+  `deterministic` flag, started/ended timestamps, and status (the
+  envelope vocabulary plus `refused`). The run's complete node ledger,
+  built for prompt-injection forensics: rows are metadata only and join
+  the run records by run_id for verbatim content. Delivered live via
+  `run_one(on_dispatch=...)` (mirroring `on_llm_call`), and persisted at
+  run end in one write (the root's own row included) to a new
+  `dispatches` table beside `calls` through an optional duck-typed
+  `store_dispatches`; rows share the call log's lifecycle, dying with the
+  run's root record or by age. `Commission.deterministic` is a new
+  ClassVar (default False) a tool author sets True in the class body to
+  say "no LLM anywhere in my interior"; it is the node's own unverified
+  word, recorded for filtering, and no framework behavior ever branches
+  on it. All eleven shipped tools declare it.
+
 - **Model profiles**: a catalog entry is now the one place a model
   configuration is done right. `Model` gains `name` (the catalog key and
   what a Commission references, defaulting to `id`) and `params` (provider
@@ -133,6 +151,18 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Changed
 
+- **Breaking (behavior): stop means stop.** After a run fuse trips,
+  `dispatch` refuses to start new invocations: the refused call returns
+  an ordinary breaker-stamped failure value (kind `cancelled`, so the
+  root's causal `run_halted` rewrite claims it unchanged) and a `refused`
+  register row records what never started. Previously a post-trip child
+  ran until its own cancellation checkpoint or next provider call, so
+  non-LLM work (file writes, fetches) could continue after a halt; now
+  the stop is structural at the seam, whatever the interior looks like.
+  In-flight work still finishes and is counted, loop wind-down still
+  concludes (`conclude` is loop-internal, not a dispatch), and a
+  coordinator's own Python after a refused dispatch keeps running: the
+  structured exit is values, not a kill.
 - **Breaking:** `KNOWN_MODELS` is retired and `DEFAULT_MODEL` is now the
   default profile *object* (a full `Model`) rather than an id string. The
   dict had shrunk to a one-entry vestige whose only job was feeding the

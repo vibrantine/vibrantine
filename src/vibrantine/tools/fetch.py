@@ -88,6 +88,7 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
     )
     input_type: ClassVar[type] = FetchInput
     output_type: ClassVar[type] = FetchOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(
         self,

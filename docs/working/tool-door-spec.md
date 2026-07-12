@@ -2,13 +2,15 @@
 
 ## Status
 
-**SPEC, RE-RULED 2026-07-12.** Same-day supersession of the ambient
+**BUILT, 2026-07-12.** Ruled in full and shipped the same day. Same-day
+supersession of the ambient
 tool-door stub. The register moved from inside each tool to `dispatch`,
 the seam every sanctioned invocation already passes; the user made the
 re-ruling explicitly, with the code in front of us, so this is a
 recorded decision and not drift. Decision 1 below carries what changed
-and why. The settled decisions are locked; the working recommendations
-are the build session's walkthrough agenda, one at a time.
+and why. The settled decisions are locked, and the seven working
+recommendations were walked one at a time and ruled (see the rulings
+section); building followed the same day.
 
 The consumer that motivated the direction is unchanged: the
 document-management bundle (prompt-injection forensics is its core
@@ -81,47 +83,58 @@ both.
    the root record dies or by age (the orphan sweep), and nothing else
    touches them.
 
-## Working recommendations (the build session's walkthrough agenda)
+## Rulings (walkthrough of 2026-07-12, one at a time)
 
-Each of these needs its own explicit yes before build; the
-recommendation is recorded so the walkthrough starts somewhere.
+1. **Every dispatch is logged**, not only flagged ones. Rows for
+   everything make the register the run's complete node ledger; "tools
+   only" is a WHERE clause on the flag column, not a schema decision.
+   You can filter a complete ledger down; you can't reconstruct rows
+   never written.
+2. **Metadata only**: run_id, parent_run_id, commission name, the flag,
+   timing, status. Content stays on `records` (which the record-default
+   flip already persists whenever a backend is wired), with `record=`
+   as its one switch and the row's run_id as the reference into it. A
+   content payload can be huge (media parts, whole documents), and a
+   register that carries weight inherits pressure to be switchable,
+   which breaks its continuity promise. Ruled after weighing an
+   on/off-switch-plus-reference shape and finding it is the existing
+   two-table design restated.
+3. **Refuse-after-halt at dispatch, no knob.** After a trip, nothing
+   new starts; in-flight work finishes and counts. The structured exit
+   the author might want is already carried by values: a refused
+   dispatch returns an ordinary failure envelope (the parent's own code
+   keeps running), loops conclude via wind-down, the root envelope
+   carries everything out, and post-halt life belongs to the caller
+   above the run. An in-run "continue with zero LLM calls" mode was
+   considered and rejected: it contradicts what a capacity halt means.
+   A `halt_mode=` knob waits for a real consumer hurting.
+4. **The flag is `deterministic: ClassVar[bool] = False`**, declared in
+   the class body beside `name` and `description`, not a constructor
+   kwarg: determinism is a property of what the author wrote, so the
+   Commission kwargs lock does not grow. A `kind` tag was rejected as
+   the type split returning as vocabulary. Default False errs safe (an
+   undeclared tool merely filters less sharply; a wrong True would lie).
+5. **The table is `dispatches`**, beside `calls`: one row per finished
+   dispatch (no two-phase start/settle until live visibility of long
+   runs earns it), columns root_run_id, run_id, parent_run_id,
+   commission_name, deterministic, started_at, ended_at, status; same
+   batching, deletion, and aging as `calls`, via a duck-typed
+   `store_dispatches`.
+6. **The live accessor is `on_dispatch=`**, mirroring `on_llm_call`.
+   Merging the two streams stays a possible later simplification; today
+   the rows differ in shape and two symmetric names are cheaper to hold.
+7. **One write.** The root's own row is settled from the result already
+   in hand at the persist point, so the whole register lands in one
+   batch; its ended_at runs microseconds early, which nobody will care
+   about. The two-write alternative (precision at the cost of a second
+   plumbing path) was declined.
 
-- **Log every dispatch, or only flagged ones?** Recommended: every
-  dispatch. A pure-Python coordinator with recording off is invisible
-  today too, and rows for everything make the register the run's
-  complete node ledger. "Tools only" is a WHERE clause on the flag
-  column, not a schema decision.
-- **Metadata or content?** Recommended: metadata only (commission name,
-  flag, run_id, parent_run_id, timing, status), joining `records` for
-  verbatim input and output. The record-default flip already made a
-  wired backend persist every node's content; the register's job is the
-  always-on skeleton, not a second content store. Confirming this
-  dissolves the stub's biggest open question.
-- **Refuse-after-halt at dispatch.** Recommended: yes. After a fuse
-  trips, dispatch refuses new invocations with the same breaker-stamped
-  vocabulary the provider door uses (a refused row, then the failure
-  value). Uniform for every node, and wind-down survives: `conclude` is
-  loop-internal, not a dispatch. Today a post-trip child runs to its
-  own cancellation checkpoint; this makes the stop structural. Note:
-  `stop_signal_error`'s detail says "Provider call refused" and needs
-  generalized wording or a sibling builder.
-- **The flag's name and shape.** `deterministic: bool` states the
-  honest interior fact; a `kind` tag reads better in SQL. Frozen
-  surface, so name it carefully.
-- **Row shape and table name.** A sibling table beside `calls` (working
-  name: `dispatches`), keyed by root_run_id and the node's run_id, with
-  a duck-typed store method like `store_calls`. One row settled at
-  completion, carrying started_at and ended_at like provider rows; a
-  two-phase start/settle shape only if live visibility of long tool
-  runs earns it.
-- **The live accessor.** Mirror `on_llm_call` (working name:
-  `on_dispatch=`); unification into one stream is a later
-  simplification if the rows converge.
-- **The root's own row.** The root persists the run's logs from inside
-  its own dispatch, before its own status is final and before the
-  run_halted rewrite reads the persistence verdict. Decide the
-  ordering: persist the register after the rewrite, or accept the root
-  row landing in a second write.
+Build notes riding the rulings: the dispatch refusal uses a sibling
+builder with the same breaker-born stamp (`stop_signal_error`'s
+"Provider call refused" wording stays true at the provider door), so
+the causal root rewrite claims refused-descended failures unchanged.
+Row status speaks the envelope vocabulary (success / failure / partial)
+plus `refused`.
 
 ## Why this shape and not the alternatives
 

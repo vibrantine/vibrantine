@@ -388,6 +388,13 @@ class Commission[InputT, OutputT](ABC):
     description: ClassVar[str]
     input_type: ClassVar[type[BaseModel]]
     output_type: ClassVar[type[BaseModel]]
+    # Self-description: True means "no LLM anywhere in my interior" (the
+    # Tool authoring discipline). The node's own unverified word, recorded
+    # in the dispatch register so a forensic query can filter tool calls
+    # from Commission calls. Log metadata ONLY: no framework behavior may
+    # ever branch on it, or the fourth category arrives through the back
+    # door. Defaults False, the safe direction of error.
+    deterministic: ClassVar[bool] = False
     # Commission-layer system prompt. None = this Commission doesn't need
     # one (typical for Tools); a string = the prompt the framework feeds
     # to the Commission's own LLM. Application and envelope layers are

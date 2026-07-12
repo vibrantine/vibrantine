@@ -46,6 +46,20 @@ def _record(
     )
 
 
+def _dispatch_row(run_id: str, *, ended_at: datetime | None = None) -> dict[str, Any]:
+    ended = ended_at or datetime.now(UTC)
+    started = ended - timedelta(seconds=1)
+    return {
+        "run_id": run_id,
+        "parent_run_id": None,
+        "commission_name": "demo",
+        "deterministic": False,
+        "started_at": started.isoformat(timespec="microseconds"),
+        "ended_at": ended.isoformat(timespec="microseconds"),
+        "status": "success",
+    }
+
+
 def _call_row(run_id: str, *, ended_at: datetime | None = None) -> dict[str, Any]:
     ended = ended_at or datetime.now(UTC)
     started = ended - timedelta(seconds=1)
@@ -392,3 +406,45 @@ async def test_sqlite_ring_buffer_pruning_removes_call_rows(tmp_path: Path) -> N
     with closing(sqlite3.connect(db)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM calls").fetchone()
     assert count == (0,)
+
+
+async def test_sqlite_dispatch_rows_die_with_the_root_record_only(tmp_path: Path) -> None:
+    # Register rows ride the call-row ownership rule (ruled 2026-07-12):
+    # they belong to the run, so a deleted child record leaves the ledger
+    # whole and deleting the root removes it entirely.
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db)
+    await backend.store(_record(run_id="root", mode="always"))
+    await backend.store(_record(run_id="child", parent_run_id="root", mode="always"))
+    await backend.store_dispatches("root", [_dispatch_row("root"), _dispatch_row("child")])
+
+    await backend.delete("child")
+    with closing(sqlite3.connect(db)) as conn:
+        rows = conn.execute("SELECT root_run_id, run_id FROM dispatches ORDER BY run_id").fetchall()
+    assert rows == [("root", "child"), ("root", "root")]
+
+    await backend.delete("root")
+    with closing(sqlite3.connect(db)) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM dispatches").fetchone()
+    assert count == (0,)
+
+
+async def test_sqlite_age_pruning_sweeps_orphaned_dispatch_rows(tmp_path: Path) -> None:
+    # Same orphan sweep as calls: rows whose run never stored a root record
+    # die by their own age; rows under a retained root survive regardless.
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db)
+    old = datetime.now(UTC) - timedelta(days=10)
+    young = datetime.now(UTC) - timedelta(days=1)
+    await backend.store(_record(run_id="kept", mode="always", created_at=old))
+    await backend.store_dispatches("kept", [_dispatch_row("kept", ended_at=old)])
+    await backend.store_dispatches("orphan", [_dispatch_row("orphan", ended_at=old)])
+    await backend.store_dispatches("young-orphan", [_dispatch_row("young-orphan", ended_at=young)])
+
+    await backend.delete_older_than(datetime.now(UTC) - timedelta(days=5))
+
+    with closing(sqlite3.connect(db)) as conn:
+        # "kept" ages out as a record (created before the cutoff), taking its
+        # rows; "orphan" is reaped by age; "young-orphan" survives on its own.
+        rows = conn.execute("SELECT root_run_id FROM dispatches").fetchall()
+    assert rows == [("young-orphan",)]
