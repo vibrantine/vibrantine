@@ -88,16 +88,18 @@ Cover the contract surface the Commission exercises:
 
 ### The cost-rollup recipe
 
-Cost rollup is the one custom-path obligation that breaks silently: nothing
-at runtime notices a coordinator that forgets to sum its children, and every
-ancestor's receipt is wrong from then on. It is also the easiest invariant
-to pin, because scripted responses make costs deterministic:
+Cost rollup is the custom-path obligation easiest to slip on: a coordinator
+that forgets to sum its children leaves every ancestor's receipt wrong from
+then on. The runtime observes the slip (`dispatch` logs a WARNING when an
+envelope's cost under-reports the provider spend witnessed in its subtree),
+but a warning in a log is not a pinned invariant. It is also the easiest
+invariant to pin, because scripted responses make costs deterministic:
 
 1. Script each LLM-bearing child with `llm_response(..., in_tokens=...,
    out_tokens=...)` so every child's cost is a known number, not a live
    variable.
-2. Run the coordinator through the entry points with the scripted clients
-   injected.
+2. Run the coordinator through the entry points with the scripted models
+   registered in `run_one(models=[...])`.
 3. Assert the parent's `result.cost.estimated_usd` equals the sum of the
    children's known costs, plus the parent's own scripted turns if it runs
    any.

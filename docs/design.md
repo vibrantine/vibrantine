@@ -306,8 +306,8 @@ What the invoker holds.
   spend, armed by the budget), a tree-wide concurrency room that counts
   calls in flight rather than coordinators, an immutable tool-exposure
   ceiling, the provider-call log (always on in memory, landing beside the
-  run records as a queryable table when a backend is wired), and the model
-  catalog. `run_one` is the only entry into a run and `dispatch` the only
+  run records as a queryable table when a backend is wired), the dispatch
+  register (the next decision), and the model catalog. `run_one` is the only entry into a run and `dispatch` the only
   path around inside one; each refuses the other's job, and `dispatch`
   refuses a context carrying a different run object, so the Gatekeeper can
   never be swapped mid-tree. It has no public name: the caller configures
@@ -353,14 +353,54 @@ What the invoker holds.
     store, never replaces it.
   - Sandbox claims.
 
+#### Every sanctioned call is logged at the one seam
+
+- **Decision.** The run keeps a dispatch register: one metadata-only row
+  per sanctioned invocation, tools and Commissions alike, settled when
+  the call returns or is refused. A row carries the tree's edges
+  (`run_id` / `parent_run_id`), the Commission's name, its deterministic
+  flag, timing, and a status speaking the envelope vocabulary plus
+  `"refused"` for an invocation a halted run never started; never
+  payloads, never dollars (verbatim input and output belong to the
+  records, spend to the call log, all joined by run id). The register
+  lives in `dispatch`, always on in memory, landing beside the run
+  records as a queryable `dispatches` table when a backend is wired and
+  streaming live through `run_one(on_dispatch=)`. The seam enforces as
+  well as observes: after a fuse trips, `dispatch` refuses new
+  invocations, so stop means stop for children, not just for provider
+  calls. (Ruled 2026-07-12, superseding a per-tool "door" drafted the
+  same day: a door on every tool is many doors to keep honest, and
+  `dispatch` is the one they all already walk through.)
+- **Why.** The Gatekeeper made the provider boundary accountable with
+  one choke point, but everything else a run did left traces only in
+  mode-gated records: a tool call, or a pure-Python coordinator's
+  children, could run with no always-on account of what ran under whom,
+  when. The forensic question comes from the document-management bundle
+  (prompt-injection forensics is its core threat model): the tree's
+  shape must be reconstructable after the fact without having opted into
+  full records. Metadata-only is what keeps the register from becoming a
+  second record store.
+- **Rules out.**
+  - Payload or spend capture in the register.
+  - Per-tool logging doors, or any second logging seam.
+  - Dispatching new work after a halt.
+  - A node reading the register mid-run to steer (the Gatekeeper's
+    invariant again: calls report in, data never flows back into a
+    node's decision).
+
 #### The run's models are defined once; the catalog vends the clients
 
 - **Decision.** The caller registers the run's models once at `run_one`
   (registering nothing gets the system default), and every Commission
-  names an entry or takes the run default. The catalog builds and holds
-  the clients; a Commission never constructs one, and a name not in the
-  catalog fails fast. Model *choice* stays distributed: each node carries
-  which entry it uses, never a copy of the catalog.
+  names an entry or takes the run default. An entry is a *profile*: one
+  model configuration done right in one place (wire id, endpoint,
+  prices, provider call settings) and named for the role it plays in the
+  run, so the same underlying model may sit in the catalog twice under
+  two roles, and the system default is itself a profile (ruled
+  2026-07-12). The catalog builds and holds the clients; a Commission
+  never constructs one, and a name not in the catalog fails fast. Model
+  *choice* stays distributed: each node carries which entry it uses,
+  never a copy of the catalog.
 - **Why.** People run one to three models per use case; the catalog is
   where they are defined right, once, and then linked to. And because the
   catalog vends the clients, the framework owns provider access by
@@ -565,15 +605,19 @@ what you give, what you get, and when the giving hurts.
   performs automatically: checking cancellation, dispatching children,
   summing their costs, carrying provenance on every return, depositing
   traces. These are checklist discipline, not rails, and the costliest
-  one (cost rollup) breaks silently when forgotten.
+  one (cost rollup) is the easiest to slip on.
 - **You get.** Full ownership of control flow, with the framework never
   inspecting the interior. The one-escape-hatch decision only works if
   the hatch is genuinely free; the price of that freedom is carrying the
   obligations yourself.
 - **When it bites.** Per custom coordinator, at authoring time; a slip
   corrupts the subtree's receipts until noticed. The mitigations are
-  `_succeed` / `_fail` for envelope assembly and the cost-rollup test
-  recipe in commission-testing.md, which makes the silent one checkable.
+  `_succeed` / `_fail` for envelope assembly, the cost-rollup test
+  recipe in commission-testing.md, and a runtime observation at the
+  seam: `dispatch` logs a warning when a returned envelope's cost falls
+  short of the provider spend the run witnessed in that call's subtree
+  (observation only; nothing branches, and over-reporting stays legal,
+  since an author may add costs the provider door never saw).
 
 ## Not built yet
 

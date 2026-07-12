@@ -1350,6 +1350,18 @@ a member is a major version bump):
   `run_halted` (spoken only by the root result when a run fuse tripped)
 - `confidence` (`ConfidenceLevel`): `verified`, `grounded`, `speculative`
 
+### Status is not the verdict
+
+`status` reports whether the Commission fulfilled its contract: a
+deliverable of the promised type came back. It says nothing about what
+the deliverable concluded. A review that finds ten bugs succeeded; a
+search that establishes there are no matches succeeded; a validator that
+rejects its input succeeded, because rejecting was the work it was
+commissioned to do. Put the domain verdict in the output type (a
+`passed: bool`, a `findings` list, whatever the promise names) so the
+caller branches on it as data. Reserve `failure` for the contract not
+being fulfilled: the work could not be done, never "the answer was no."
+
 ## Runtime conditions: CallContext
 
 `CallContext` is a frozen dataclass carried alongside the input; copy it
