@@ -186,6 +186,30 @@ How units meet.
   - Mid-flight gossip between workers; coordination that cannot be read
     off the parent's code.
 
+#### One menu; a reusable Commission is shared by object
+
+- **Decision.** There is one toolbox menu, and tools and Commissions sit
+  on it together; no parallel "Commission menu" exists. A general-purpose
+  Commission that many nodes want (a coding Commission, say) is
+  constructed once and the same object is placed in every toolbox that
+  wants it, treated as frozen once shared. Name-based linking (a node
+  carrying a string resolved against some central Commission registry)
+  is deliberately absent; it becomes worth building only where a
+  reference must cross a data boundary, which is the crafter's problem,
+  not the library's. (Ruled 2026-07-12.)
+- **Why.** A second menu would rebuild the tool/Commission type split
+  the categories erased. Object sharing is already safe and lossless
+  because Commissions hold no state between invocations; a name is
+  strictly poorer (it needs a registry, a resolution failure mode, and a
+  new frozen surface) and buys nothing until the reference genuinely
+  leaves the process. Models are by-name because deployment config
+  crosses that boundary; in-process composition does not.
+- **Rules out.**
+  - A central Commission registry or "universal menu" object in the
+    library.
+  - `Commission(tool="name")`-style resolution of children.
+  - Mutating a shared instance's configuration after handing it out.
+
 #### Errors are values
 
 - **Decision.** No exception crosses the boundary. Failure returns as a
