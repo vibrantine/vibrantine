@@ -1207,7 +1207,7 @@ from vibrantine import (
     ErrorState, ErrorKind,                                 # failure model
     OverflowPolicy, PersistenceMode,                       # policy vocabularies
     PersistedRecord, PersistenceBackend, FilesystemBackend, SqliteBackend,  # persistence
-    Model, KNOWN_MODELS, DEFAULT_MODEL, openai_compatible, ollama,  # models
+    Model, DEFAULT_MODEL, openai_compatible, ollama,      # models
     run_one, invoke_sync, dispatch,                        # entry points
     create_commission,                                     # authoring factory
     ContentPart, TextPart, ImagePart, AudioPart,           # message content parts
@@ -1449,9 +1449,16 @@ written as a selection prompt.
   clients. A Commission carries only a *name* (`model=`, None = the run
   default) resolved against the catalog when its loop runs; a name not in
   the catalog fails fast. Never hardcode a model in a Commission body.
+- Each catalog entry is a *profile*: `name` (the catalog key, what a
+  Commission references; defaults to `id`), `id` (the wire string),
+  endpoint, prices, and `params` (provider call settings like temperature,
+  merged verbatim into every call the profile serves). Two entries may
+  share an `id` under different names: the same model at two temperatures
+  is two profiles. Define a configuration once, in its profile; nodes just
+  name the role.
 - An empty catalog auto-registers the system default (`DEFAULT_MODEL`, a
-  `KNOWN_MODELS` entry), so hello world configures nothing. Build entries
-  with `Model(id=...)` for OpenRouter targets, `openai_compatible(name,
+  full profile object), so hello world configures nothing. Build entries
+  with `Model(id=...)` for OpenRouter targets, `openai_compatible(id,
   address)` for any OpenAI-format endpoint, or `ollama(id)` for a local
   Ollama server.
 - Pricing states: *priced*, *free* (a real $0, like local Ollama), or

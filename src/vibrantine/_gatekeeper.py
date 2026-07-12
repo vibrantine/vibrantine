@@ -42,7 +42,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from vibrantine.contract import CancelToken, ErrorState
-from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, UnknownModelError
+from vibrantine.models import DEFAULT_MODEL, Model, UnknownModelError
+
+# `Model.params` keys the framework itself sets on every provider call. A
+# profile overriding these would silently rewrite the call's structure, so
+# the catalog refuses them at the front door instead of at call time.
+_RESERVED_PARAM_KEYS = frozenset({"model", "messages", "tools", "tool_choice", "response_format"})
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -111,17 +116,26 @@ def build_catalog(
         ):
             if price is not None and (not math.isfinite(price) or price < 0):
                 raise RunConfigError(
-                    f"model {model.id!r} has invalid {field_name}={price!r}; "
+                    f"model {model.name!r} has invalid {field_name}={price!r}; "
                     f"prices must be finite and non-negative (0.0 means free)."
                 )
-        if model.id in catalog:
+        reserved = _RESERVED_PARAM_KEYS.intersection(model.params)
+        if reserved:
             raise RunConfigError(
-                f"models= names {model.id!r} more than once; the catalog "
-                f"defines each model exactly once."
+                f"model {model.name!r} sets params the framework owns "
+                f"({', '.join(sorted(reserved))}); params carries provider "
+                f"knobs (temperature, reasoning toggles), never the call's "
+                f"structure."
             )
-        catalog[model.id] = model
+        if model.name in catalog:
+            raise RunConfigError(
+                f"models= names {model.name!r} more than once; the catalog "
+                f"defines each name exactly once (profiles sharing an id "
+                f"need distinct names)."
+            )
+        catalog[model.name] = model
     if not catalog:
-        catalog[DEFAULT_MODEL] = KNOWN_MODELS[DEFAULT_MODEL]
+        catalog[DEFAULT_MODEL.name] = DEFAULT_MODEL
     if default_model is not None:
         if default_model not in catalog:
             raise RunConfigError(
@@ -131,12 +145,12 @@ def build_catalog(
         return catalog, default_model
     if len(catalog) == 1:
         return catalog, next(iter(catalog))
-    if DEFAULT_MODEL not in catalog:
+    if DEFAULT_MODEL.name not in catalog:
         raise RunConfigError(
             f"models= has several entries and none is the system default "
-            f"{DEFAULT_MODEL!r}; name one with default_model=."
+            f"{DEFAULT_MODEL.name!r}; name one with default_model=."
         )
-    return catalog, DEFAULT_MODEL
+    return catalog, DEFAULT_MODEL.name
 
 
 class RunCancel:
@@ -430,6 +444,7 @@ class Gatekeeper:
         *,
         commission_name: str,
         model: str,
+        model_name: str,
         run_id: str | None,
         grant_usd: float | None,
     ) -> None:
@@ -457,6 +472,7 @@ class Gatekeeper:
                     run_id=run_id,
                     commission_name=commission_name,
                     model=model,
+                    model_name=model_name,
                     started_at=now,
                     ended_at=now,
                     in_tokens=None,
@@ -502,9 +518,14 @@ class Gatekeeper:
         is deadlock-free even at a limit of 1.
         """
         model = entry.id
+        model_name = entry.name
         run_id = _current_call_run_id()
         self._refuse_if_due(
-            commission_name=commission_name, model=model, run_id=run_id, grant_usd=grant_usd
+            commission_name=commission_name,
+            model=model,
+            model_name=model_name,
+            run_id=run_id,
+            grant_usd=grant_usd,
         )
         # Vend before taking a chair: a missing-key raise should not occupy
         # the room, and it is not a refusal, so no log row.
@@ -524,6 +545,7 @@ class Gatekeeper:
                 self._refuse_if_due(
                     commission_name=commission_name,
                     model=model,
+                    model_name=model_name,
                     run_id=run_id,
                     grant_usd=grant_usd,
                 )
@@ -588,6 +610,7 @@ class Gatekeeper:
                         run_id=run_id,
                         commission_name=commission_name,
                         model=model,
+                        model_name=model_name,
                         started_at=started_at,
                         ended_at=_utcnow_iso(),
                         in_tokens=ticket.in_tokens,
@@ -611,6 +634,7 @@ class Gatekeeper:
         run_id: str | None,
         commission_name: str,
         model: str,
+        model_name: str,
         started_at: str,
         ended_at: str,
         in_tokens: int | None,
@@ -621,11 +645,17 @@ class Gatekeeper:
         calls_before: int,
         spend_before: float,
     ) -> dict[str, Any]:
-        """One log row. Keys are shared with the persisted `calls` table."""
+        """One log row. Keys are shared with the persisted `calls` table.
+
+        `model` is the wire id; `model_name` is the profile that made the
+        call. They differ exactly when a catalog defines roles, which is
+        what a forensic "which profile spent this" query needs.
+        """
         return {
             "run_id": run_id,
             "commission_name": commission_name,
             "model": model,
+            "model_name": model_name,
             "started_at": started_at,
             "ended_at": ended_at,
             "in_tokens": in_tokens,

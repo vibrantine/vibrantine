@@ -53,6 +53,7 @@ def _call_row(run_id: str, *, ended_at: datetime | None = None) -> dict[str, Any
         "run_id": run_id,
         "commission_name": "demo",
         "model": "fixture/model",
+        "model_name": "fixture/model",
         "started_at": started.isoformat(timespec="microseconds"),
         "ended_at": ended.isoformat(timespec="microseconds"),
         "in_tokens": 10,

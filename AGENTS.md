@@ -66,7 +66,7 @@ A one-sentence description is the exception, justified only when a Commission ge
 
 The full surface is on `CallContext`, but not every field changes behavior today. Authors should know which are enforced and which are stubs:
 
-- **`budget_usd`**: enforced by the default LLM loop (`run_llm_loop` halts after a turn with `kind="budget_exceeded"`) and by Synthesize's custom two-pass invoke (pre-flight estimate + post-call actuals). Information-only for tools like Fetch (HTTP costs $0). Coordinators allocate slices through it. The loop allocates too: each child it dispatches receives the remaining budget (grant minus spend so far), never a full copy of the grant. Enforcement needs a priced model: if a budget is set but the model isn't in `KNOWN_MODELS` (so cost can't be computed), the default loop and Synthesize fail fast with `kind="validation"` rather than running with a silently unenforced budget; register the model or invoke without a budget.
+- **`budget_usd`**: enforced by the default LLM loop (`run_llm_loop` halts after a turn with `kind="budget_exceeded"`) and by Synthesize's custom two-pass invoke (pre-flight estimate + post-call actuals). Information-only for tools like Fetch (HTTP costs $0). Coordinators allocate slices through it. The loop allocates too: each child it dispatches receives the remaining budget (grant minus spend so far), never a full copy of the grant. Enforcement needs a priced model: if a budget is set but the resolved catalog entry is unpriced (so cost can't be computed), the default loop and Synthesize fail fast with `kind="validation"` rather than running with a silently unenforced budget; price the model in `models=` or invoke without a budget.
   A paid provider must also return token usage: if it omits usage on a dollar-accounted call (a node grant or the run's spend fuse is armed, including a grant-stripped subtree under a budgeted run), that call fails instead of being counted as free. Explicit `0.0` prices remain the supported free/local-model case.
 - **`cancel`**: enforced everywhere. Commissions check `ctx.cancel.is_cancelled` at natural breakpoints and return `kind="cancelled"`.
 - **`on_progress`**: emitted by Synthesize (`synthesis_pass`, `structured_pass`), NewsDigest (`fetching`, `synthesizing`), and MorningBriefing (`sections`, `executive_summary`, `written`). Coordinators forward `on_progress` to their children, so worker events bubble up under the original callback.
@@ -152,7 +152,7 @@ src/
     dispatch.py                       # wraps _run: run_id + parent_run_id + overflow + record + raise backstop
     llm_tools.py                      # LLM-tool wrapper + the default LLM loop
     factory.py                        # create_commission authoring factory
-    models.py                         # Model objects (identity + endpoint + pricing); KNOWN_MODELS + DEFAULT_MODEL
+    models.py                         # Model profiles (name + wire id + endpoint + pricing + params); DEFAULT_MODEL
     persistence.py                    # shipped backends: FilesystemBackend + SqliteBackend
     testing.py                        # supported test doubles for the client= seam
     examples/                         # worked example Commissions (importable, provisional)

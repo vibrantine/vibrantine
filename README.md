@@ -324,10 +324,13 @@ Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
   naming the fuse, with all provider-reported spend included. A
   dollar-accounted paid call that omits token usage fails instead of
   counting as free.
-- The run model catalog: models are defined once at `run_one(models=[...])`
-  and referenced by name from Commissions; the catalog vends the provider
-  clients, unknown names fail fast, and an empty catalog auto-registers the
-  system default.
+- The run model catalog: model profiles are defined once at
+  `run_one(models=[...])` and referenced by name from Commissions; a profile
+  bundles the wire id, endpoint, prices, and provider call settings
+  (`params`), so one model can serve several roles ("fast-cheap",
+  "deep-thinker") that differ only in settings. The catalog vends the
+  provider clients, unknown names fail fast, and an empty catalog
+  auto-registers the system default.
 - A working `truncate_with_reference` overflow policy: the author's typed
   `truncate_output` hook shrinks the output, and the full result is
   persisted under the run_id named in the error detail.
@@ -356,7 +359,7 @@ The SemVer promise is deliberately tight: the public contract exported from
 under `vibrantine.examples`, the tools, and authoring helpers are useful, but
 may remain provisional until more real consumers exercise them. One honest
 caveat inside the frozen surface: the model catalog's *shapes* are protected,
-but the *contents* of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are
+but the *contents* of `DEFAULT_MODEL` (its id, pricing, context window) are
 catalog data that changes as models come and go, without a major version.
 
 ## What Vibrantine Is Not

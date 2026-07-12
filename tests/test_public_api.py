@@ -56,8 +56,10 @@ def test_the_exported_surface_is_locked_exactly() -> None:
         "SqliteBackend",
         # Model vocabulary: callers are told to register models and build
         # Model targets, so the names they need are part of the surface.
+        # KNOWN_MODELS retired 2026-07-12 with the profile split: it had
+        # shrunk to a one-entry vestige whose only job was feeding the
+        # default; DEFAULT_MODEL is now that profile object itself.
         "Model",
-        "KNOWN_MODELS",
         "DEFAULT_MODEL",
         "openai_compatible",
         "ollama",

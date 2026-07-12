@@ -227,6 +227,7 @@ class SqliteBackend:
                     run_id TEXT,
                     commission_name TEXT NOT NULL,
                     model TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     ended_at TEXT NOT NULL,
                     in_tokens INTEGER,
@@ -342,10 +343,10 @@ class SqliteBackend:
             conn.executemany(
                 """
                 INSERT INTO calls
-                    (root_run_id, run_id, commission_name, model, started_at,
-                     ended_at, in_tokens, out_tokens, cost_usd, grant_usd,
-                     run_calls_before, run_spend_before_usd, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (root_run_id, run_id, commission_name, model, model_name,
+                     started_at, ended_at, in_tokens, out_tokens, cost_usd,
+                     grant_usd, run_calls_before, run_spend_before_usd, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -353,6 +354,7 @@ class SqliteBackend:
                         row["run_id"],
                         row["commission_name"],
                         row["model"],
+                        row["model_name"],
                         row["started_at"],
                         row["ended_at"],
                         row["in_tokens"],

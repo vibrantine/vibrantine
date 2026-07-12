@@ -208,6 +208,10 @@ async def test_bad_run_configuration_is_a_validation_failure() -> None:
             "finite and non-negative",
         ),
         ({"models": [FIXTURE_MODEL, FIXTURE_MODEL]}, "more than once"),
+        (
+            {"models": [Model(id="bad/reserved-params", params={"model": "sneaky"})]},
+            "params the framework owns",
+        ),
         ({"default_model": "fixture/absent"}, "not in models="),
         ({"models": [FIXTURE_MODEL, Model(id="other/model")]}, "default_model"),
     ):
@@ -230,6 +234,49 @@ async def test_unknown_model_name_fails_fast_and_loud() -> None:
     assert "fixture/not-registered" in result.error.detail
     assert "not in this run's catalog" in result.error.detail
     assert result.cost.estimated_usd == 0.0
+
+
+async def test_profile_params_ride_every_provider_call() -> None:
+    # A profile's params merge verbatim into chat.completions.create,
+    # alongside (never instead of) the structural keys the loop owns.
+    scripted = ScriptedLLM([_conclude()])
+    entry = scripted_model(scripted, params={"temperature": 0.2, "top_p": 0.9})
+    result = await run_one(_Probe(), _Q(question="?"), models=[entry])
+    assert result.status == "success"
+    sent = scripted.calls[0]
+    assert sent["temperature"] == 0.2
+    assert sent["top_p"] == 0.9
+    assert sent["model"] == FIXTURE_MODEL.id
+
+
+async def test_two_profiles_of_one_wire_id_are_distinct_entries() -> None:
+    # The name/id split's point: one underlying model, two catalog entries
+    # differing in params, each resolvable by its role name. Distinct fakes
+    # prove the node's reference picked the right profile.
+    cool_fake, hot_fake = ScriptedLLM([_conclude()]), ScriptedLLM([_conclude()])
+    cool = scripted_model(cool_fake, name="fast-cool", params={"temperature": 0.1})
+    hot = scripted_model(hot_fake, name="fast-hot", params={"temperature": 1.0})
+    probe = _Probe(model="fast-hot")
+    result = await run_one(probe, _Q(question="?"), models=[cool, hot], default_model="fast-cool")
+    assert result.status == "success"
+    assert cool_fake.calls == []
+    assert hot_fake.calls[0]["temperature"] == 1.0
+    assert hot_fake.calls[0]["model"] == FIXTURE_MODEL.id
+
+
+async def test_call_rows_carry_the_profile_name_beside_the_wire_id(
+    open_test_run: Any,
+) -> None:
+    # Forensics: "which profile made this call" and "what was on the wire"
+    # are different questions exactly when a catalog defines roles.
+    scripted = ScriptedLLM([_conclude()])
+    entry = scripted_model(scripted, name="deep-thinker")
+    async with open_test_run(models=[entry]) as ctx:
+        await dispatch(_Probe(model="deep-thinker"), _Q(question="?"), ctx)
+        rows = ctx._gatekeeper.calls  # pyright: ignore[reportPrivateUsage]
+    assert len(rows) == 1
+    assert rows[0]["model"] == FIXTURE_MODEL.id
+    assert rows[0]["model_name"] == "deep-thinker"
 
 
 async def test_caller_cancellation_is_not_relabelled_run_halted() -> None:
@@ -986,6 +1033,7 @@ ROW_KEYS = {
     "run_id",
     "commission_name",
     "model",
+    "model_name",
     "started_at",
     "ended_at",
     "in_tokens",

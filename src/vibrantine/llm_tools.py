@@ -275,11 +275,18 @@ async def run_llm_loop[OutputT: BaseModel](
                     commission_name=commission_name,
                     grant_usd=ctx.budget_usd,
                 ) as ticket:
-                    response: ChatCompletion = await ticket.client.chat.completions.create(
-                        model=entry.id,
-                        messages=messages,
-                        tools=tools,
-                        tool_choice="auto",
+                    # The params spread defeats the SDK's overload matching
+                    # (it can no longer prove stream is absent), so pin the
+                    # non-streaming type the door only ever speaks.
+                    response = cast(
+                        "ChatCompletion",
+                        await ticket.client.chat.completions.create(
+                            model=entry.id,
+                            messages=messages,
+                            tools=tools,
+                            tool_choice="auto",
+                            **entry.params,
+                        ),
                     )
                     if response.usage is not None:
                         ticket.record_usage(

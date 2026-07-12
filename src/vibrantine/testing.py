@@ -163,6 +163,8 @@ def scripted_model(
     scripted: ScriptedLLM,
     *,
     id: str = FIXTURE_MODEL.id,
+    name: str = "",
+    params: dict[str, Any] | None = None,
     context_window: int | None = FIXTURE_MODEL.context_window,
     input_usd_per_million: float | None = FIXTURE_MODEL.input_usd_per_million,
     output_usd_per_million: float | None = FIXTURE_MODEL.output_usd_per_million,
@@ -176,10 +178,14 @@ def scripted_model(
     assertions keep their dollars; pass a distinct `id` per fake to script a
     multi-model tree (name each seat's model, register every fake in one
     `models=[...]`, and set `default_model=` when no entry is the system
-    default).
+    default). `name=` and `params=` pass through like any profile, so a
+    test can script two roles sharing one wire id or assert that a
+    profile's params reached the provider (they land in `scripted.calls`).
     """
     return _ScriptedModel(
         id=id,
+        name=name,
+        params=params if params is not None else {},
         context_window=context_window,
         input_usd_per_million=input_usd_per_million,
         output_usd_per_million=output_usd_per_million,

@@ -41,7 +41,7 @@ from vibrantine.examples.demo.trace import (
 from vibrantine.examples.morning_briefing import MorningBriefingOutput
 from vibrantine.examples.recursive_research import ResearchOutput
 from vibrantine.examples.synthesize import SynthesizeOutput
-from vibrantine.models import DEFAULT_MODEL, KNOWN_MODELS, Model, ollama
+from vibrantine.models import DEFAULT_MODEL, Model, ollama
 from vibrantine.orchestrator import run_one
 
 # Spending policy is the caller's, so it lives here, not on the examples.
@@ -143,7 +143,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     target.add_argument(
         "--model",
         default=None,
-        help=f"model id, resolved via KNOWN_MODELS / OpenRouter (default: {DEFAULT_MODEL})",
+        help=f"OpenRouter model id (default: {DEFAULT_MODEL.id})",
     )
     target.add_argument(
         "--ollama",
@@ -163,9 +163,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def session_model(args: argparse.Namespace) -> Model:
     if args.ollama:
         return ollama(str(args.ollama))
-    model_id = str(args.model) if args.model else DEFAULT_MODEL
-    known = KNOWN_MODELS.get(model_id)
-    return known if known is not None else Model(id=model_id)
+    if not args.model or str(args.model) == DEFAULT_MODEL.id:
+        return DEFAULT_MODEL
+    return Model(id=str(args.model))
 
 
 def key_missing_message(model: Model) -> str | None:

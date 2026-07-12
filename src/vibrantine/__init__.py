@@ -11,7 +11,7 @@ entry points, and the authoring-edge names a Commission author is taught
 to use (`estimate_tokens`, `deposit_llm_trace`, `DEFAULT_MAX_ITERATIONS`,
 and the `ContentPart` message vocabulary). Two honesty notes on that
 promise. The model vocabulary's *shapes* are protected, but the *contents*
-of `KNOWN_MODELS` and the id behind `DEFAULT_MODEL` are catalog data:
+of `DEFAULT_MODEL` (its id, pricing, context window) are catalog data:
 they change as models come and go, without a major version. And the
 non-text `ContentPart` members are provisional in their fields: `ImagePart`
 and `AudioPart` today, and any later modality part (a video or document part)
@@ -69,7 +69,6 @@ from vibrantine.dispatch import deposit_llm_trace, dispatch
 from vibrantine.factory import create_commission
 from vibrantine.models import (
     DEFAULT_MODEL,
-    KNOWN_MODELS,
     Model,
     ollama,
     openai_compatible,
@@ -106,7 +105,6 @@ __all__ = [
     "SqliteBackend",
     # Models: the vocabulary callers use to pick or build a model target
     "Model",
-    "KNOWN_MODELS",
     "DEFAULT_MODEL",
     "openai_compatible",
     "ollama",

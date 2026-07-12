@@ -22,7 +22,7 @@ def _args(model: str | None = None, ollama_name: str | None = None) -> argparse.
 
 def test_session_model_defaults_to_the_known_default() -> None:
     model = session_model(_args())
-    assert model.id == DEFAULT_MODEL
+    assert model is DEFAULT_MODEL
     assert model.is_priced
 
 

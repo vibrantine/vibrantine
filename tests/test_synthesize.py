@@ -71,6 +71,24 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
     assert result.output.claims[0].value == "X is true"
 
 
+async def test_synthesize_applies_profile_params_on_both_passes() -> None:
+    # Synthesize's custom two-pass flow is the second governed call site;
+    # a profile's params must ride it exactly like the default loop.
+    commission, fake = _commission(
+        [llm_response(content="Both sources agree X."), llm_response(content=_VALID_STRUCTURED)]
+    )
+
+    result = await run_one(
+        commission,
+        SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake, params={"temperature": 0.3})],
+    )
+
+    assert result.status == "success"
+    assert len(fake.calls) == 2
+    assert all(sent["temperature"] == 0.3 for sent in fake.calls)
+
+
 async def test_synthesize_record_carries_both_pass_transcripts(tmp_path: Path) -> None:
     backend = FilesystemBackend(tmp_path)
     commission, fake = _commission(

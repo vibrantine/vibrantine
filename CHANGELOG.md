@@ -10,6 +10,22 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Added
 
+- **Model profiles**: a catalog entry is now the one place a model
+  configuration is done right. `Model` gains `name` (the catalog key and
+  what a Commission references, defaulting to `id`) and `params` (provider
+  call settings such as temperature or reasoning toggles, merged verbatim
+  into every `chat.completions.create` the profile serves, in the default
+  loop and in Synthesize's passes). Two entries may share a wire `id`
+  under different names, so one model can play several roles ("fast-cheap",
+  "fast-hot") differing only in settings; duplicate *names* stay the
+  config error. Params are raw by design (the provider validates its own
+  knobs), except the keys the framework owns (`model`, `messages`,
+  `tools`, `tool_choice`, `response_format`), which the catalog refuses at
+  the front door. `openai_compatible()`, `ollama()`, and
+  `testing.scripted_model()` pass `name=` / `params=` through. Call-log
+  rows gain `model_name` (the profile that made the call) beside `model`
+  (the wire id), in `on_llm_call` dicts and the SQLite `calls` table.
+
 - **The Run Gatekeeper**: every run gets one internal control object,
   created by `run_one`, standing at the provider seam as `dispatch`'s
   mirror. It holds three resource fuses (an LLM-call backstop, default-on
@@ -117,6 +133,16 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Changed
 
+- **Breaking:** `KNOWN_MODELS` is retired and `DEFAULT_MODEL` is now the
+  default profile *object* (a full `Model`) rather than an id string. The
+  dict had shrunk to a one-entry vestige whose only job was feeding the
+  empty-catalog default; that entry and the id constant were two
+  definitions of one fact, now folded into the single owned seam a future
+  config-loaded default routes through. Callers using `DEFAULT_MODEL` as a
+  string read `DEFAULT_MODEL.name` (or `.id`). `openai_compatible()`'s
+  first parameter is renamed `name` → `id` to match `Model` and
+  `ollama()` now that `name` means the profile name; positional callers
+  are unaffected.
 - **Breaking:** `run_one` is the only way into a run and `dispatch` the
   only way around inside one, each refusing the other's job: nested
   `run_one` refuses ("you are inside a run; use dispatch"), `dispatch`

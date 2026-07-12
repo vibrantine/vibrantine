@@ -377,16 +377,27 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 commission_name=self.name,
                 grant_usd=ctx.budget_usd,
             ) as ticket:
+                # The params spread defeats the SDK's overload matching (it
+                # can no longer prove stream is absent), so pin the
+                # non-streaming type the door only ever speaks.
                 if json_mode:
-                    response: ChatCompletion = await ticket.client.chat.completions.create(
-                        model=entry.id,
-                        messages=messages,
-                        response_format={"type": "json_object"},
+                    response = cast(
+                        "ChatCompletion",
+                        await ticket.client.chat.completions.create(
+                            model=entry.id,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                            **entry.params,
+                        ),
                     )
                 else:
-                    response = await ticket.client.chat.completions.create(
-                        model=entry.id,
-                        messages=messages,
+                    response = cast(
+                        "ChatCompletion",
+                        await ticket.client.chat.completions.create(
+                            model=entry.id,
+                            messages=messages,
+                            **entry.params,
+                        ),
                     )
                 if response.usage is not None:
                     ticket.record_usage(
