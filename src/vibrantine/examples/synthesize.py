@@ -19,7 +19,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
-from vibrantine._gatekeeper import Gatekeeper, RunHaltedError
+from vibrantine._gatekeeper import Gatekeeper, MissingUsageError, RunHaltedError
 from vibrantine.contract import (
     CallContext,
     Claim,
@@ -387,6 +387,19 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                 self._fail(
                     "cancelled",
                     f"Provider call refused by the run's stop signal: {exc}",
+                    retryable=False,
+                    provenance=provenance,
+                    cost=cost_so_far,
+                ),
+            )
+        except MissingUsageError as exc:
+            return (
+                "",
+                0,
+                0,
+                self._fail(
+                    "internal",
+                    str(exc),
                     retryable=False,
                     provenance=provenance,
                     cost=cost_so_far,

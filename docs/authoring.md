@@ -438,7 +438,11 @@ bounds are already on your Commission; this step is about knowing them.
   degrades gracefully when the grant is several multiples of a single
   turn's cost, and a turn re-reads everything fetched so far, so a
   transcript holding a few 50k-char pages can cost more per turn than a
-  tight grant leaves for wrapping up.
+  tight grant leaves for wrapping up. A paid provider must return token
+  usage for this accounting to be possible; if it omits usage during a
+  budgeted call, the call fails structurally instead of being counted as
+  free. Explicitly free models (`0.0` prices) need no usage to enforce a
+  dollar budget.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
@@ -1448,7 +1452,8 @@ written as a selection prompt.
   Ollama server.
 - Pricing states: *priced*, *free* (a real $0, like local Ollama), or
   *unpriced* (unknown). Setting `budget_usd` on an unpriced model fails
-  fast: the framework refuses to run a budget it cannot enforce.
+  fast: the framework refuses to run a budget it cannot enforce. Prices
+  must be finite and non-negative; `0.0`, not a missing price, means free.
 - The default endpoint is OpenRouter, via the `openai` SDK with `base_url`
   swapped, keyed by `OPENROUTER_API_KEY`.
 - `CostMetrics` carries raw token counts alongside the dollars:

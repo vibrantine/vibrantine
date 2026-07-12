@@ -37,7 +37,7 @@ from openai.types.chat import (
 )
 from pydantic import BaseModel, ValidationError
 
-from vibrantine._gatekeeper import RunHaltedError
+from vibrantine._gatekeeper import MissingUsageError, RunHaltedError
 from vibrantine.contract import (
     AudioPart,
     CallContext,
@@ -284,6 +284,15 @@ async def run_llm_loop[OutputT: BaseModel](
                     out_tokens=out_tokens,
                     children_cost=children_cost,
                 )
+            except MissingUsageError as exc:
+                return _loop_error(
+                    "internal",
+                    str(exc),
+                    retryable=False,
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
             except openai.RateLimitError as exc:
                 return _loop_error(
                     "rate_limit",
@@ -327,16 +336,9 @@ async def run_llm_loop[OutputT: BaseModel](
                     usage.completion_tokens,
                 )
             else:
-                # Without usage data this turn's tokens go uncounted: budget
-                # enforcement and the reported cost silently understate the
-                # true spend. Loud, because budget_usd is a hard-ceiling
-                # promise.
-                logger.warning(
-                    "LLM response carried no usage data (model=%s); this "
-                    "turn's tokens are uncounted and budget enforcement "
-                    "understates real spend.",
-                    entry.id,
-                )
+                # The provider door already warned for this unbudgeted call.
+                # A budgeted paid call never reaches here without usage.
+                pass
 
             # Own token cost plus everything dispatched children spent, so a
             # recursive or sub-Commission-bearing loop enforces the budget against

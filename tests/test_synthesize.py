@@ -257,6 +257,26 @@ async def test_synthesize_budget_exhausted_after_first_call_skips_second() -> No
     assert result.cost.estimated_usd > 0
 
 
+async def test_synthesize_missing_usage_preserves_prior_pass_cost() -> None:
+    structured = llm_response(content=_VALID_STRUCTURED)
+    structured.usage = None
+    commission, fake = _commission([llm_response(content="first pass"), structured])
+
+    result = await run_one(
+        commission,
+        SynthesizeInput(sources=[_src(0), _src(1)]),
+        models=[scripted_model(fake)],
+        budget_usd=1.0,
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "returned no token usage" in result.error.detail
+    assert result.cost.estimated_usd > 0
+    assert len(fake.calls) == 2
+
+
 async def test_synthesize_oversized_input_fails_validation_with_no_llm_call() -> None:
     # max_input_tokens=10 with target_input_fraction=0.75 → input fits only if
     # estimated tokens <= 7. The padded source below estimates well above that.

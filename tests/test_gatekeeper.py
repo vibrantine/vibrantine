@@ -176,9 +176,37 @@ async def test_bad_run_configuration_is_a_validation_failure() -> None:
     probe = _Probe()
     for kwargs, needle in (
         ({"concurrency": 0}, "concurrency"),
+        ({"concurrency": 1.5}, "concurrency"),
         ({"max_llm_calls": 0}, "max_llm_calls"),
+        ({"max_llm_calls": 1.5}, "max_llm_calls"),
         ({"time_limit_seconds": 0}, "time_limit_seconds"),
         ({"budget_usd": -1.0}, "budget_usd"),
+        ({"time_limit_seconds": math.nan}, "time_limit_seconds"),
+        ({"budget_usd": math.nan}, "budget_usd"),
+        (
+            {
+                "models": [
+                    Model(
+                        id="bad/negative-price",
+                        input_usd_per_million=-1.0,
+                        output_usd_per_million=1.0,
+                    )
+                ]
+            },
+            "finite and non-negative",
+        ),
+        (
+            {
+                "models": [
+                    Model(
+                        id="bad/nan-price",
+                        input_usd_per_million=math.nan,
+                        output_usd_per_million=1.0,
+                    )
+                ]
+            },
+            "finite and non-negative",
+        ),
         ({"models": [FIXTURE_MODEL, FIXTURE_MODEL]}, "more than once"),
         ({"default_model": "fixture/absent"}, "not in models="),
         ({"models": [FIXTURE_MODEL, Model(id="other/model")]}, "default_model"),
@@ -296,8 +324,10 @@ async def test_zero_budget_runs_a_free_model() -> None:
     # budget_usd=0.0 arms the spend fuse at $0, but a genuinely free model
     # (local Ollama shape) never spends past it: the run proceeds instead of
     # being refused before its first call.
+    response = _conclude("gratis")
+    response.usage = None
     free = scripted_model(
-        ScriptedLLM([_conclude("gratis")]),
+        ScriptedLLM([response]),
         input_usd_per_million=0.0,
         output_usd_per_million=0.0,
     )
@@ -305,6 +335,34 @@ async def test_zero_budget_runs_a_free_model() -> None:
     assert result.status == "success"
     assert result.output is not None and result.output.answer == "gratis"
     assert result.cost.estimated_usd == 0.0
+
+
+async def test_budgeted_paid_call_without_usage_fails_instead_of_counting_as_free() -> None:
+    response = _conclude()
+    response.usage = None
+
+    result = await run_one(
+        _Probe(),
+        _Q(question="?"),
+        models=[_scripted([response])],
+        budget_usd=1.0,
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "returned no token usage" in result.error.detail
+    assert result.cost.estimated_usd == 0.0
+
+
+async def test_unbudgeted_paid_call_may_run_without_usage() -> None:
+    response = _conclude("unmetered")
+    response.usage = None
+
+    result = await run_one(_Probe(), _Q(question="?"), models=[_scripted([response])])
+
+    assert result.status == "success"
+    assert result.output is not None and result.output.answer == "unmetered"
 
 
 async def test_a_root_that_concludes_despite_a_trip_keeps_its_success() -> None:
@@ -860,6 +918,30 @@ async def test_a_raising_on_llm_call_never_breaks_the_run() -> None:
         _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], on_llm_call=boom
     )
     assert result.status == "success"
+
+
+async def test_on_llm_call_cannot_mutate_the_persisted_row(tmp_path: Any) -> None:
+    import sqlite3
+
+    from vibrantine.persistence import SqliteBackend
+
+    def clear_row(row: dict[str, Any]) -> None:
+        row.clear()
+
+    backend = SqliteBackend(tmp_path / "runs.db")
+    result = await run_one(
+        _Probe(),
+        _Q(question="?"),
+        models=[_scripted([_conclude()])],
+        on_llm_call=clear_row,
+        backend=backend,
+        record="always",
+    )
+
+    assert result.status == "success"
+    with sqlite3.connect(tmp_path / "runs.db") as conn:
+        row = conn.execute("SELECT commission_name, status FROM calls").fetchone()
+    assert row == ("probe", "completed")
 
 
 async def test_calls_land_beside_records_in_sqlite(tmp_path: Any) -> None:

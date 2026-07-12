@@ -78,11 +78,12 @@ _trace_box: contextvars.ContextVar[list[list[dict[str, Any]]] | None] = contextv
 def deposit_llm_trace(messages: list[dict[str, Any]]) -> None:
     """Drop an LLM message history into the current call's trace mailbox.
 
-    `run_llm_loop` calls this on its way out (success or failure); a custom
-    Commission that runs its own LLM calls may do the same to have its
-    transcript recorded. The trace serves the recorder, never the caller: a
-    deposit lands only in this call's own `PersistedRecord.llm_trace`, and
-    outside any dispatch it goes nowhere, harmlessly.
+    `run_llm_loop` calls this on its way out (success or failure).
+    Library-owned custom provider flows do the same; external custom `_run`
+    methods dispatch an LLM-bearing child instead of calling a provider
+    directly. The trace serves the recorder, never the caller: a deposit
+    lands only in this call's own `PersistedRecord.llm_trace`, and outside
+    any dispatch it goes nowhere, harmlessly.
     """
     box = _trace_box.get()
     if box is not None:

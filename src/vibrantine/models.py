@@ -22,6 +22,9 @@ tree silently under-reports the whole tree's cost; price it for accurate
 accounting. A Commission invoked with a `budget_usd` but an *unpriced* model
 can't have that budget enforced, so it fails fast before running; a *free* model
 (`0.0`) enforces fine and runs.
+
+Catalog construction accepts only finite, non-negative prices. Zero is the
+explicit free value; negative and NaN prices would make spend accounting lie.
 """
 
 from dataclasses import dataclass

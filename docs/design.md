@@ -296,7 +296,9 @@ What the invoker holds.
   a node reads its own granted slice, never the run's running totals.
   Fuses bound resources the run consumes, never how it is composed, and
   they stop the bleeding loudly (a `run_halted` failure naming the fuse
-  and the numbers, true spend always reported) rather than steering. The
+  and the numbers, all provider-reported spend included) rather than
+  steering. A budgeted paid call whose provider omits usage fails instead
+  of being treated as free. The
   spend fuse is honest, not absolute: it refuses new calls at the limit
   and lets in-flight calls finish, so overshoot is bounded in calls, not
   dollars. The `run_halted` rewrite is causal and claims failed roots

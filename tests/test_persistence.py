@@ -13,6 +13,7 @@ from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -43,6 +44,25 @@ def _record(
         ctx_snapshot={"budget_usd": None},
         llm_trace=None,
     )
+
+
+def _call_row(run_id: str, *, ended_at: datetime | None = None) -> dict[str, Any]:
+    ended = ended_at or datetime.now(UTC)
+    started = ended - timedelta(seconds=1)
+    return {
+        "run_id": run_id,
+        "commission_name": "demo",
+        "model": "fixture/model",
+        "started_at": started.isoformat(timespec="microseconds"),
+        "ended_at": ended.isoformat(timespec="microseconds"),
+        "in_tokens": 10,
+        "out_tokens": 5,
+        "cost_usd": 0.001,
+        "grant_usd": 1.0,
+        "run_calls_before": 0,
+        "run_spend_before_usd": 0.0,
+        "status": "completed",
+    }
 
 
 @pytest.fixture(params=["filesystem", "sqlite"])
@@ -274,3 +294,53 @@ async def test_sqlite_records_survive_reopen(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.run_id == "kept"
     assert loaded.result["status"] == "success"
+
+
+async def test_sqlite_delete_removes_owned_and_direct_call_rows(tmp_path: Path) -> None:
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db)
+    await backend.store(_record(run_id="root", mode="always"))
+    await backend.store(_record(run_id="child", parent_run_id="root", mode="always"))
+    await backend.store_calls("root", [_call_row("root"), _call_row("child")])
+
+    await backend.delete("child")
+    with closing(sqlite3.connect(db)) as conn:
+        rows = conn.execute("SELECT root_run_id, run_id FROM calls").fetchall()
+    assert rows == [("root", "root")]
+
+    await backend.delete("root")
+    with closing(sqlite3.connect(db)) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM calls").fetchone()
+    assert count == (0,)
+
+
+async def test_sqlite_age_pruning_removes_call_rows(tmp_path: Path) -> None:
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db)
+    old = datetime.now(UTC) - timedelta(days=10)
+    young = datetime.now(UTC) - timedelta(days=1)
+    await backend.store(_record(run_id="old", mode="always", created_at=old))
+    await backend.store(_record(run_id="young", mode="always", created_at=young))
+    await backend.store_calls("old", [_call_row("old", ended_at=old)])
+    await backend.store_calls("young", [_call_row("young", ended_at=young)])
+    await backend.store_calls("call-only", [_call_row("call-only", ended_at=old)])
+
+    await backend.delete_older_than(datetime.now(UTC) - timedelta(days=5))
+
+    with closing(sqlite3.connect(db)) as conn:
+        rows = conn.execute("SELECT root_run_id FROM calls").fetchall()
+    assert rows == [("young",)]
+
+
+async def test_sqlite_ring_buffer_pruning_removes_call_rows(tmp_path: Path) -> None:
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db, dev_ring_buffer_size=1)
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    await backend.store(_record(run_id="old", mode="dev", created_at=old))
+    await backend.store_calls("old", [_call_row("old")])
+
+    await backend.store(_record(run_id="new", mode="dev", created_at=old + timedelta(minutes=1)))
+
+    with closing(sqlite3.connect(db)) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM calls").fetchone()
+    assert count == (0,)

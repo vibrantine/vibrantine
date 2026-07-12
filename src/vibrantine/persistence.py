@@ -315,15 +315,20 @@ class SqliteBackend:
 
     def _delete_sync(self, run_id: str) -> None:
         with closing(self._connect()) as conn, conn:
-            conn.execute("DELETE FROM records WHERE run_id = ?", (run_id,))
+            self._delete_run_data_sync(conn, [run_id])
 
     def _delete_older_than_sync(self, cutoff: datetime) -> int:
         with closing(self._connect()) as conn, conn:
-            cursor = conn.execute(
-                "DELETE FROM records WHERE created_at < ?",
+            rows = conn.execute(
+                "SELECT run_id FROM records WHERE created_at < ?",
                 (_timestamp(cutoff),),
-            )
-            return cursor.rowcount
+            ).fetchall()
+            run_ids = [cast("str", row[0]) for row in rows]
+            self._delete_run_data_sync(conn, run_ids)
+            # Call logging is independent of node recording, so some rows
+            # legitimately have no matching record to select above.
+            conn.execute("DELETE FROM calls WHERE ended_at < ?", (_timestamp(cutoff),))
+            return len(run_ids)
 
     def _store_calls_sync(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
         with closing(self._connect()) as conn, conn:
@@ -357,20 +362,35 @@ class SqliteBackend:
 
     def _prune_for_mode_sync(self, conn: sqlite3.Connection, mode: PersistenceMode) -> None:
         if mode == "dev":
-            conn.execute(
+            rows = conn.execute(
                 """
-                DELETE FROM records WHERE mode = 'dev' AND run_id NOT IN (
+                SELECT run_id FROM records WHERE mode = 'dev' AND run_id NOT IN (
                     SELECT run_id FROM records WHERE mode = 'dev'
                     ORDER BY created_at DESC LIMIT ?
                 )
                 """,
                 (self._dev_ring_buffer_size,),
-            )
+            ).fetchall()
+            self._delete_run_data_sync(conn, [cast("str", row[0]) for row in rows])
         elif mode == "on_failure":
             cutoff = datetime.now(UTC) - timedelta(days=self._on_failure_retention_days)
-            conn.execute(
-                "DELETE FROM records WHERE mode = 'on_failure' AND created_at < ?",
+            rows = conn.execute(
+                "SELECT run_id FROM records WHERE mode = 'on_failure' AND created_at < ?",
                 (_timestamp(cutoff),),
-            )
+            ).fetchall()
+            self._delete_run_data_sync(conn, [cast("str", row[0]) for row in rows])
         # off and always: no pruning here. "off" never reaches store; "always"
         # leaves retention to the application.
+
+    def _delete_run_data_sync(
+        self,
+        conn: sqlite3.Connection,
+        run_ids: list[str],
+    ) -> None:
+        """Delete records and every call row they own or directly made."""
+        for run_id in run_ids:
+            conn.execute(
+                "DELETE FROM calls WHERE root_run_id = ? OR run_id = ?",
+                (run_id, run_id),
+            )
+            conn.execute("DELETE FROM records WHERE run_id = ?", (run_id,))

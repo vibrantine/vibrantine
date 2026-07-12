@@ -13,6 +13,7 @@ overflow enforcement, and persistence happen uniformly from the top.
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -212,18 +213,24 @@ def _config_error(
     concurrency: int,
 ) -> str | None:
     """A run configuration the Gatekeeper cannot honor, named; None when fine."""
-    if concurrency < 1:
-        return f"concurrency must be at least 1, got {concurrency}."
-    if max_llm_calls is not None and max_llm_calls < 1:
+    if not _is_positive_int(concurrency):
+        return f"concurrency must be a positive integer, got {concurrency}."
+    if max_llm_calls is not None and not _is_positive_int(max_llm_calls):
         return (
-            f"max_llm_calls must be at least 1, got {max_llm_calls}; "
+            f"max_llm_calls must be a positive integer, got {max_llm_calls}; "
             f"pass None to disable the call-count fuse."
         )
-    if time_limit_seconds is not None and time_limit_seconds <= 0:
+    if time_limit_seconds is not None and (
+        not math.isfinite(time_limit_seconds) or time_limit_seconds <= 0
+    ):
         return f"time_limit_seconds must be positive, got {time_limit_seconds}."
-    if budget_usd is not None and budget_usd < 0:
+    if budget_usd is not None and (not math.isfinite(budget_usd) or budget_usd < 0):
         return f"budget_usd must be non-negative, got {budget_usd}."
     return None
+
+
+def _is_positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
 def _config_failure[InputT, OutputT](

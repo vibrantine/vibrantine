@@ -23,7 +23,7 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   same `CallContext.cancel` every checkpoint already honors), refuses new
   provider calls, lets in-flight calls finish and count, and surfaces at
   the root as the new `run_halted` `ErrorKind` with the fuse and numbers
-  named and true total spend in the cost field. The rewrite is causal and
+  named and all provider-reported spend in the cost field. The rewrite is causal and
   runs before the root record is persisted: only a failure that descended
   from the trip is claimed, a root that still concluded keeps its result,
   an unrelated failure keeps its own error, and the stored record always
@@ -76,6 +76,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Fixed
 
+- Budgeted paid calls now fail when a provider omits token usage instead
+  of silently settling at $0; explicitly free models retain valid `0.0`
+  pricing. Run limits and catalog prices also reject negative or non-finite
+  values before they can disable accounting.
+- SQLite deletion and retention pruning now remove the associated provider
+  call rows, and `on_llm_call` receives a copy so an observer cannot mutate
+  the Gatekeeper's persisted audit row.
 - The budget documentation overstated `budget_usd` as a "hard ceiling".
   Enforcement is per-turn and a turn's exact cost is unknowable before it
   runs, so the true spend can overshoot the grant by up to about one

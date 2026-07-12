@@ -33,6 +33,7 @@ claim to prevent. See docs/design.md for the canonical statement.
 import asyncio
 import contextvars
 import logging
+import math
 import os
 import time
 from collections.abc import AsyncGenerator, Callable, Sequence
@@ -79,6 +80,10 @@ class RunConfigError(ValueError):
     """
 
 
+class MissingUsageError(Exception):
+    """A budgeted paid call returned no token usage to price."""
+
+
 def build_catalog(
     models: Sequence[Model],
     default_model: str | None,
@@ -94,6 +99,15 @@ def build_catalog(
     """
     catalog: dict[str, Model] = {}
     for model in models:
+        for field_name, price in (
+            ("input_usd_per_million", model.input_usd_per_million),
+            ("output_usd_per_million", model.output_usd_per_million),
+        ):
+            if price is not None and (not math.isfinite(price) or price < 0):
+                raise RunConfigError(
+                    f"model {model.id!r} has invalid {field_name}={price!r}; "
+                    f"prices must be finite and non-negative (0.0 means free)."
+                )
         if model.id in catalog:
             raise RunConfigError(
                 f"models= names {model.id!r} more than once; the catalog "
@@ -156,8 +170,8 @@ class _ProviderTicket:
 
     The caller makes the provider call on `client` and reports the turn's
     token counts through `record_usage`; the door settles cost from them on
-    exit. An unreported call (provider error, missing usage data) settles at
-    $0, the same silent-understatement posture the loop already logs loudly.
+    exit. A budgeted paid call without usage is refused because its cost
+    cannot be enforced; an unbudgeted one settles at $0 with a warning.
     """
 
     def __init__(self, client: "AsyncOpenAI") -> None:
@@ -244,7 +258,9 @@ class Gatekeeper:
         if self._on_call is None:
             return
         try:
-            self._on_call(row)
+            # The callback is observational: hand it a copy so mutation
+            # cannot rewrite the Gatekeeper's audit row before persistence.
+            self._on_call(row.copy())
         except Exception as exc:
             logger.warning("on_llm_call callback raised %s (ignored): %s", type(exc).__name__, exc)
 
@@ -501,6 +517,21 @@ class Gatekeeper:
                 started_at = _utcnow_iso()
                 ticket = _ProviderTicket(client)
                 yield ticket
+                paid_model = (
+                    entry.input_usd_per_million != 0.0 or entry.output_usd_per_million != 0.0
+                )
+                missing_usage = ticket.in_tokens is None or ticket.out_tokens is None
+                if grant_usd is not None and paid_model and missing_usage:
+                    raise MissingUsageError(
+                        f"model {entry.id!r} returned no token usage for a "
+                        f"budgeted paid call, so its cost cannot be tracked."
+                    )
+                if paid_model and missing_usage:
+                    logger.warning(
+                        "model %s returned no token usage; this unbudgeted "
+                        "call's cost is unreported",
+                        entry.id,
+                    )
         except BaseException:
             failed = True
             raise
