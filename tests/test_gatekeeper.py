@@ -680,6 +680,37 @@ async def test_a_bubbled_halt_from_a_custom_run_reports_cancelled(open_test_run:
     assert "stop signal" in result.error.detail
 
 
+async def test_a_backstop_failure_reports_the_nodes_settled_spend(open_test_run: Any) -> None:
+    # Best-effort floor (ruled 2026-07-12): a _run that raised after real
+    # governed calls reports its own settled door spend from the run log,
+    # not $0. Children's envelopes unwound with the stack and stay
+    # excluded; the run log still holds every row.
+    class _SpendsThenRaises(Commission[_EchoIn, _EchoOut]):
+        name: ClassVar[str] = "spends_then_raises"
+        description: ClassVar[str] = "Makes one governed call, then raises. Test double."
+        input_type: ClassVar[type] = _EchoIn
+        output_type: ClassVar[type] = _EchoOut
+
+        async def _run(self, input: _EchoIn, ctx: CallContext) -> CommissionResult[_EchoOut]:
+            gatekeeper = ctx._gatekeeper  # pyright: ignore[reportPrivateUsage]
+            assert gatekeeper is not None
+            entry = gatekeeper.resolve_model(None)
+            async with gatekeeper.provider_call(
+                entry=entry, commission_name=self.name, grant_usd=None
+            ) as ticket:
+                response = await ticket.client.chat.completions.create(model=entry.id, messages=[])
+                assert response.usage is not None
+                ticket.record_usage(response.usage.prompt_tokens, response.usage.completion_tokens)
+            raise RuntimeError("boom after real spend")
+
+    async with open_test_run(models=[_scripted([_conclude()])]) as ctx:
+        result = await dispatch(_SpendsThenRaises(), _EchoIn(text="hi"), ctx)
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+
+
 # --- The room ---------------------------------------------------------------
 
 

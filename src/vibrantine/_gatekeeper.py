@@ -367,6 +367,16 @@ class Gatekeeper:
         # a $0 budget run free models at all.
         return self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
 
+    def settled_spend_usd(self, run_id: str | None) -> float:
+        """One node's own settled provider-call costs, summed from the log.
+
+        The best-effort floor for a backstop-built failure envelope: a
+        `_run` that raised unwound its children's envelopes with the stack,
+        but its own door calls settled into the log and stay recoverable.
+        A floor, not a total: children's spend is excluded.
+        """
+        return sum(row["cost_usd"] for row in self.calls if row["run_id"] == run_id)
+
     def final_error(self, root_run_id: str | None, *, log_status: str) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
 

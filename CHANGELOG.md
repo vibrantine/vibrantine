@@ -101,6 +101,12 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 - A run that halts before any provider call was made now says so in the
   `run_halted` detail instead of advising the caller to wire a backend
   they may already have wired.
+- A `_run` that raised after making governed provider calls (a bubbled
+  halt refusal, or any exception dispatch converts to a failure) now
+  reports a best-effort cost floor summed from the node's own settled
+  calls in the run log, instead of $0. Children's envelopes unwind with
+  the stack, so the floor excludes their spend; the run log still holds
+  every row.
 - The budget documentation overstated `budget_usd` as a "hard ceiling".
   Enforcement is per-turn and a turn's exact cost is unknowable before it
   runs, so the true spend can overshoot the grant by up to about one

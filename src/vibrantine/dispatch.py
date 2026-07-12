@@ -157,7 +157,9 @@ async def dispatch[InputT, OutputT](
         # node-level cancellation the framework loop reports, so one trip
         # speaks one vocabulary all the way up the tree.
         logger.info("%s halted by the run's stop signal: %s", commission.name, exc)
-        result = _halt_to_failure(commission, exc)
+        result = _halt_to_failure(
+            commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
+        )
     except Exception as exc:
         # Errors are values: a Commission that *raises* instead of returning a
         # failure (a custom-_run bug, a third-party Commission) has broken the
@@ -171,7 +173,9 @@ async def dispatch[InputT, OutputT](
             type(exc).__name__,
             exc,
         )
-        result = _exception_to_failure(commission, exc)
+        result = _exception_to_failure(
+            commission, exc, spent_usd=gatekeeper.settled_spend_usd(my_run_id)
+        )
     finally:
         _current_run_id.reset(token)
         _trace_box.reset(trace_token)
@@ -405,6 +409,7 @@ def halt_checkpoint_error(where: str) -> ErrorState:
 def _dispatch_failure[OutputT](
     commission: Commission[Any, OutputT],
     error: ErrorState,
+    spent_usd: float,
 ) -> CommissionResult[OutputT]:
     """The failure envelope dispatch builds when `_run` raised instead of returning."""
     return cast(
@@ -417,7 +422,7 @@ def _dispatch_failure[OutputT](
                 fetched_at=datetime.now(UTC),
                 confidence="grounded",
             ),
-            cost=CostMetrics(estimated_usd=0.0),
+            cost=CostMetrics(estimated_usd=spent_usd),
         ),
     )
 
@@ -425,6 +430,8 @@ def _dispatch_failure[OutputT](
 def _halt_to_failure[OutputT](
     commission: Commission[Any, OutputT],
     exc: RunHaltedError,
+    *,
+    spent_usd: float,
 ) -> CommissionResult[OutputT]:
     """Translate a bubbled provider-door refusal into the node vocabulary.
 
@@ -432,20 +439,24 @@ def _halt_to_failure[OutputT](
     was caught by the framework loop or escaped a custom `_run`; without
     this branch the generic backstop would call the same trip `internal`.
     """
-    return _dispatch_failure(commission, stop_signal_error(exc))
+    return _dispatch_failure(commission, stop_signal_error(exc), spent_usd)
 
 
 def _exception_to_failure[OutputT](
     commission: Commission[Any, OutputT],
     exc: Exception,
+    *,
+    spent_usd: float,
 ) -> CommissionResult[OutputT]:
     """Convert a raised exception into a structured `internal` failure.
 
     Upholding errors-as-values is the author's job, but dispatch is the seam
     that *guarantees* it: a raising `_run` becomes a failure result rather
-    than propagating out of `run_one`. Cost is reported as $0; any spend
-    before the raise unwound with the stack and is unrecoverable here; the real
-    remedy is Commissions returning failures instead of raising.
+    than propagating out of `run_one`. Cost is a best-effort floor (ruled
+    2026-07-12): the node's own settled door calls, summed from the run
+    log; children's envelopes unwound with the stack, so their spend is
+    missing from this node's number (the run log still holds every row).
+    The real remedy is Commissions returning failures instead of raising.
     """
     return _dispatch_failure(
         commission,
@@ -454,6 +465,7 @@ def _exception_to_failure[OutputT](
             detail=f"Commission {commission.name!r} raised {type(exc).__name__}: {exc}",
             retryable=False,
         ),
+        spent_usd,
     )
 
 
