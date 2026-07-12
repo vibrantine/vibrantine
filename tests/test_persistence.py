@@ -296,7 +296,10 @@ async def test_sqlite_records_survive_reopen(tmp_path: Path) -> None:
     assert loaded.result["status"] == "success"
 
 
-async def test_sqlite_delete_removes_owned_and_direct_call_rows(tmp_path: Path) -> None:
+async def test_sqlite_call_rows_die_with_the_root_record_only(tmp_path: Path) -> None:
+    # A call row belongs to the run, not the node that made it (ruled
+    # 2026-07-12): deleting a child record leaves the root's call log
+    # whole; deleting the root record removes the run's entire log.
     db = tmp_path / "runs.db"
     backend = SqliteBackend(db)
     await backend.store(_record(run_id="root", mode="always"))
@@ -305,13 +308,57 @@ async def test_sqlite_delete_removes_owned_and_direct_call_rows(tmp_path: Path) 
 
     await backend.delete("child")
     with closing(sqlite3.connect(db)) as conn:
-        rows = conn.execute("SELECT root_run_id, run_id FROM calls").fetchall()
-    assert rows == [("root", "root")]
+        rows = conn.execute("SELECT root_run_id, run_id FROM calls ORDER BY run_id").fetchall()
+    assert rows == [("root", "child"), ("root", "root")]
 
     await backend.delete("root")
     with closing(sqlite3.connect(db)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM calls").fetchone()
     assert count == (0,)
+
+
+async def test_sqlite_ring_buffer_pruning_a_child_keeps_the_roots_log_whole(
+    tmp_path: Path,
+) -> None:
+    # The dev ring buffer evicts per record with no tree awareness; child
+    # records age out before their root's. The run's audit log must not be
+    # hole-punched by that rotation: call rows ride the root record alone.
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db, dev_ring_buffer_size=2)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    await backend.store(_record(run_id="child", parent_run_id="root", mode="dev", created_at=base))
+    await backend.store(_record(run_id="root", mode="dev", created_at=base + timedelta(minutes=1)))
+    await backend.store_calls("root", [_call_row("root"), _call_row("child")])
+
+    # A later run's record fills the buffer and evicts the oldest ("child").
+    await backend.store(_record(run_id="other", mode="dev", created_at=base + timedelta(minutes=2)))
+
+    with closing(sqlite3.connect(db)) as conn:
+        records = {row[0] for row in conn.execute("SELECT run_id FROM records").fetchall()}
+        calls = conn.execute("SELECT COUNT(*) FROM calls").fetchone()
+    assert records == {"root", "other"}
+    assert calls == (2,)
+
+
+async def test_sqlite_age_pruning_keeps_a_retained_records_whole_log(tmp_path: Path) -> None:
+    # A run that straddles the cutoff (early calls ended before it, record
+    # stored after it) keeps its record AND its whole call log: the orphan
+    # sweep only reaps rows whose run never stored a root record.
+    db = tmp_path / "runs.db"
+    backend = SqliteBackend(db)
+    cutoff = datetime.now(UTC) - timedelta(days=5)
+    await backend.store(
+        _record(run_id="straddler", mode="always", created_at=cutoff + timedelta(hours=1))
+    )
+    await backend.store_calls(
+        "straddler", [_call_row("straddler", ended_at=cutoff - timedelta(hours=1))]
+    )
+
+    await backend.delete_older_than(cutoff)
+
+    with closing(sqlite3.connect(db)) as conn:
+        rows = conn.execute("SELECT root_run_id FROM calls").fetchall()
+    assert rows == [("straddler",)]
 
 
 async def test_sqlite_age_pruning_removes_call_rows(tmp_path: Path) -> None:

@@ -325,9 +325,16 @@ class SqliteBackend:
             ).fetchall()
             run_ids = [cast("str", row[0]) for row in rows]
             self._delete_run_data_sync(conn, run_ids)
-            # Call logging is independent of node recording, so some rows
-            # legitimately have no matching record to select above.
-            conn.execute("DELETE FROM calls WHERE ended_at < ?", (_timestamp(cutoff),))
+            # Orphan sweep: call logging is independent of node recording,
+            # so rows whose run never stored a root record die by their own
+            # age. Rows under a still-retained root are exempt, so a
+            # surviving record's "full call log under run X" pointer never
+            # dangles into a hole-punched log.
+            conn.execute(
+                "DELETE FROM calls WHERE ended_at < ? "
+                "AND root_run_id NOT IN (SELECT run_id FROM records)",
+                (_timestamp(cutoff),),
+            )
             return len(run_ids)
 
     def _store_calls_sync(self, root_run_id: str | None, calls: list[dict[str, Any]]) -> None:
@@ -387,10 +394,16 @@ class SqliteBackend:
         conn: sqlite3.Connection,
         run_ids: list[str],
     ) -> None:
-        """Delete records and every call row they own or directly made."""
-        for run_id in run_ids:
-            conn.execute(
-                "DELETE FROM calls WHERE root_run_id = ? OR run_id = ?",
-                (run_id, run_id),
-            )
-            conn.execute("DELETE FROM records WHERE run_id = ?", (run_id,))
+        """Delete records; call rows die only with their run's root.
+
+        A call row belongs to the run, not to the node that made it (ruled
+        2026-07-12): pruning or deleting a child record leaves the root's
+        call log whole, and deleting the root record removes the run's
+        entire log. Set-based so the calls delete rides the root_run_id
+        index instead of scanning per record.
+        """
+        if not run_ids:
+            return
+        placeholders = ",".join("?" * len(run_ids))
+        conn.execute(f"DELETE FROM calls WHERE root_run_id IN ({placeholders})", run_ids)
+        conn.execute(f"DELETE FROM records WHERE run_id IN ({placeholders})", run_ids)
