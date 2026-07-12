@@ -174,6 +174,58 @@ bounded work, structured result envelope, parent-mediated composition, cost,
 and provenance. A TypeScript implementation could uphold the same contract with
 different host-language ergonomics.
 
+## What You Must Actually Hold
+
+Most of the discipline in Vibrantine is enforced by the machine: identity
+checks fire at class definition, inputs and outputs are validated at the
+boundary, exceptions become failure envelopes, unknown model names fail
+fast. You do not have to remember those rules; breaking them is loud and
+immediate.
+
+A few things are conventions you carry in your head instead. This is the
+honest, complete list.
+
+1. **The underscore vocabulary.** A leading underscore means internal, with
+   named exceptions. `_run` is implement-only: you write it, you never call
+   it (callers always go through `run_one`, `invoke_sync`, or `dispatch`,
+   which is where the boundary guarantees live). `_succeed`, `_fail`, and
+   `_emit` are supported author helpers despite the underscore; they stay
+   protected until the authoring-surface freeze promotes them.
+
+2. **What `None` means, knob by knob.** `None` always means "no limit" or
+   "no opinion," never zero. `budget_usd=None` is no grant and no spend
+   fuse. `max_llm_calls=None` disarms the call backstop (the default, 1000,
+   is armed). `time_limit_seconds=None` is no deadline. `tool_ceiling=None`
+   is no ceiling, while an empty list is a ceiling that exposes nothing.
+   Unrestricted capabilities permit everything, while an empty allow-list
+   permits nothing. `record=None` follows the backend's default, and a
+   node's `persistence_mode=None` means "no opinion, follow the caller."
+
+3. **Three words for tool restriction, three owners.** `toolbox` is what a
+   Commission owns: part of its identity, set at construction.
+   `capabilities` is what a branch is permitted: a grant that can narrow as
+   it passes down the tree. `tool_ceiling` is what the whole run may ever
+   expose: immutable, set once at `run_one`. The menu a model actually sees
+   is the intersection of all three.
+
+4. **Money speaks three dialects.** `budget_exceeded` means one node's
+   grant ran out; it surfaces from that node and the tree above it decides
+   what to do. `run_halted` means a run-wide fuse tripped (spend, calls, or
+   time); it surfaces at the root and names the fuse. And the bound is real
+   but soft: in-flight work finishes and counts, so a halted run can
+   overshoot by roughly one turn per level of depth, with true spend always
+   reported. If a number must never be exceeded, enforce it above the
+   library.
+
+5. **Persistence has an order of precedence.** Nothing records without a
+   backend; wiring one is the "I care about logs" signal and defaults to
+   recording everything. From there, a node's explicit `persistence_mode`
+   beats the caller's `record=`, which beats the wired default.
+
+Everything not on this list is either enforced by the machine or written
+down where the machine checks it (`docs/authoring.md` is machine-verified
+in CI).
+
 ## Minimal Example
 
 This example sketches a small research-brief Commission. It accepts a question
