@@ -80,8 +80,14 @@ class RunConfigError(ValueError):
     """
 
 
-class MissingUsageError(Exception):
-    """A budgeted paid call returned no token usage to price."""
+class UnmeterableCallError(Exception):
+    """A dollar-accounted call whose cost cannot be tracked.
+
+    Raised at the door when a node grant or the run spend fuse is armed
+    and the call cannot be priced: the provider omitted token usage, or
+    the catalog entry carries no prices. Explicit `0.0` prices are the
+    supported free case and never raise.
+    """
 
 
 def build_catalog(
@@ -159,8 +165,9 @@ class RunCancel:
         """The caller's own token, seen alone.
 
         Distinguishes a user stop from a fuse trip when both share the
-        combined signal: the root rewrite must never relabel a cancellation
-        the caller asked for as `run_halted`.
+        combined signal: the loop's checkpoint exit is stamped breaker-born
+        only when the breaker alone is set, because a cancellation the
+        caller asked for must never be relabeled `run_halted` at the root.
         """
         return self._caller.is_cancelled
 
@@ -170,8 +177,9 @@ class _ProviderTicket:
 
     The caller makes the provider call on `client` and reports the turn's
     token counts through `record_usage`; the door settles cost from them on
-    exit. A budgeted paid call without usage is refused because its cost
-    cannot be enforced; an unbudgeted one settles at $0 with a warning.
+    exit. A dollar-accounted call (a node grant or the run spend fuse is
+    armed) without usage is refused because its cost cannot be enforced;
+    an unaccounted one settles at $0 with a warning.
     """
 
     def __init__(self, client: "AsyncOpenAI") -> None:
@@ -353,20 +361,21 @@ class Gatekeeper:
     def _time_due(self) -> bool:
         return self._deadline is not None and time.monotonic() >= self._deadline
 
-    def final_error(
-        self,
-        root_run_id: str | None,
-        *,
-        log_persisted: bool,
-        log_persistence_failed: bool = False,
-    ) -> ErrorState:
+    def _spend_due(self) -> bool:
+        # Strictly past, not at: spending exactly the budget is within
+        # budget, the same reading as the node-level checks, and what lets
+        # a $0 budget run free models at all.
+        return self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
+
+    def final_error(self, root_run_id: str | None, *, log_status: str) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
 
         Written for an AI-agent reader with no other context: the fuse, the
         numbers, what the in-flight calls added, and where the full log
-        lives, but only when it lives somewhere (`log_persisted` confirms the
-        backend took the rows; a live `on_llm_call` already delivered them;
-        with neither, the honest pointer is how to wire one next time).
+        lives, but only when it lives somewhere. `log_status` is dispatch's
+        persistence verdict ("persisted" | "failed" | "unavailable" |
+        "no_calls"); a live `on_llm_call` already delivered the rows; with
+        neither, the honest pointer is how to wire one next time.
         Composed at run end rather than trip time so calls that were
         in flight at the trip report their settled cost, which is what makes
         "every dollar reported" checkable.
@@ -379,11 +388,13 @@ class Gatekeeper:
                 f"; {self._settled_after_trip} in-flight call(s) completed for ${extra:.4f} more"
             )
         detail += f"; true total spend ${self.observed_spend_usd:.4f}"
-        if log_persisted:
+        if log_status == "persisted":
             detail += f"; full call log under run {root_run_id}."
+        elif log_status == "no_calls":
+            detail += "; no provider calls were made in this run."
         elif self._on_call is not None:
             detail += "; the full call log was delivered live via on_llm_call."
-        elif log_persistence_failed:
+        elif log_status == "failed":
             detail += "; call-log persistence failed; inspect the framework warning for details."
         else:
             detail += (
@@ -427,9 +438,7 @@ class Gatekeeper:
                 )
             elif self._time_due():
                 self._trip(self._time_detail(), fuse="time")
-            elif (
-                self.spend_limit_usd is not None and self.observed_spend_usd > self.spend_limit_usd
-            ):
+            elif self._spend_due():
                 self._trip(self._spend_detail(), fuse="spend")
         if self.tripped is not None:
             now = _utcnow_iso()
@@ -517,19 +526,32 @@ class Gatekeeper:
                 started_at = _utcnow_iso()
                 ticket = _ProviderTicket(client)
                 yield ticket
-                paid_model = (
-                    entry.input_usd_per_million != 0.0 or entry.output_usd_per_million != 0.0
-                )
                 missing_usage = ticket.in_tokens is None or ticket.out_tokens is None
-                if grant_usd is not None and paid_model and missing_usage:
-                    raise MissingUsageError(
-                        f"model {entry.id!r} returned no token usage for a "
-                        f"budgeted paid call, so its cost cannot be tracked."
-                    )
-                if paid_model and missing_usage:
+                free_model = (
+                    entry.input_usd_per_million == 0.0 and entry.output_usd_per_million == 0.0
+                )
+                # Dollar accounting is armed by the node's grant or by the
+                # run's spend fuse; either one makes an untrackable cost a
+                # structural failure, not a silent $0. A grant-stripped
+                # subtree under a budgeted run is still accounted.
+                dollar_accounted = grant_usd is not None or self.spend_limit_usd is not None
+                if dollar_accounted and not free_model:
+                    if not entry.is_priced:
+                        raise UnmeterableCallError(
+                            f"model {entry.id!r} has no known prices, so this "
+                            f"dollar-accounted call's cost cannot be tracked; "
+                            f"price it in models= (0.0 means free) or drop the "
+                            f"budget."
+                        )
+                    if missing_usage:
+                        raise UnmeterableCallError(
+                            f"model {entry.id!r} returned no token usage for a "
+                            f"dollar-accounted call, so its cost cannot be tracked."
+                        )
+                if missing_usage:
                     logger.warning(
-                        "model %s returned no token usage; this unbudgeted "
-                        "call's cost is unreported",
+                        "model %s returned no token usage; this call's cost "
+                        "and token counts are unreported",
                         entry.id,
                     )
         except BaseException:
@@ -570,14 +592,7 @@ class Gatekeeper:
                 # The spend fuse trips at settle, not only at the next
                 # admission, so parallel branches start winding down the
                 # moment the limit is passed instead of at their next call.
-                # Strictly past, not at: spending exactly the budget is
-                # within budget, the same reading as the node-level checks,
-                # and what lets a $0 budget run free models at all.
-                if (
-                    self.tripped is None
-                    and self.spend_limit_usd is not None
-                    and self.observed_spend_usd > self.spend_limit_usd
-                ):
+                if self.tripped is None and self._spend_due():
                     self._trip(self._spend_detail(), fuse="spend")
 
     def _row(

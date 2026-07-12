@@ -25,7 +25,7 @@ from typing import (
     runtime_checkable,
 )
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from vibrantine.models import Model, UnknownModelError
 
@@ -113,6 +113,13 @@ class ErrorState(BaseModel):
     retryable: bool = Field(
         description="True if retrying with the same input might succeed.",
     )
+    # Interior marker, never serialized and not part of the contract: True
+    # only on the instance the framework itself built when the run's stop
+    # signal refused a provider call. The root rewrite reads it to claim
+    # breaker-born failures causally; it rides the object, so a failure an
+    # author manufactures (even with identical text) is the author's own
+    # story. Stamped in dispatch.stop_signal_error, the one builder.
+    _breaker_born: bool = PrivateAttr(default=False)
 
 
 class Claim[T](BaseModel):
@@ -667,12 +674,17 @@ class Commission[InputT, OutputT](ABC):
             out_tokens=outcome.out_tokens,
         )
         if outcome.error is not None:
-            return self._fail(
-                outcome.error.kind,
-                outcome.error.detail,
-                retryable=outcome.error.retryable,
-                provenance=provenance,
-                cost=cost,
+            # The loop's ErrorState instance rides into the envelope intact
+            # rather than being rebuilt: interior markers (the breaker-born
+            # stamp) live on the object, and a rebuild would strip them.
+            return cast(
+                "CommissionResult[OutputT]",
+                CommissionResult(
+                    status="failure",
+                    error=outcome.error,
+                    provenance=provenance,
+                    cost=cost,
+                ),
             )
         assert outcome.output is not None
         return self._succeed(cast(OutputT, outcome.output), provenance=provenance, cost=cost)

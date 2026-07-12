@@ -321,8 +321,9 @@ Available in v0.5.0 (plus the Run Gatekeeper on main, unreleased):
   tool-exposure ceiling, and an always-on provider-call log (`on_llm_call`
   live, a queryable `calls` table beside the run records when SQLite is
   wired). A tripped fuse halts the run loudly: a `run_halted` failure
-  naming the fuse, with all provider-reported spend included. A budgeted
-  paid call that omits token usage fails instead of counting as free.
+  naming the fuse, with all provider-reported spend included. A
+  dollar-accounted paid call that omits token usage fails instead of
+  counting as free.
 - The run model catalog: models are defined once at `run_one(models=[...])`
   and referenced by name from Commissions; the catalog vends the provider
   clients, unknown names fail fast, and an empty catalog auto-registers the

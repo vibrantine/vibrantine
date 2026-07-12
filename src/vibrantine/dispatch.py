@@ -11,8 +11,9 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
   - `overflow_policy` is enforced on the returned result
   - recording is decided and honored: the node's explicit
     `persistence_mode` wins, a node with no opinion (None) follows the
-    caller's `CallContext.record` default, and the record is written
-    through `CallContext.backend` if one is wired
+    caller's `CallContext.record` default (silence with a backend wired
+    means "always"), and the record is written through
+    `CallContext.backend` if one is wired
   - the LLM loop's transcript is collected: dispatch hangs a context-local
     trace mailbox before calling `_run`, `run_llm_loop` deposits its
     message history into it on the way out, and whatever landed is written
@@ -42,7 +43,6 @@ from pydantic import BaseModel
 from vibrantine._gatekeeper import Gatekeeper, RunCancel, RunHaltedError, current_gatekeeper
 from vibrantine.contract import (
     CallContext,
-    CancelToken,
     Commission,
     CommissionResult,
     CommissionStatus,
@@ -203,16 +203,12 @@ async def dispatch[InputT, OutputT](
         parent is None
         and gatekeeper.tripped is not None
         and result.status == "failure"
-        and _trip_descended(result.error, ctx_for_run.cancel, gatekeeper)
+        and _trip_descended(result.error, gatekeeper)
     ):
         result = result.model_copy(
             update={
                 "output": None,
-                "error": gatekeeper.final_error(
-                    my_run_id,
-                    log_persisted=log_persistence == "persisted",
-                    log_persistence_failed=log_persistence == "failed",
-                ),
+                "error": gatekeeper.final_error(my_run_id, log_status=log_persistence),
                 # True total spend, from the door's settled observations:
                 # this is what makes "every dollar reported" checkable
                 # even when parts of the tree were torn down mid-flight.
@@ -229,11 +225,14 @@ async def dispatch[InputT, OutputT](
     )
 
     # Effective recording mode: the node's explicit persistence_mode wins;
-    # a node with no opinion (None) follows the caller's ctx.record default;
-    # silence on both sides means off.
+    # a node with no opinion (None) follows the caller's ctx.record default.
+    # Silence with a backend wired means "always": handing the run a
+    # database is the "I care about logs" signal, and keeping less is the
+    # active choice (ruled 2026-07-12). Silence without one stays off.
     mode = commission.persistence_mode
     if mode is None:
-        mode = ctx.record if ctx.record is not None else "off"
+        default_mode: PersistenceMode = "always" if ctx.backend is not None else "off"
+        mode = ctx.record if ctx.record is not None else default_mode
 
     # truncate_with_reference forces this run's record on: the chopped
     # envelope references the full output by run_id, so the full (pre-chop)
@@ -298,8 +297,16 @@ async def _persist_call_log(
     root_run_id: str,
     calls: list[dict[str, Any]],
 ) -> str:
-    """Persist the complete run log and report whether the claim is safe."""
-    if backend is None or not calls:
+    """Persist the complete run log and report whether the claim is safe.
+
+    Returns "persisted" | "failed" | "unavailable" | "no_calls"; the shared
+    vocabulary `Gatekeeper.final_error` composes its pointer from. An empty
+    log is its own outcome: with zero provider calls there is no log to
+    point at, wired backend or not.
+    """
+    if not calls:
+        return "no_calls"
+    if backend is None:
         return "unavailable"
     store_calls = cast(
         "Callable[[str | None, list[dict[str, Any]]], Awaitable[None]] | None",
@@ -325,32 +332,94 @@ async def _persist_call_log(
 # --- The root rewrite -------------------------------------------------------
 
 
-def _trip_descended(
-    error: ErrorState | None,
-    cancel: CancelToken,
-    gatekeeper: Gatekeeper,
-) -> bool:
+def _trip_descended(error: ErrorState | None, gatekeeper: Gatekeeper) -> bool:
     """Did this root failure descend from the fuse trip?
 
-    Two shapes qualify: a cancellation that was the breaker's doing (not
-    the caller's own token, which must keep its plain `cancelled`), and a
-    root `budget_exceeded` when the *spend* fuse tripped (the root grant
-    and the fuse are the same number read two ways, so the fuse story with
-    true total spend is strictly more informative). Anything else is the
-    root's own story: an unrelated internal or validation failure keeps its
-    error, its cost, and its detail even when a fuse happened to trip.
+    Two shapes qualify: an ErrorState the framework itself built when the
+    stop signal refused a provider call (the breaker-born stamp, set in
+    `stop_signal_error` and riding the instance up the tree), and a root
+    `budget_exceeded` when the *spend* fuse tripped (the root grant and the
+    fuse are the same number read two ways, so the fuse story with true
+    total spend is strictly more informative). Anything else is the root's
+    own story: an unrelated failure, a caller cancellation, or a
+    coordinator's own scoped-token cancellation keeps its error, its cost,
+    and its detail even when a fuse happened to trip.
     """
     if error is None:
         return False
-    if error.kind == "cancelled":
-        caller_cancelled = isinstance(cancel, RunCancel) and cancel.caller_cancelled
-        return not caller_cancelled
+    if error._breaker_born:  # pyright: ignore[reportPrivateUsage]
+        return True
     if error.kind == "budget_exceeded":
         return gatekeeper.tripped_fuse == "spend"
     return False
 
 
 # --- Exception handling ---------------------------------------------------
+
+
+def _as_breaker_born(error: ErrorState) -> ErrorState:
+    """Stamp: this failure is the run breaker's own doing.
+
+    The stamp rides the instance up the tree (never serialized), so the
+    root rewrite claims breaker-born failures causally instead of matching
+    the kind or the text. Only the two builders below stamp.
+    """
+    error._breaker_born = True  # pyright: ignore[reportPrivateUsage]
+    return error
+
+
+def stop_signal_error(exc: BaseException) -> ErrorState:
+    """The one builder for "the run's stop signal refused a provider call".
+
+    Every framework path that translates a door refusal into an error value
+    (the LLM loop, Synthesize's custom passes, dispatch's backstop below)
+    calls this, so one trip speaks one vocabulary all the way up the tree.
+    """
+    return _as_breaker_born(
+        ErrorState(
+            kind="cancelled",
+            detail=f"Provider call refused by the run's stop signal: {exc}",
+            retryable=False,
+        )
+    )
+
+
+def halt_checkpoint_error(where: str) -> ErrorState:
+    """A checkpoint exit when the breaker, not the caller, is set.
+
+    A checkpoint that fires because a fuse tripped is trip-descended even
+    though no provider call was refused (the time fuse can trip between
+    calls, or with none made at all), so it carries the stamp too. `where`
+    names the checkpoint ("between loop iterations", "between synthesis
+    and structured-output passes").
+    """
+    return _as_breaker_born(
+        ErrorState(
+            kind="cancelled",
+            detail=f"Halted by the run's stop signal {where}.",
+            retryable=False,
+        )
+    )
+
+
+def _dispatch_failure[OutputT](
+    commission: Commission[Any, OutputT],
+    error: ErrorState,
+) -> CommissionResult[OutputT]:
+    """The failure envelope dispatch builds when `_run` raised instead of returning."""
+    return cast(
+        CommissionResult[OutputT],
+        CommissionResult(
+            status="failure",
+            error=error,
+            provenance=Provenance(
+                source=f"{commission.name}:dispatch",
+                fetched_at=datetime.now(UTC),
+                confidence="grounded",
+            ),
+            cost=CostMetrics(estimated_usd=0.0),
+        ),
+    )
 
 
 def _halt_to_failure[OutputT](
@@ -363,23 +432,7 @@ def _halt_to_failure[OutputT](
     was caught by the framework loop or escaped a custom `_run`; without
     this branch the generic backstop would call the same trip `internal`.
     """
-    return cast(
-        CommissionResult[OutputT],
-        CommissionResult(
-            status="failure",
-            error=ErrorState(
-                kind="cancelled",
-                detail=f"Provider call refused by the run's stop signal: {exc}",
-                retryable=False,
-            ),
-            provenance=Provenance(
-                source=f"{commission.name}:dispatch",
-                fetched_at=datetime.now(UTC),
-                confidence="grounded",
-            ),
-            cost=CostMetrics(estimated_usd=0.0),
-        ),
-    )
+    return _dispatch_failure(commission, stop_signal_error(exc))
 
 
 def _exception_to_failure[OutputT](
@@ -394,21 +447,12 @@ def _exception_to_failure[OutputT](
     before the raise unwound with the stack and is unrecoverable here; the real
     remedy is Commissions returning failures instead of raising.
     """
-    return cast(
-        CommissionResult[OutputT],
-        CommissionResult(
-            status="failure",
-            error=ErrorState(
-                kind="internal",
-                detail=(f"Commission {commission.name!r} raised {type(exc).__name__}: {exc}"),
-                retryable=False,
-            ),
-            provenance=Provenance(
-                source=f"{commission.name}:dispatch",
-                fetched_at=datetime.now(UTC),
-                confidence="grounded",
-            ),
-            cost=CostMetrics(estimated_usd=0.0),
+    return _dispatch_failure(
+        commission,
+        ErrorState(
+            kind="internal",
+            detail=f"Commission {commission.name!r} raised {type(exc).__name__}: {exc}",
+            retryable=False,
         ),
     )
 

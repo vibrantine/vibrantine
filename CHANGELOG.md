@@ -27,9 +27,14 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   runs before the root record is persisted: only a failure that descended
   from the trip is claimed, a root that still concluded keeps its result,
   an unrelated failure keeps its own error, and the stored record always
-  matches the returned envelope. Node-level allocation exhaustion stays
-  `budget_exceeded`: the line between the kinds is scope, not resource
-  type.
+  matches the returned envelope. Causality is a stamp the framework sets
+  where it translates a refusal (or a breaker-caused checkpoint exit)
+  into an error value, riding the error object up the tree; it is never
+  inferred from the failure's kind or text, so a coincidental trip cannot
+  mask a root's own cancellation story, and a coordinator that propagates
+  a child's refusal unchanged keeps the claim. Node-level allocation
+  exhaustion stays `budget_exceeded`: the line between the kinds is
+  scope, not resource type.
 - **The run model catalog**: `run_one(models=[...], default_model=...)`
   defines the run's models once; every Commission references an entry by
   name or takes the run default, unknown names fail fast, an empty
@@ -76,13 +81,26 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Fixed
 
-- Budgeted paid calls now fail when a provider omits token usage instead
-  of silently settling at $0; explicitly free models retain valid `0.0`
-  pricing. Run limits and catalog prices also reject negative or non-finite
-  values before they can disable accounting.
-- SQLite deletion and retention pruning now remove the associated provider
-  call rows, and `on_llm_call` receives a copy so an observer cannot mutate
+- Dollar-accounted paid calls now fail when a provider omits token usage
+  (or the entry carries no prices) instead of silently settling at $0.
+  Dollar-accounted means a node grant or the run's spend fuse is armed,
+  so a grant-stripped subtree under a budgeted run can no longer starve
+  the fuse's accounting; explicitly free models retain valid `0.0`
+  pricing, and any model that omits usage now draws a warning (free
+  models' token counts previously flatlined silently). Run limits and
+  catalog prices also reject negative or non-finite values before they
+  can disable accounting.
+- SQLite call rows now belong to the run, not the node: they are removed
+  when the run's root record is deleted or pruned, or by age when their
+  run never stored a root record. Deleting or ring-buffer-pruning a child
+  record no longer punches holes in a retained run's audit log, a
+  retained record keeps its whole call log across `delete_older_than`,
+  and the calls table no longer grows unboundedly under `on_failure`
+  recording. `on_llm_call` receives a copy so an observer cannot mutate
   the Gatekeeper's persisted audit row.
+- A run that halts before any provider call was made now says so in the
+  `run_halted` detail instead of advising the caller to wire a backend
+  they may already have wired.
 - The budget documentation overstated `budget_usd` as a "hard ceiling".
   Enforcement is per-turn and a turn's exact cost is unknowable before it
   runs, so the true spend can overshoot the grant by up to about one
@@ -114,6 +132,13 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 - **Breaking:** the advisory `CallContext.concurrency` field (which
   nothing read) retires in favor of the run-wide room, and `run_halted`
   joins the frozen `ErrorKind` vocabulary.
+- **Breaking:** a wired backend now records everything by default:
+  `run_one(backend=...)` with `record=` unset behaves as
+  `record="always"`, because handing the run a database is the "I care
+  about logs" signal and keeping less is the active choice. Without a
+  backend nothing changes (nothing is recorded); a node's explicit
+  `persistence_mode` still beats the default. Callers who wired a backend
+  expecting records off must now pass `record="off"`.
 - The default loop translates opening-message parts with one explicit
   branch per modality and rejects an opening message it must not send (a
   part it cannot translate, or an empty parts list, which providers refuse

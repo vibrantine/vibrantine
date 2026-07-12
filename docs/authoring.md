@@ -440,9 +440,10 @@ bounds are already on your Commission; this step is about knowing them.
   transcript holding a few 50k-char pages can cost more per turn than a
   tight grant leaves for wrapping up. A paid provider must return token
   usage for this accounting to be possible; if it omits usage during a
-  budgeted call, the call fails structurally instead of being counted as
-  free. Explicitly free models (`0.0` prices) need no usage to enforce a
-  dollar budget.
+  dollar-accounted call (your grant, or the run's spend fuse, even in a
+  subtree whose own grant was stripped), the call fails structurally
+  instead of being counted as free. Explicitly free models (`0.0` prices)
+  need no usage to enforce a dollar budget.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
@@ -910,8 +911,11 @@ child Commission rather than calling a provider directly: a raw call would
 bypass the run's private Gatekeeper. Library-owned custom provider flows use
 `deposit_llm_trace` internally; `SynthesizeCommission` is that internal
 worked example. Switching records on is also one
-line: `run_one(..., backend=FilesystemBackend(root), record="always")`
-reaches every node in the call tree, including children spawned mid-run.
+line: `run_one(..., backend=FilesystemBackend(root))` reaches every node
+in the call tree, including children spawned mid-run. Wiring a backend is
+the "I care about logs" signal, so it defaults to recording everything
+(`record="always"`); pass `record="dev"` or `record="off"` when you want
+the database to hold less.
 Three tiers, all optional: log lines to watch, events to react, records
 to query.
 
@@ -1479,10 +1483,14 @@ written as a selection prompt.
   optional LLM trace.
 - Modes: `off` / `on_failure` / `dev` / `always`. Wire a backend via
   `run_one(..., backend=...)`; children inherit it automatically.
-- Switch recording on with `run_one(..., record="always")`: the caller's
-  default for every node whose own `persistence_mode` is `None` (the class
-  default). A node's explicit mode, `"off"` included, beats the caller's
-  default; silence follows the room, a spoken choice is kept.
+- A wired backend records everything by default: silence on `record=`
+  means `"always"`, because handing the run a database is the "I care
+  about logs" signal, and keeping less (`record="dev"`, `"on_failure"`,
+  `"off"`) is the active choice. Without a backend nothing is recorded.
+  `record=` is the caller's default for every node whose own
+  `persistence_mode` is `None` (the class default). A node's explicit
+  mode, `"off"` included, beats the caller's default; silence follows the
+  room, a spoken choice is kept.
 
 ## Authoring discipline
 

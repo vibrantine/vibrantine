@@ -297,20 +297,26 @@ What the invoker holds.
   Fuses bound resources the run consumes, never how it is composed, and
   they stop the bleeding loudly (a `run_halted` failure naming the fuse
   and the numbers, all provider-reported spend included) rather than
-  steering. A budgeted paid call whose provider omits usage fails instead
-  of being treated as free. The
+  steering. A dollar-accounted call (a node grant or the run's spend
+  fuse, including a grant-stripped subtree under a budgeted run) whose
+  provider omits usage fails instead of being treated as free. The
   spend fuse is honest, not absolute: it refuses new calls at the limit
   and lets in-flight calls finish, so overshoot is bounded in calls, not
   dollars. The `run_halted` rewrite is causal and claims failed roots
-  only (ratified 2026-07-12): a root failure that descended from the trip
-  (its calls were refused, or the spend fuse and the root grant are one
-  number read two ways) is rewritten before the record is persisted, so
-  the stored record and the returned envelope tell one story; a root that
+  only (ratified 2026-07-12): causality is a stamp the framework sets at
+  the point of translation (a refused provider call, a breaker-caused
+  checkpoint exit), riding the error object up the tree, never inferred
+  from the failure's kind or text. A stamped root failure (or a root
+  `budget_exceeded` when the spend fuse and the root grant are one number
+  read two ways) is rewritten before the record is persisted, so the
+  stored record and the returned envelope tell one story; a root that
   still concluded despite a trip keeps its result, because winding down
   and concluding with what it has is the designed response to a trip, not
   a failure to override; and an unrelated failure that merely happened
-  during a trip keeps its own error rather than being masked by the fuse
-  story (the trip stays visible in the call log either way). And it
+  during a trip (including a coordinator's own scoped-token cancellation,
+  or a failure an author manufactured rather than propagated) keeps its
+  own error rather than being masked by the fuse story (the trip stays
+  visible in the call log either way). And it
   is an in-process guardrail, not a sandbox: custom Python
   can step around it, a deliberate escape the library does not claim to
   close.

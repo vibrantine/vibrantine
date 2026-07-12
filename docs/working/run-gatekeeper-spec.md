@@ -17,7 +17,12 @@ Only a failure that descended from the trip is rewritten (rewritten inside
 the root's dispatch, before the record is persisted, so record and envelope
 agree); a root that still concluded despite a trip keeps its result,
 because winding down is the designed response to a trip; an unrelated root
-failure coincident with a trip keeps its own error.
+failure coincident with a trip keeps its own error. Amended same day after
+review: "descended from the trip" is a breaker-born stamp the framework
+sets where it translates a refusal or a breaker-caused checkpoint exit
+into an error value, riding the error object up the tree; it is never
+inferred from the failure's kind, which had let a coincidental trip mask
+a root's own scoped-token cancellation.
 
 Below is the settled decision record as built, kept for the reasoning.
 Settled 2026-07-11 after a full walkthrough with the author. This replaces

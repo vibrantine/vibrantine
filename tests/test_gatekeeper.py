@@ -419,21 +419,27 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
 
     class _FailsAfter(Commission[_Q, _A]):
         name: ClassVar[str] = "fails_after"
-        description: ClassVar[str] = "Gathers two children, then stops on the shared signal."
+        description: ClassVar[str] = "Gathers two children, then reports the grant exhausted."
         input_type: ClassVar[type] = _Q
         output_type: ClassVar[type] = _A
 
         async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
-            await asyncio.gather(dispatch(fast, input, ctx), dispatch(slow, input, ctx))
-            # The trip flipped the shared stop signal; failing on it is the
-            # trip-descended shape the causal root rewrite claims.
+            first, second = await asyncio.gather(
+                dispatch(fast, input, ctx), dispatch(slow, input, ctx)
+            )
+            # The trip flipped the shared stop signal; reporting the grant
+            # exhausted is the trip-descended shape the causal rewrite
+            # claims (the root grant and the spend fuse are one number
+            # read two ways).
             assert ctx.cancel.is_cancelled
             return self._fail(
-                "cancelled",
-                "stopping: the run's stop signal is set after fan-out",
+                "budget_exceeded",
+                "children spent past the grant",
                 retryable=False,
                 provenance=_prov("fails_after"),
-                cost=CostMetrics(estimated_usd=0.0),
+                cost=CostMetrics(
+                    estimated_usd=first.cost.estimated_usd + second.cost.estimated_usd
+                ),
             )
 
     # The fast call alone passes the limit (the fuse is strictly past, so
@@ -494,6 +500,105 @@ async def test_an_unrelated_root_failure_is_not_masked_by_a_trip() -> None:
     assert result.error.kind == "internal"
     assert "a bug of my own" in result.error.detail
     assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+
+
+async def test_a_roots_own_cancellation_is_not_claimed_by_a_coincidental_trip() -> None:
+    # The rewrite claims the breaker's own failures (the stamp), never a
+    # cancellation the root authored itself: a coordinator that cancelled
+    # one of its own branches keeps its story even though a fuse tripped
+    # at the same time. Kind-matching would have masked it.
+    child = _Child()
+
+    class _OwnCancel(Commission[_Q, _A]):
+        name: ClassVar[str] = "own_cancel"
+        description: ClassVar[str] = "Reports its own scoped cancellation, mid-trip."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            first = await dispatch(child, input, ctx)  # admitted: call 1 of 1
+            second = await dispatch(child, input, ctx)  # refused: trips the fuse
+            assert first.status == "success" and second.status == "failure"
+            return self._fail(
+                "cancelled",
+                "branch B cancelled by my own scoped token",
+                retryable=False,
+                provenance=_prov("own_cancel"),
+                cost=CostMetrics(estimated_usd=first.cost.estimated_usd),
+            )
+
+    result = await run_one(
+        _OwnCancel(),
+        _Q(question="?"),
+        models=[_scripted([_conclude(), _conclude()])],
+        max_llm_calls=1,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "cancelled"
+    assert "my own scoped token" in result.error.detail
+    assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+
+
+async def test_a_propagated_refusal_keeps_its_stamp_and_is_claimed() -> None:
+    # A coordinator that passes a child's breaker-refused failure up
+    # unchanged keeps the stamp on the error object, so the root rewrite
+    # claims it and tells the fuse story with true total spend.
+    child = _Child()
+
+    class _Propagates(Commission[_Q, _A]):
+        name: ClassVar[str] = "propagates"
+        description: ClassVar[str] = "Returns its child's refusal untouched."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            first = await dispatch(child, input, ctx)  # admitted: call 1 of 1
+            second = await dispatch(child, input, ctx)  # refused: trips the fuse
+            assert first.status == "success" and second.status == "failure"
+            return second
+
+    result = await run_one(
+        _Propagates(),
+        _Q(question="?"),
+        models=[_scripted([_conclude(), _conclude()])],
+        max_llm_calls=1,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "run_halted"
+    assert "llm-call fuse tripped" in result.error.detail
+    assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+
+
+async def test_a_grant_stripped_subtree_is_still_dollar_accounted() -> None:
+    # run_one(budget_usd=...) arms the spend fuse; a coordinator may legally
+    # strip a child's grant via replace(). The child's paid call that omits
+    # usage must still fail structurally (the fuse cannot account what the
+    # door cannot meter), not settle at a silent $0.
+    child = _Child()
+
+    class _Strips(Commission[_Q, _A]):
+        name: ClassVar[str] = "strips"
+        description: ClassVar[str] = "Dispatches its child without a grant."
+        input_type: ClassVar[type] = _Q
+        output_type: ClassVar[type] = _A
+
+        async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
+            return await dispatch(child, input, replace(ctx, budget_usd=None))
+
+    response = _conclude()
+    response.usage = None
+    result = await run_one(
+        _Strips(),
+        _Q(question="?"),
+        models=[_scripted([response])],
+        budget_usd=1.0,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "returned no token usage" in result.error.detail
 
 
 async def test_the_persisted_root_record_speaks_run_halted_too(tmp_path: Any) -> None:

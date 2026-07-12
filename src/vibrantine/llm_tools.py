@@ -37,7 +37,7 @@ from openai.types.chat import (
 )
 from pydantic import BaseModel, ValidationError
 
-from vibrantine._gatekeeper import MissingUsageError, RunHaltedError
+from vibrantine._gatekeeper import RunCancel, RunHaltedError, UnmeterableCallError
 from vibrantine.contract import (
     AudioPart,
     CallContext,
@@ -50,7 +50,12 @@ from vibrantine.contract import (
     TextPart,
     estimate_tokens,
 )
-from vibrantine.dispatch import deposit_llm_trace, dispatch
+from vibrantine.dispatch import (
+    deposit_llm_trace,
+    dispatch,
+    halt_checkpoint_error,
+    stop_signal_error,
+)
 from vibrantine.models import UnknownModelError
 
 # One line per LLM round-trip at INFO (the httpx convention for "a network
@@ -217,12 +222,21 @@ async def run_llm_loop[OutputT: BaseModel](
 
         for _ in range(max_iterations):
             if ctx.cancel.is_cancelled:
+                # Attributed at the source: a checkpoint that fires because
+                # the breaker tripped (not the caller's token) is stamped
+                # breaker-born for the root rewrite; a caller cancellation
+                # keeps its plain, unstamped story.
+                breaker_only = isinstance(ctx.cancel, RunCancel) and not ctx.cancel.caller_cancelled
                 return LoopOutcome(
                     output=None,
-                    error=ErrorState(
-                        kind="cancelled",
-                        detail="Cancelled between loop iterations.",
-                        retryable=False,
+                    error=(
+                        halt_checkpoint_error("between loop iterations")
+                        if breaker_only
+                        else ErrorState(
+                            kind="cancelled",
+                            detail="Cancelled between loop iterations.",
+                            retryable=False,
+                        )
                     ),
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
@@ -275,16 +289,16 @@ async def run_llm_loop[OutputT: BaseModel](
             except RunHaltedError as exc:
                 # The run's stop signal refused the call. Report an ordinary
                 # cancellation: mid-tree nodes ride the cancel path, and only
-                # the root speaks run_halted (dispatch rewrites it there).
-                return _loop_error(
-                    "cancelled",
-                    f"Provider call refused by the run's stop signal: {exc}",
-                    retryable=False,
+                # the root speaks run_halted (dispatch rewrites it there,
+                # claiming the breaker-born stamp this builder sets).
+                return LoopOutcome(
+                    output=None,
+                    error=stop_signal_error(exc),
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
                     children_cost=children_cost,
                 )
-            except MissingUsageError as exc:
+            except UnmeterableCallError as exc:
                 return _loop_error(
                     "internal",
                     str(exc),
@@ -325,6 +339,9 @@ async def run_llm_loop[OutputT: BaseModel](
                     children_cost=children_cost,
                 )
 
+            # A response without usage reaches here only when the door let it
+            # pass (no dollar accounting armed); the door already warned that
+            # this turn's cost and token counts go unreported.
             usage = response.usage
             if usage is not None:
                 in_tokens += usage.prompt_tokens
@@ -335,10 +352,6 @@ async def run_llm_loop[OutputT: BaseModel](
                     usage.prompt_tokens,
                     usage.completion_tokens,
                 )
-            else:
-                # The provider door already warned for this unbudgeted call.
-                # A budgeted paid call never reaches here without usage.
-                pass
 
             # Own token cost plus everything dispatched children spent, so a
             # recursive or sub-Commission-bearing loop enforces the budget against

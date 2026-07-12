@@ -19,7 +19,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
-from vibrantine._gatekeeper import Gatekeeper, MissingUsageError, RunHaltedError
+from vibrantine._gatekeeper import Gatekeeper, RunCancel, RunHaltedError, UnmeterableCallError
 from vibrantine.contract import (
     CallContext,
     Claim,
@@ -27,10 +27,11 @@ from vibrantine.contract import (
     CommissionResult,
     ConfidenceLevel,
     CostMetrics,
+    ErrorState,
     Provenance,
     estimate_tokens,
 )
-from vibrantine.dispatch import deposit_llm_trace
+from vibrantine.dispatch import deposit_llm_trace, halt_checkpoint_error, stop_signal_error
 from vibrantine.models import Model, UnknownModelError
 
 _SYNTHESIS_SYSTEM_PROMPT = (
@@ -221,12 +222,27 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
         out_tokens += first_out
 
         if ctx.cancel.is_cancelled:
-            return self._fail(
-                "cancelled",
-                "Cancelled between synthesis and structured-output passes.",
-                retryable=False,
-                provenance=provenance,
-                cost=self._cost(in_tokens, out_tokens, entry),
+            # Attributed at the source, like the default loop's checkpoint:
+            # a breaker-caused exit carries the stamp the root rewrite
+            # claims; a caller cancellation keeps its plain story.
+            breaker_only = isinstance(ctx.cancel, RunCancel) and not ctx.cancel.caller_cancelled
+            error = (
+                halt_checkpoint_error("between synthesis and structured-output passes")
+                if breaker_only
+                else ErrorState(
+                    kind="cancelled",
+                    detail="Cancelled between synthesis and structured-output passes.",
+                    retryable=False,
+                )
+            )
+            return cast(
+                "CommissionResult[SynthesizeOutput]",
+                CommissionResult(
+                    status="failure",
+                    error=error,
+                    provenance=provenance,
+                    cost=self._cost(in_tokens, out_tokens, entry),
+                ),
             )
 
         # Post-first-call budget check against real usage.
@@ -379,20 +395,24 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                     )
         except RunHaltedError as exc:
             # Caught here rather than left to dispatch's backstop so the
-            # cost already spent on prior passes stays on the envelope.
+            # cost already spent on prior passes stays on the envelope. The
+            # shared builder keeps the vocabulary (and the breaker-born
+            # stamp the root rewrite claims) identical to the loop's.
             return (
                 "",
                 0,
                 0,
-                self._fail(
-                    "cancelled",
-                    f"Provider call refused by the run's stop signal: {exc}",
-                    retryable=False,
-                    provenance=provenance,
-                    cost=cost_so_far,
+                cast(
+                    "CommissionResult[SynthesizeOutput]",
+                    CommissionResult(
+                        status="failure",
+                        error=stop_signal_error(exc),
+                        provenance=provenance,
+                        cost=cost_so_far,
+                    ),
                 ),
             )
-        except MissingUsageError as exc:
+        except UnmeterableCallError as exc:
             return (
                 "",
                 0,

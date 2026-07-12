@@ -296,15 +296,21 @@ async def test_dispatch_on_failure_skips_successes(
     assert await backend.list_references() == []
 
 
-async def test_dispatch_no_opinion_and_no_ctx_record_stays_off(
+async def test_dispatch_no_opinion_with_a_backend_defaults_to_always(
     tmp_path: Path, open_test_run: OpenTestRun
 ) -> None:
+    # Wiring a backend is the "I care about logs" signal: silence on both
+    # the node and record= means "always", and keeping less is the active
+    # choice (record="off"/"dev"). Ruled 2026-07-12.
     backend = FilesystemBackend(tmp_path)
     stub = _Stub()  # persistence_mode None (no opinion), no ctx.record either
     async with open_test_run(backend=backend) as ctx:
-        await dispatch(stub, _Input(q="?"), ctx)
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
-    assert await backend.list_references() == []
+    assert await backend.list_references() == [result.run_id]
+    loaded = await backend.load(cast("str", result.run_id))
+    assert loaded is not None
+    assert loaded.mode == "always"
 
 
 async def test_ctx_record_switches_on_the_whole_tree(
