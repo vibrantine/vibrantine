@@ -97,14 +97,16 @@ varies, the less a human or an AI assistant has to guess.
 - **`models.py`** (optional, provisional) holds the Commission's model
   menu: a frozen dataclass declaring the tree's LLM seats (the
   Commission's own loop plus one seat per LLM-bearing subcommission). A
-  seat accepts a single model (paints that whole subtree) or the child's
-  own menu type (fine-grained, recursively). The parent's `__init__`
-  resolves each seat with one fallback chain: named seat, then menu
-  `default`, then the system default. Dumb data, no behavior. The
-  Commission declares its seats (identity); the caller fills them
-  (capacity); nothing in a Commission body names a literal model. Earned
-  when a tree grows a second seat worth naming; a single-seat Commission
-  keeps the plain `model=` kwarg.
+  seat is a pure catalog name resolved against the run's model catalog
+  (a name paints that whole subtree), or the child's own menu type
+  (fine-grained, recursively); the profiles the names resolve to live in
+  `run_one(models=[...])`, never here. The parent's `__init__` resolves
+  each seat with one fallback chain: named seat, then menu `default`,
+  then the run's default. Dumb data, no behavior. The Commission
+  declares its seats (identity); the caller fills them (capacity);
+  nothing in a Commission body names a literal model. Earned when a tree
+  grows a second seat worth naming; a single-seat Commission keeps the
+  plain `model=` kwarg.
 - **`prompts/`** holds prompt text as markdown, one file per stable
   prompt-bearing step, `system.md` by convention for the main prompt. Long
   prompts diff better as markdown and stay out of Python noise. A
@@ -226,11 +228,14 @@ in `tools/`), or a Commission (belongs in `subcommissions/`). A local
 - The model menu (`models.py`) is provisional until proven by a real
   consumer. The first wiring landed in `recursive_research/models.py`
   (`RecursiveResearchModelMenu`), which proved the plumbing but is a
-  single-class tree. Open within it: the seat-name vocabulary (per child
-  class vs per subtree role, which needs a true multi-seat Commission to
-  answer), whether a menu ever needs per-seat client injection alongside
-  the model, and how the menu relates to the planned catalog/grant
-  model-ownership design.
+  single-class tree. Two questions this note once held open were settled
+  by the model catalog (2026-07-12): the menu's relation to model
+  ownership (a seat is the distributed model *choice*, a bare catalog
+  name; the profile it resolves to is defined once in
+  `run_one(models=[...])`), and per-seat client injection (dead: model
+  access flows only through the run's catalog, and `client=` is gone).
+  What remains open is the seat-name vocabulary (per child class vs per
+  subtree role), which needs a true multi-seat Commission to answer.
 
 ## What Bites Next
 
