@@ -1554,7 +1554,9 @@ Before you ship a Commission, confirm:
 - [ ] **`description` is written for an LLM** deciding whether to call this
   Commission.
 - [ ] **Errors are returned, not raised**: `status="failure"` plus an
-  `ErrorState` whose `kind` is one of the seven allowed values.
+  `ErrorState` whose `kind` is one of the seven author-usable values
+  (the eighth, `run_halted`, is spoken only by the framework when a run
+  fuse trips; never manufacture it).
 - [ ] **Custom path**: every `CommissionResult` you build carries a
   `Provenance` (success included) and a `CostMetrics`; `_succeed` and
   `_fail` assemble them correctly. (Basic path: the framework fills these
