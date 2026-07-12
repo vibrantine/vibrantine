@@ -437,6 +437,29 @@ class Gatekeeper:
         """
         return sum(row["cost_usd"] for row in self.calls if row["run_id"] == run_id)
 
+    def subtree_spend_usd(self, run_id: str | None) -> float:
+        """Settled provider spend for a node and every descendant.
+
+        The witness side of dispatch's cost-honesty check. The dispatch
+        register supplies the parent->child edges (a child's row settles
+        before its parent returns, so the subtree is complete by the time
+        the parent's envelope is inspected); the call log supplies the
+        dollars. Built per query from the logs rather than kept as a
+        running total: the logs are the one source of truth, and a second
+        ledger could drift from them.
+        """
+        children: dict[str | None, list[str]] = {}
+        for row in self.dispatches:
+            children.setdefault(row["parent_run_id"], []).append(row["run_id"])
+        subtree = {run_id}
+        frontier = [run_id]
+        while frontier:
+            for child in children.get(frontier.pop(), ()):
+                if child not in subtree:
+                    subtree.add(child)
+                    frontier.append(child)
+        return sum(row["cost_usd"] for row in self.calls if row["run_id"] in subtree)
+
     def final_error(self, root_run_id: str | None, *, log_status: str) -> ErrorState:
         """The root's `run_halted` failure, rebuilt with the final numbers.
 

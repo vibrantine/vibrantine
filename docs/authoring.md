@@ -913,7 +913,9 @@ At INFO you get one line per LLM round-trip (model and token counts) and one
 line per completed call (name, status, cost, run_id), at any nesting depth.
 WARNING surfaces the things worth a human's attention (a Commission that
 raised, a conclude that failed validation, a persistence backend that
-errored); DEBUG adds call starts and the loop's self-corrections. The library
+errored, a custom `_run` whose returned cost under-reports the provider
+spend the run witnessed in its subtree); DEBUG adds call starts and the
+loop's self-corrections. The library
 never installs handlers or writes files on its own.
 
 Beyond watching: `on_progress` on the `CallContext` streams typed
@@ -1547,8 +1549,10 @@ Before you ship a Commission, confirm:
   for you.)
 - [ ] **Custom `_run`**: check `ctx.cancel.is_cancelled` at breakpoints;
   call children via `dispatch(child, input, ctx)`, never `._run`; sum
-  children's `cost.estimated_usd`; if you call the model yourself,
-  deposit each transcript via `deposit_llm_trace` so records carry it.
+  children's `cost.estimated_usd` (the framework logs a WARNING when a
+  returned envelope's cost falls short of the provider spend it witnessed
+  in that call's subtree); if you call the model yourself, deposit each
+  transcript via `deposit_llm_trace` so records carry it.
 - [ ] **Compose through constructors**: inject sub-Commissions and the model
   at construction; never reach into another Commission's internals.
 - [ ] **State stays outside**: no memory held inside the Commission between

@@ -69,6 +69,11 @@ from vibrantine.contract import (
 # and persistence trouble at WARNING. No handlers are installed here, ever.
 logger = logging.getLogger(__name__)
 
+# The cost-honesty check's slack: absorbs float noise between the door's
+# per-call pricing and an author's rollup arithmetic (one hundredth of a
+# cent); anything past it is a real under-report, not rounding.
+_COST_HONESTY_EPSILON_USD = 0.0001
+
 _current_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "_vibrantine_current_run_id",
     default=None,
@@ -172,10 +177,12 @@ async def dispatch[InputT, OutputT](
         trace_token = _trace_box.set(box)
         token = _current_run_id.set(my_run_id)
         logger.debug("%s started run_id=%s parent=%s", commission.name, my_run_id, parent)
+        author_reported = False
         try:
             # Dispatch is the hook's one sanctioned caller; the protected
             # access is the design, not a shortcut.
             result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
+            author_reported = True
         except RunHaltedError as exc:
             # A custom _run let the provider door's refusal bubble instead of
             # catching it. Not a contract breach: translate it to the same
@@ -209,6 +216,30 @@ async def dispatch[InputT, OutputT](
         # A custom _run may run several LLM loops in sequence; the raw-JSON
         # v1 trace is their message histories concatenated in run order.
         llm_trace = [message for deposit in box for message in deposit] or None
+
+        # Cost honesty (ruled 2026-07-13): the envelope's cost is the number
+        # the rollup invariant leans on, and on the custom path summing
+        # children is the author's job, unenforceable at return time. This
+        # is the observation that job was skipped: the reported cost is
+        # compared against the provider spend the run witnessed inside this
+        # node's own subtree, keyed through the register's edges rather than
+        # a spend delta so parallel siblings never witness each other. Log
+        # only, nothing branches; over-reporting stays legal (an author may
+        # add costs the door never saw); envelopes the framework's backstops
+        # built are exempt, their cost being a documented best-effort floor.
+        if author_reported:
+            witnessed = gatekeeper.subtree_spend_usd(my_run_id)
+            if result.cost.estimated_usd < witnessed - _COST_HONESTY_EPSILON_USD:
+                logger.warning(
+                    "%s reported cost $%.6f but the run witnessed $%.6f of "
+                    "settled provider spend in its subtree; the envelope "
+                    "under-reports. A custom _run must sum children's "
+                    "cost.estimated_usd into its own. run_id=%s",
+                    commission.name,
+                    result.cost.estimated_usd,
+                    witnessed,
+                    my_run_id,
+                )
 
     # Stamp before the overflow policy runs, so a truncate_with_reference
     # detail can name the run_id the full output is persisted under.

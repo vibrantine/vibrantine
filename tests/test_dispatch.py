@@ -14,6 +14,7 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar, cast
 
 import pytest
@@ -807,3 +808,214 @@ async def test_nested_traces_stay_with_their_own_records(
     assert len(parent_record.llm_trace) == 5
     assert parent_record.llm_trace[1]["content"] == "parent-q"
     assert parent_record.llm_trace[3]["role"] == "tool"
+
+
+# --- cost-honesty tests -----------------------------------------------------
+# The rollup invariant ("children's dollars roll up structurally") is
+# enforced code on the basic path and author discipline on the custom path.
+# Dispatch observes the discipline: it compares the envelope's reported cost
+# against the provider spend the run witnessed in the node's own subtree and
+# warns on a material under-report. Log only; nothing branches.
+
+# A single scripted turn at these counts prices to $0.20 at the fixture
+# rates, far above the check's float-noise epsilon.
+_SPENDY_IN_TOKENS = 100_000
+_SPENDY_OUT_TOKENS = 50_000
+
+
+class _ForgetfulParent(Commission[_Input, _Output]):
+    """Dispatches an LLM child and reports $0: skips the rollup discipline."""
+
+    name: ClassVar[str] = "forgetful_parent"
+    description: ClassVar[str] = "custom parent that forgets to sum child cost"
+    input_type: ClassVar[type[BaseModel]] = _Input
+    output_type: ClassVar[type[BaseModel]] = _Output
+
+    def __init__(self, child: Commission[_Input, _Output]) -> None:
+        super().__init__()
+        self._child = child
+
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+        await dispatch(self._child, input, ctx)
+        return _success_result("forgot-the-cost")  # cost stays $0.0
+
+
+class _SummingParent(Commission[_Input, _Output]):
+    """Dispatches children and sums their envelope costs: the discipline kept.
+
+    `extra_usd` models a cost the door never saw (a priced external API);
+    over-reporting is legal and must stay silent.
+    """
+
+    name: ClassVar[str] = "summing_parent"
+    description: ClassVar[str] = "custom parent that sums child cost"
+    input_type: ClassVar[type[BaseModel]] = _Input
+    output_type: ClassVar[type[BaseModel]] = _Output
+
+    def __init__(
+        self,
+        *children: Commission[_Input, _Output],
+        extra_usd: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self._children = children
+        self._extra_usd = extra_usd
+
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+        results = await asyncio.gather(*[dispatch(child, input, ctx) for child in self._children])
+        total = sum(r.cost.estimated_usd for r in results) + self._extra_usd
+        return CommissionResult[_Output](
+            status="success",
+            output=_Output(a="summed"),
+            provenance=Provenance(
+                source="summing_parent", fetched_at=datetime.now(UTC), confidence="grounded"
+            ),
+            cost=CostMetrics(estimated_usd=total),
+        )
+
+
+class _SpendThenRaiseParent(Commission[_Input, _Output]):
+    """Dispatches a spending child, then raises: exercises the backstop."""
+
+    name: ClassVar[str] = "spend_then_raise"
+    description: ClassVar[str] = "custom parent that raises after child spend"
+    input_type: ClassVar[type[BaseModel]] = _Input
+    output_type: ClassVar[type[BaseModel]] = _Output
+
+    def __init__(self, child: Commission[_Input, _Output]) -> None:
+        super().__init__()
+        self._child = child
+
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+        await dispatch(self._child, input, ctx)
+        raise RuntimeError("boom after spending")
+
+
+def _spendy_conclude() -> SimpleNamespace:
+    return llm_response(
+        tool_calls=[("c1", "conclude", {"a": "done"})],
+        in_tokens=_SPENDY_IN_TOKENS,
+        out_tokens=_SPENDY_OUT_TOKENS,
+    )
+
+
+async def test_under_reported_cost_logs_a_warning(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    fake = ScriptedLLM([_spendy_conclude()])
+    parent = _ForgetfulParent(_LoopProbe())
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
+            result = await dispatch(parent, _Input(q="hi"), ctx)
+
+    # Observation only: the result flows through untouched.
+    assert result.status == "success"
+    assert result.cost.estimated_usd == 0.0
+    assert "forgetful_parent" in caplog.text
+    assert "under-reports" in caplog.text
+
+
+async def test_summed_cost_logs_no_warning(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    fake = ScriptedLLM([_spendy_conclude()])
+    parent = _SummingParent(_LoopProbe())
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
+            result = await dispatch(parent, _Input(q="hi"), ctx)
+
+    assert result.status == "success"
+    assert result.cost.estimated_usd > 0.0
+    assert "under-reports" not in caplog.text
+
+
+async def test_over_reported_cost_is_legal(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    # An author may add costs the provider door never saw (a priced external
+    # API); only under-reporting is a discipline breach.
+    fake = ScriptedLLM([_spendy_conclude()])
+    parent = _SummingParent(_LoopProbe(), extra_usd=5.0)
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
+            result = await dispatch(parent, _Input(q="hi"), ctx)
+
+    assert result.status == "success"
+    assert "under-reports" not in caplog.text
+
+
+async def test_basic_loop_rollup_passes_the_check(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    # The basic path sums children automatically; a nested loop tree must
+    # sail through the check silently, or every well-formed Commission would
+    # cry wolf.
+    child_fake = ScriptedLLM([_spendy_conclude()])
+    child = _LoopProbe(model="fixture/child")
+    parent_fake = ScriptedLLM(
+        [
+            llm_response(
+                tool_calls=[("p1", "loop_probe", {"q": "child-q"})],
+                in_tokens=_SPENDY_IN_TOKENS,
+                out_tokens=_SPENDY_OUT_TOKENS,
+            ),
+            llm_response(
+                tool_calls=[("p2", "conclude", {"a": "parent-done"})],
+                in_tokens=_SPENDY_IN_TOKENS,
+                out_tokens=_SPENDY_OUT_TOKENS,
+            ),
+        ]
+    )
+    parent = _LoopProbe(model="fixture/parent", toolbox=(child,))
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(
+            models=[
+                scripted_model(parent_fake, id="fixture/parent"),
+                scripted_model(child_fake, id="fixture/child"),
+            ],
+            default_model="fixture/parent",
+        ) as ctx:
+            result = await dispatch(parent, _Input(q="parent-q"), ctx)
+
+    assert result.status == "success", result.error
+    assert "under-reports" not in caplog.text
+
+
+async def test_backstop_envelope_is_exempt_from_the_check(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    # A raising _run gets a framework-built envelope whose cost is a
+    # documented best-effort floor (the node's own door calls; children's
+    # spend excluded). Warning about a shortfall the framework itself chose
+    # would blame the author for a ruled behavior.
+    fake = ScriptedLLM([_spendy_conclude()])
+    parent = _SpendThenRaiseParent(_LoopProbe())
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
+            result = await dispatch(parent, _Input(q="hi"), ctx)
+
+    assert result.status == "failure"
+    assert result.error is not None and result.error.kind == "internal"
+    assert "under-reports" not in caplog.text
+
+
+async def test_gathered_siblings_do_not_witness_each_other(
+    caplog: pytest.LogCaptureFixture, open_test_run: OpenTestRun
+) -> None:
+    # The witness is keyed through the register's subtree edges, not a
+    # spend-before/spend-after delta: two honest siblings spending in
+    # parallel must not see each other's dollars and warn falsely.
+    fake = ScriptedLLM([_spendy_conclude(), _spendy_conclude()])
+    parent = _SummingParent(_LoopProbe(), _LoopProbe())
+
+    with caplog.at_level(logging.WARNING, logger="vibrantine"):
+        async with open_test_run(models=[scripted_model(fake)]) as ctx:
+            result = await dispatch(parent, _Input(q="hi"), ctx)
+
+    assert result.status == "success"
+    assert "under-reports" not in caplog.text
