@@ -9,7 +9,7 @@ heterogeneous-output flattening are all exercised end-to-end.
 
 from types import SimpleNamespace
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.examples.email_handler import (
     EmailHandlerCommission,
     EmailHandlerInput,
@@ -43,7 +43,7 @@ async def test_email_handler_non_urgent_concludes_directly() -> None:
         ]
     )
 
-    result = await run_one(commission, _input(), models=[scripted_model(fake)])
+    result = await run_commission(commission, _input(), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -77,7 +77,7 @@ async def test_email_handler_draft_route_rolls_up_child_cost() -> None:
         ],
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         _input(),
         models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
@@ -117,7 +117,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
         ]
     )
 
-    result = await run_one(commission, _input(), models=[scripted_model(fake)])
+    result = await run_commission(commission, _input(), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     assert result.output is not None
@@ -130,7 +130,7 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
 async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await run_one(
+    result = await run_commission(
         commission, _input(), models=[scripted_model(fake)], cancel=AlwaysCancelled()
     )
 

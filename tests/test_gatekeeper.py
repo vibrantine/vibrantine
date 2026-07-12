@@ -1,7 +1,7 @@
 """Tests for the run Gatekeeper: fuses, room, stop signal, refusals, log.
 
 The Gatekeeper is internal (no public name); these tests exercise it the
-way a caller experiences it, through `run_one` kwargs and the root result,
+way a caller experiences it, through `run_commission` kwargs and the root result,
 plus the conftest `open_test_run` harness where the in-memory log itself is
 inspected. Scripted catalog entries keep every run offline: the framework's
 behavior around the provider is what is under test, never the provider.
@@ -28,7 +28,7 @@ from vibrantine.contract import (
 )
 from vibrantine.dispatch import dispatch
 from vibrantine.models import Model
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.testing import (
     FIXTURE_MODEL,
     AlwaysCancelled,
@@ -166,8 +166,8 @@ def _paced_entry(
 # --- Hello world and configuration ----------------------------------------
 
 
-async def test_defaults_run_one_line_and_succeed() -> None:
-    result = await run_one(_Probe(), _Q(question="?"), models=[_scripted([_conclude("42")])])
+async def test_defaults_run_in_one_line_and_succeed() -> None:
+    result = await run_commission(_Probe(), _Q(question="?"), models=[_scripted([_conclude("42")])])
     assert result.status == "success"
     assert result.error is None
     assert result.output is not None and result.output.answer == "42"
@@ -216,7 +216,7 @@ async def test_bad_run_configuration_is_a_validation_failure() -> None:
         ({"default_model": "fixture/absent"}, "not in models="),
         ({"models": [FIXTURE_MODEL, Model(id="other/model")]}, "default_model"),
     ):
-        result = await run_one(probe, _Q(question="?"), **cast(dict[str, Any], kwargs))
+        result = await run_commission(probe, _Q(question="?"), **cast(dict[str, Any], kwargs))
         assert result.status == "failure"
         assert result.error is not None
         assert result.error.kind == "validation"
@@ -228,7 +228,7 @@ async def test_unknown_model_name_fails_fast_and_loud() -> None:
     # validation failure naming the id and the catalog, before anything is
     # sent or spent. The silent bare-OpenRouter fallback is gone.
     probe = _Probe(model="fixture/not-registered")
-    result = await run_one(probe, _Q(question="?"), models=[_scripted([_conclude()])])
+    result = await run_commission(probe, _Q(question="?"), models=[_scripted([_conclude()])])
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "validation"
@@ -242,7 +242,7 @@ async def test_profile_params_ride_every_provider_call() -> None:
     # alongside (never instead of) the structural keys the loop owns.
     scripted = ScriptedLLM([_conclude()])
     entry = scripted_model(scripted, params={"temperature": 0.2, "top_p": 0.9})
-    result = await run_one(_Probe(), _Q(question="?"), models=[entry])
+    result = await run_commission(_Probe(), _Q(question="?"), models=[entry])
     assert result.status == "success"
     sent = scripted.calls[0]
     assert sent["temperature"] == 0.2
@@ -258,7 +258,9 @@ async def test_two_profiles_of_one_wire_id_are_distinct_entries() -> None:
     cool = scripted_model(cool_fake, name="fast-cool", params={"temperature": 0.1})
     hot = scripted_model(hot_fake, name="fast-hot", params={"temperature": 1.0})
     probe = _Probe(model="fast-hot")
-    result = await run_one(probe, _Q(question="?"), models=[cool, hot], default_model="fast-cool")
+    result = await run_commission(
+        probe, _Q(question="?"), models=[cool, hot], default_model="fast-cool"
+    )
     assert result.status == "success"
     assert cool_fake.calls == []
     assert hot_fake.calls[0]["temperature"] == 1.0
@@ -283,7 +285,7 @@ async def test_call_rows_carry_the_profile_name_beside_the_wire_id(
 async def test_caller_cancellation_is_not_relabelled_run_halted() -> None:
     # The caller's token and the breaker share one signal, but a pure caller
     # cancellation is not a fuse trip: no rewrite, the ordinary kind stands.
-    result = await run_one(_Probe(), _Q(question="?"), cancel=AlwaysCancelled())
+    result = await run_commission(_Probe(), _Q(question="?"), cancel=AlwaysCancelled())
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "cancelled"
@@ -299,7 +301,7 @@ async def test_llm_call_fuse_trips_and_root_speaks_run_halted() -> None:
     # has no other context.
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(probe, _Q(question="?"), models=[script], max_llm_calls=1)
+    result = await run_commission(probe, _Q(question="?"), models=[script], max_llm_calls=1)
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -318,7 +320,7 @@ async def test_spend_fuse_trips_and_reports_true_total_spend() -> None:
     # One turn costing $0.0002 against a $0.0001 budget: the node's own
     # allocation check fails it, the fuse trips at settle, and the root is
     # rewritten to run_halted with the observed total in the cost field.
-    result = await run_one(
+    result = await run_commission(
         _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], budget_usd=0.0001
     )
     assert result.status == "failure"
@@ -338,7 +340,7 @@ async def test_time_fuse_trips_at_the_dispatch_seam() -> None:
         [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
         delay=0.2,
     )
-    result = await run_one(probe, _Q(question="?"), models=[entry], time_limit_seconds=0.05)
+    result = await run_commission(probe, _Q(question="?"), models=[entry], time_limit_seconds=0.05)
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
@@ -350,7 +352,7 @@ async def test_time_fuse_trips_at_the_dispatch_seam() -> None:
 async def test_exactly_n_calls_do_not_trip_the_count_fuse() -> None:
     # The count check reads "this call would be call N+1": a run that makes
     # exactly N calls and concludes has not tripped anything.
-    result = await run_one(
+    result = await run_commission(
         _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], max_llm_calls=1
     )
     assert result.status == "success"
@@ -359,7 +361,7 @@ async def test_exactly_n_calls_do_not_trip_the_count_fuse() -> None:
 async def test_spend_exactly_at_the_limit_does_not_trip() -> None:
     # Spending exactly the budget is within budget: the fuse is strictly
     # past the limit, the same reading as the node-level checks.
-    result = await run_one(
+    result = await run_commission(
         _Probe(),
         _Q(question="?"),
         models=[_scripted([_conclude()])],
@@ -379,7 +381,7 @@ async def test_zero_budget_runs_a_free_model() -> None:
         input_usd_per_million=0.0,
         output_usd_per_million=0.0,
     )
-    result = await run_one(_Probe(), _Q(question="?"), models=[free], budget_usd=0.0)
+    result = await run_commission(_Probe(), _Q(question="?"), models=[free], budget_usd=0.0)
     assert result.status == "success"
     assert result.output is not None and result.output.answer == "gratis"
     assert result.cost.estimated_usd == 0.0
@@ -389,7 +391,7 @@ async def test_budgeted_paid_call_without_usage_fails_instead_of_counting_as_fre
     response = _conclude()
     response.usage = None
 
-    result = await run_one(
+    result = await run_commission(
         _Probe(),
         _Q(question="?"),
         models=[_scripted([response])],
@@ -407,7 +409,7 @@ async def test_unbudgeted_paid_call_may_run_without_usage() -> None:
     response = _conclude("unmetered")
     response.usage = None
 
-    result = await run_one(_Probe(), _Q(question="?"), models=[_scripted([response])])
+    result = await run_commission(_Probe(), _Q(question="?"), models=[_scripted([response])])
 
     assert result.status == "success"
     assert result.output is not None and result.output.answer == "unmetered"
@@ -442,7 +444,7 @@ async def test_a_root_that_concludes_despite_a_trip_keeps_its_success() -> None:
             )
 
     coordinator = _MakesDo(_Child(model="fixture/a"), _Child(model="fixture/b"))
-    result = await run_one(
+    result = await run_commission(
         coordinator,
         _Q(question="?"),
         models=[
@@ -493,7 +495,7 @@ async def test_in_flight_calls_settle_and_count_after_a_trip() -> None:
     # The fast call alone passes the limit (the fuse is strictly past, so
     # the limit sits below one call's cost), tripping at its settle while
     # the slow call is still open.
-    result = await run_one(
+    result = await run_commission(
         _FailsAfter(),
         _Q(question="?"),
         models=[
@@ -537,7 +539,7 @@ async def test_an_unrelated_root_failure_is_not_masked_by_a_trip() -> None:
                 cost=CostMetrics(estimated_usd=first.cost.estimated_usd),
             )
 
-    result = await run_one(
+    result = await run_commission(
         _OwnBug(),
         _Q(question="?"),
         models=[_scripted([_conclude(), _conclude()])],
@@ -575,7 +577,7 @@ async def test_a_roots_own_cancellation_is_not_claimed_by_a_coincidental_trip() 
                 cost=CostMetrics(estimated_usd=first.cost.estimated_usd),
             )
 
-    result = await run_one(
+    result = await run_commission(
         _OwnCancel(),
         _Q(question="?"),
         models=[_scripted([_conclude(), _conclude()])],
@@ -606,7 +608,7 @@ async def test_a_propagated_refusal_keeps_its_stamp_and_is_claimed() -> None:
             assert first.status == "success" and second.status == "failure"
             return second
 
-    result = await run_one(
+    result = await run_commission(
         _Propagates(),
         _Q(question="?"),
         models=[_scripted([_conclude(), _conclude()])],
@@ -620,7 +622,7 @@ async def test_a_propagated_refusal_keeps_its_stamp_and_is_claimed() -> None:
 
 
 async def test_a_grant_stripped_subtree_is_still_dollar_accounted() -> None:
-    # run_one(budget_usd=...) arms the spend fuse; a coordinator may legally
+    # run_commission(budget_usd=...) arms the spend fuse; a coordinator may legally
     # strip a child's grant via replace(). The child's paid call that omits
     # usage must still fail structurally (the fuse cannot account what the
     # door cannot meter), not settle at a silent $0.
@@ -637,7 +639,7 @@ async def test_a_grant_stripped_subtree_is_still_dollar_accounted() -> None:
 
     response = _conclude()
     response.usage = None
-    result = await run_one(
+    result = await run_commission(
         _Strips(),
         _Q(question="?"),
         models=[_scripted([response])],
@@ -661,7 +663,7 @@ async def test_the_persisted_root_record_speaks_run_halted_too(tmp_path: Any) ->
     backend = SqliteBackend(tmp_path / "runs.db")
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(
+    result = await run_commission(
         probe,
         _Q(question="?"),
         models=[script],
@@ -692,7 +694,7 @@ async def test_run_halted_does_not_claim_a_call_log_that_failed_to_persist() -> 
 
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(
+    result = await run_commission(
         probe,
         _Q(question="?"),
         models=[script],
@@ -779,7 +781,7 @@ async def test_room_bounds_provider_calls_across_the_tree() -> None:
                 _A(answer="fanned"), provenance=_prov("fan"), cost=CostMetrics(estimated_usd=0.0)
             )
 
-    result = await run_one(
+    result = await run_commission(
         _Fan(),
         _Q(question="?"),
         models=[
@@ -800,7 +802,7 @@ async def test_room_of_one_with_a_nested_llm_tree_completes() -> None:
     child = _Child(model="fixture/child")
     parent = _Probe(toolbox=(child,))
     result = await asyncio.wait_for(
-        run_one(
+        run_commission(
             parent,
             _Q(question="?"),
             models=[
@@ -826,7 +828,9 @@ async def test_tool_ceiling_clamps_the_llm_menu() -> None:
     # is never gated.
     fake = ScriptedLLM([_conclude()])
     probe = _Probe(toolbox=(_EchoTool(),))
-    result = await run_one(probe, _Q(question="?"), models=[scripted_model(fake)], tool_ceiling=[])
+    result = await run_commission(
+        probe, _Q(question="?"), models=[scripted_model(fake)], tool_ceiling=[]
+    )
     assert result.status == "success"
     menu = [t["function"]["name"] for t in fake.calls[0]["tools"]]
     assert menu == ["conclude"]
@@ -855,7 +859,7 @@ async def test_a_widened_grant_stays_clamped_by_the_ceiling() -> None:
                 cost=CostMetrics(estimated_usd=child_result.cost.estimated_usd),
             )
 
-    result = await run_one(
+    result = await run_commission(
         _Widener(),
         _Q(question="?"),
         models=[scripted_model(fake)],
@@ -870,7 +874,7 @@ async def test_a_widened_grant_stays_clamped_by_the_ceiling() -> None:
 async def test_tool_ceiling_permits_exactly_its_names() -> None:
     fake = ScriptedLLM([_conclude()])
     probe = _Probe(toolbox=(_EchoTool(),))
-    result = await run_one(
+    result = await run_commission(
         probe, _Q(question="?"), models=[scripted_model(fake)], tool_ceiling=["echo"]
     )
     assert result.status == "success"
@@ -882,21 +886,21 @@ async def test_tool_ceiling_permits_exactly_its_names() -> None:
 
 
 async def test_dispatch_outside_a_run_refuses() -> None:
-    with pytest.raises(RuntimeError, match="outside a run; use run_one"):
+    with pytest.raises(RuntimeError, match="outside a run; use run_commission"):
         await dispatch(_EchoTool(), _EchoIn(text="hi"), CallContext())
 
 
-async def test_nested_run_one_refuses_and_teaches_dispatch() -> None:
+async def test_nested_run_commission_refuses_and_teaches_dispatch() -> None:
     class _Nester(Commission[_Q, _A]):
         name: ClassVar[str] = "nester"
-        description: ClassVar[str] = "Calls run_one from inside a run."
+        description: ClassVar[str] = "Calls run_commission from inside a run."
         input_type: ClassVar[type] = _Q
         output_type: ClassVar[type] = _A
 
         async def _run(self, input: _Q, ctx: CallContext) -> CommissionResult[_A]:
-            return await run_one(_EchoTool(), _EchoIn(text="hi"))  # type: ignore[return-value]
+            return await run_commission(_EchoTool(), _EchoIn(text="hi"))  # type: ignore[return-value]
 
-    result = await run_one(_Nester(), _Q(question="?"))
+    result = await run_commission(_Nester(), _Q(question="?"))
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "internal"
@@ -919,7 +923,7 @@ async def test_dispatch_refuses_a_context_from_outside_the_run() -> None:
                 _A(answer="never"), provenance=_prov("smuggler"), cost=CostMetrics(estimated_usd=0)
             )
 
-    result = await run_one(_Smuggler(), _Q(question="?"))
+    result = await run_commission(_Smuggler(), _Q(question="?"))
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "internal"
@@ -982,7 +986,7 @@ async def test_a_swapped_cancel_token_cannot_sever_the_breaker() -> None:
                 cost=CostMetrics(estimated_usd=0.0),
             )
 
-    result = await run_one(
+    result = await run_commission(
         _Severer(),
         _Q(question="?"),
         models=[_scripted([_conclude(), _conclude()])],
@@ -1014,7 +1018,7 @@ async def test_a_scoped_cancel_narrows_one_branch_only() -> None:
                 _A(answer="scoped"), provenance=_prov("scoper"), cost=CostMetrics(estimated_usd=0)
             )
 
-    result = await run_one(_Scoper(), _Q(question="?"), models=[_scripted([_conclude()])])
+    result = await run_commission(_Scoper(), _Q(question="?"), models=[_scripted([_conclude()])])
     assert result.status == "success"
 
 
@@ -1090,7 +1094,7 @@ async def test_on_llm_call_receives_every_row_including_refusals() -> None:
     rows: list[dict[str, Any]] = []
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(
+    result = await run_commission(
         probe, _Q(question="?"), models=[script], max_llm_calls=1, on_llm_call=rows.append
     )
     assert result.status == "failure"
@@ -1106,7 +1110,7 @@ async def test_a_raising_on_llm_call_never_breaks_the_run() -> None:
     def boom(row: dict[str, Any]) -> None:
         raise RuntimeError("observer bug")
 
-    result = await run_one(
+    result = await run_commission(
         _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], on_llm_call=boom
     )
     assert result.status == "success"
@@ -1121,7 +1125,7 @@ async def test_on_llm_call_cannot_mutate_the_persisted_row(tmp_path: Any) -> Non
         row.clear()
 
     backend = SqliteBackend(tmp_path / "runs.db")
-    result = await run_one(
+    result = await run_commission(
         _Probe(),
         _Q(question="?"),
         models=[_scripted([_conclude()])],
@@ -1144,7 +1148,7 @@ async def test_calls_land_beside_records_in_sqlite(tmp_path: Any) -> None:
     backend = SqliteBackend(tmp_path / "runs.db")
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(
+    result = await run_commission(
         probe, _Q(question="?"), models=[script], backend=backend, record="always"
     )
     assert result.status == "success"
@@ -1178,7 +1182,7 @@ async def test_a_backend_without_store_calls_is_skipped_gracefully(tmp_path: Any
     # implementation) keeps working.
     from vibrantine.persistence import FilesystemBackend
 
-    result = await run_one(
+    result = await run_commission(
         _Probe(),
         _Q(question="?"),
         models=[_scripted([_conclude()])],
@@ -1250,7 +1254,7 @@ async def test_refused_dispatch_logs_a_row_and_the_root_speaks_run_halted() -> N
             assert refused.cost.estimated_usd == 0.0  # it never ran
             return refused
 
-    result = await run_one(
+    result = await run_commission(
         _Coordinator(),
         _Q(question="?"),
         models=[_scripted([_conclude(), _conclude()])],
@@ -1268,7 +1272,7 @@ async def test_a_raising_on_dispatch_never_breaks_the_run() -> None:
     def boom(row: dict[str, Any]) -> None:
         raise RuntimeError("observer bug")
 
-    result = await run_one(
+    result = await run_commission(
         _Probe(), _Q(question="?"), models=[_scripted([_conclude()])], on_dispatch=boom
     )
     assert result.status == "success"
@@ -1282,7 +1286,7 @@ async def test_dispatches_land_beside_records_in_sqlite(tmp_path: Any) -> None:
     backend = SqliteBackend(tmp_path / "runs.db")
     probe = _Probe(toolbox=(_EchoTool(),))
     script = _scripted([llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()])
-    result = await run_one(
+    result = await run_commission(
         probe, _Q(question="?"), models=[script], backend=backend, record="always"
     )
     assert result.status == "success"

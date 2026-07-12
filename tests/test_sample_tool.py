@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.tools.sample import (
     LINE_CAP_CHARS,
     SampleInput,
@@ -28,7 +28,7 @@ async def test_sample_small_file_returns_full_head_and_tail(tmp_path: Path) -> N
     path = _make(tmp_path, "small.txt", "one\ntwo\nthree\n")
     before = datetime.now(UTC)
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=path),
     )
@@ -50,7 +50,7 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
     content = "".join(f"line{i}\n" for i in range(100))
     path = _make(tmp_path, "many.txt", content)
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=path, head_lines=3, tail_lines=2),
     )
@@ -65,7 +65,7 @@ async def test_sample_large_file_truncates_to_head_and_tail(tmp_path: Path) -> N
 async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
     path = _make(tmp_path, "doc.txt", "a\nb\nc\nd\n")
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=path, head_lines=0, tail_lines=2),
     )
@@ -79,7 +79,7 @@ async def test_sample_head_zero_returns_empty_head(tmp_path: Path) -> None:
 async def test_sample_empty_file(tmp_path: Path) -> None:
     path = _make(tmp_path, "empty.txt", "")
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=path),
     )
@@ -93,7 +93,7 @@ async def test_sample_empty_file(tmp_path: Path) -> None:
 
 
 async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=Path("relative.txt")),
     )
@@ -106,7 +106,7 @@ async def test_sample_relative_path_returns_validation(tmp_path: Path) -> None:
 async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "missing.txt"
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=missing),
     )
@@ -118,7 +118,7 @@ async def test_sample_nonexistent_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_sample_directory_returns_validation(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=tmp_path),
     )
@@ -133,7 +133,7 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
     binary = tmp_path / "binary.bin"
     binary.write_bytes(b"\xff\xfe\x00\x01")
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=binary),
     )
@@ -147,7 +147,7 @@ async def test_sample_binary_returns_internal(tmp_path: Path) -> None:
 async def test_sample_cancelled_returns_cancelled(tmp_path: Path) -> None:
     path = _make(tmp_path, "any.txt", "x")
 
-    result = await run_one(
+    result = await run_commission(
         SampleTool(),
         SampleInput(path=path),
         cancel=_AlwaysCancelled(),
@@ -167,7 +167,7 @@ async def test_sample_long_line_is_capped_with_marker(tmp_path: Path) -> None:
     long_line = "x" * (LINE_CAP_CHARS * 3)
     path = _make(tmp_path, "minified.js", f"{long_line}\nshort\n")
 
-    result = await run_one(SampleTool(), SampleInput(path=path))
+    result = await run_commission(SampleTool(), SampleInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None
@@ -180,7 +180,7 @@ async def test_sample_line_at_exact_cap_is_untouched(tmp_path: Path) -> None:
     exact = "y" * LINE_CAP_CHARS
     path = _make(tmp_path, "exact.txt", f"{exact}\n")
 
-    result = await run_one(SampleTool(), SampleInput(path=path))
+    result = await run_commission(SampleTool(), SampleInput(path=path))
 
     assert result.status == "success"
     assert result.output is not None

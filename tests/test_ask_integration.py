@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from vibrantine.examples.ask import AskCommission, AskInput
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 
 pytestmark = [
     pytest.mark.integration,
@@ -35,7 +35,7 @@ async def test_ask_against_real_openrouter_answers_from_file(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    result = await run_one(
+    result = await run_commission(
         AskCommission(),
         AskInput(question="What is the capital of France?", file_path=file),
         budget_usd=0.10,

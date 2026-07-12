@@ -4,7 +4,7 @@ This is the demo's application layer, and deliberately so: everything the
 library refuses to own (secret wiring, model choice, budgets, conversation
 state, presentation) has to live somewhere, and this file is the worked
 example of where. Every run rides the public contract: construct with
-config, build a typed input, run it through `run_one`, read the result
+config, build a typed input, run it through `run_commission`, read the result
 envelope and the persisted records.
 """
 
@@ -42,7 +42,7 @@ from vibrantine.examples.morning_briefing import MorningBriefingOutput
 from vibrantine.examples.recursive_research import ResearchOutput
 from vibrantine.examples.synthesize import SynthesizeOutput
 from vibrantine.models import DEFAULT_MODEL, Model, ollama
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 
 # Spending policy is the caller's, so it lives here, not on the examples.
 AGENT_BUDGET_USD = 0.20
@@ -57,7 +57,7 @@ class MenuEntry:
     blurb: str
     budget_usd: float
     # Builders take a model *name* (None = the run default); the session's
-    # Model object itself is registered once, in run_one(models=[...]).
+    # Model object itself is registered once, in run_commission(models=[...]).
     build: Callable[[str | None], tuple[Any, BaseModel]]
     present: Callable[[Any], str]
 
@@ -333,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             # record="always" is the whole persistence switch: it rides the
             # context to every node in the tree, including any spawned mid-run.
             result = asyncio.run(
-                run_one(
+                run_commission(
                     commission,
                     demo_input,
                     budget_usd=budget,
@@ -347,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             chat_input = ChatInput(message=line, transcript=list(transcript))
             result = asyncio.run(
-                run_one(
+                run_commission(
                     agent,
                     chat_input,
                     budget_usd=budget_for(AGENT_BUDGET_USD),

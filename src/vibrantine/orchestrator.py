@@ -1,6 +1,6 @@
 """Top-level entry points for invoking a Commission from outside.
 
-`run_one` is the only way into a run, and `dispatch` is the only way around
+`run_commission` is the only way into a run, and `dispatch` is the only way around
 inside one; each refuses the other's job. Every run gets one internal
 control object (the Gatekeeper), created here, carried to every node by
 reference inside the CallContext, consulted by every governed LLM call and
@@ -56,7 +56,7 @@ DEFAULT_MAX_LLM_CALLS = 1_000
 DEFAULT_CONCURRENCY = 16
 
 
-async def run_one[InputT, OutputT](
+async def run_commission[InputT, OutputT](
     commission: Commission[InputT, OutputT],
     input: InputT,
     *,
@@ -83,7 +83,7 @@ async def run_one[InputT, OutputT](
 ) -> CommissionResult[OutputT]:
     """Run one Commission as a complete, governed run.
 
-    Hello world stays one line: `run_one(commission, input)` gets the system
+    Hello world stays one line: `run_commission(commission, input)` gets the system
     default model, the call-count backstop, a room of 16, no budget, no
     deadline. `models=` is the run's catalog: define each model once; every
     Commission references an entry by name or takes the run default (the
@@ -99,14 +99,14 @@ async def run_one[InputT, OutputT](
     CommissionResult unchanged otherwise: errors surface as ErrorState in
     the result, not as raised exceptions.
 
-    Called inside a run, this refuses: a nested run_one would spawn a fresh
+    Called inside a run, this refuses: a nested run_commission would spawn a fresh
     run object and silently escape every fuse. Any Commission that works as
     a principal works as a child through `dispatch`, same run, no special
     design.
     """
     if current_gatekeeper.get() is not None:
         raise RuntimeError(
-            "run_one was called inside a run; a nested run_one would spawn "
+            "run_commission was called inside a run; a nested run_commission would spawn "
             "a fresh run object and silently escape every fuse. You are "
             "inside a run; use dispatch."
         )
@@ -169,7 +169,7 @@ async def run_one[InputT, OutputT](
     return result
 
 
-def invoke_sync[InputT, OutputT](
+def run_commission_sync[InputT, OutputT](
     commission: Commission[InputT, OutputT],
     input: InputT,
     *,
@@ -188,9 +188,9 @@ def invoke_sync[InputT, OutputT](
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> CommissionResult[OutputT]:
-    """Sync wrapper over `run_one`. For scripts, REPL, smoke tests."""
+    """Sync wrapper over `run_commission`. For scripts, REPL, smoke tests."""
     return asyncio.run(
-        run_one(
+        run_commission(
             commission,
             input,
             budget_usd=budget_usd,
@@ -254,7 +254,7 @@ def _config_failure[InputT, OutputT](
             status="failure",
             error=ErrorState(kind="validation", detail=detail, retryable=False),
             provenance=Provenance(
-                source=f"{commission.name}:run_one",
+                source=f"{commission.name}:run_commission",
                 fetched_at=datetime.now(UTC),
                 confidence="grounded",
             ),

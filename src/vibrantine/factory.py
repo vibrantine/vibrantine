@@ -80,7 +80,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     the model through the catalog: `testing.scripted_model`.
 
     Returns an ordinary `Commission[InputT, OutputT]`; run it through
-    `run_one` / `invoke_sync` / `dispatch` like any other.
+    `run_commission` / `run_commission_sync` / `dispatch` like any other.
     """
     commission_name = name
     commission_description = description

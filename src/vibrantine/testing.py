@@ -1,6 +1,6 @@
 """Supported test doubles: script the LLM, keep every other part of the run real.
 
-A run's models are defined in its catalog (`run_one(models=[...])`), and the
+A run's models are defined in its catalog (`run_commission(models=[...])`), and the
 catalog vends the provider clients. That makes testing a Commission cheap and
 deterministic: register a `scripted_model(...)` entry whose "provider" is a
 queue of responses you wrote, and the full machinery (dispatch wrapping, the
@@ -13,7 +13,7 @@ This module is supported public surface, the testing half of the run
 catalog's client-vending seam:
 
 - `scripted_model(scripted, ...)`: a catalog entry carrying a scripted fake
-  as its provider. Register it in `run_one(models=[...])`; a single entry is
+  as its provider. Register it in `run_commission(models=[...])`; a single entry is
   the run default, so the Commission under test needs no `model=` at all.
 - `ScriptedLLM(responses)`: the fake provider. Pops one response per LLM
   call, in order, and records every request it received in `calls`.
@@ -28,14 +28,14 @@ catalog's client-vending seam:
 
 The one test worth writing first:
 
-    from vibrantine import run_one
+    from vibrantine import run_commission
     from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
     async def test_concludes() -> None:
         scripted = ScriptedLLM([
             llm_response(tool_calls=[("t1", "conclude", {"answer": "42"})]),
         ])
-        result = await run_one(
+        result = await run_commission(
             MyCommission(),
             MyInput(question="?"),
             models=[scripted_model(scripted)],
@@ -68,7 +68,7 @@ FIXTURE_MODEL = Model(
 class AlwaysCancelled:
     """A CancelToken whose `is_cancelled` is always True.
 
-    Pass as `run_one(..., cancel=AlwaysCancelled())` to prove a Commission
+    Pass as `run_commission(..., cancel=AlwaysCancelled())` to prove a Commission
     checks for cancellation before doing the work.
     """
 
@@ -171,7 +171,7 @@ def scripted_model(
 ) -> Model:
     """A run catalog entry whose provider is a scripted fake: the test seam.
 
-    Register the returned entry in `run_one(models=[...])`; every LLM call a
+    Register the returned entry in `run_commission(models=[...])`; every LLM call a
     Commission naming it makes (a single entry is the run default) is served
     by `scripted`, while dispatch, the Gatekeeper, cost, and budget math run
     for real. Defaults reuse `FIXTURE_MODEL`'s id and pinned pricing so cost

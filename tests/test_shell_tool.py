@@ -8,7 +8,7 @@ interpreter behaves identically on both.
 import sys
 from pathlib import Path
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.tools.shell import (
     ShellInput,
     ShellTool,
@@ -26,7 +26,7 @@ _PYTHON = sys.executable
 
 
 async def test_shell_success_captures_stdout(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "print(\'hello\')"'),
     )
@@ -42,7 +42,7 @@ async def test_shell_success_captures_stdout(tmp_path: Path) -> None:
 
 async def test_shell_non_zero_exit_returned_as_success(tmp_path: Path) -> None:
     # A non-zero exit is data the caller interprets, not a tool-level failure.
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "import sys; sys.exit(7)"'),
     )
@@ -54,7 +54,7 @@ async def test_shell_non_zero_exit_returned_as_success(tmp_path: Path) -> None:
 
 async def test_shell_stderr_separated_from_stdout(tmp_path: Path) -> None:
     code = "import sys; print('out'); print('err', file=sys.stderr)"
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "{code}"'),
     )
@@ -69,7 +69,7 @@ async def test_shell_stderr_separated_from_stdout(tmp_path: Path) -> None:
 
 async def test_shell_timeout_kills_process_and_returns_timeout(tmp_path: Path) -> None:
     code = "import time; time.sleep(5)"
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(
             command=f'"{_PYTHON}" -c "{code}"',
@@ -84,7 +84,7 @@ async def test_shell_timeout_kills_process_and_returns_timeout(tmp_path: Path) -
 
 
 async def test_shell_cancelled_before_launch_returns_cancelled(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "print(\'should not run\')"'),
         cancel=_AlwaysCancelled(),
@@ -101,7 +101,7 @@ async def test_shell_cwd_honored(tmp_path: Path) -> None:
     (tmp_path / "marker.txt").write_text("here", encoding="utf-8")
     code = "import os; print(os.path.exists('marker.txt'))"
 
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "{code}"', cwd=tmp_path),
     )
@@ -112,7 +112,7 @@ async def test_shell_cwd_honored(tmp_path: Path) -> None:
 
 
 async def test_shell_relative_cwd_returns_validation(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command="echo hi", cwd=Path("relative")),
     )
@@ -125,7 +125,7 @@ async def test_shell_relative_cwd_returns_validation(tmp_path: Path) -> None:
 async def test_shell_nonexistent_cwd_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-dir"
 
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command="echo hi", cwd=missing),
     )
@@ -137,7 +137,7 @@ async def test_shell_nonexistent_cwd_returns_validation(tmp_path: Path) -> None:
 
 async def test_shell_caps_stdout_and_flags_truncation(tmp_path: Path) -> None:
     # Emit 500 chars on stdout; cap at 100 → head kept, truncated, total reported.
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(
             command=f"\"{_PYTHON}\" -c \"print('x' * 500, end='')\"",
@@ -156,7 +156,7 @@ async def test_shell_caps_stdout_and_flags_truncation(tmp_path: Path) -> None:
 
 
 async def test_shell_small_output_not_truncated(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f"\"{_PYTHON}\" -c \"print('hi', end='')\""),
     )
@@ -192,7 +192,7 @@ async def test_shell_utf8_output_round_trips(tmp_path: Path) -> None:
     # End to end: genuine UTF-8 bytes from a real subprocess survive intact
     # on every platform (the strict-decode path, which is the modern norm).
     code = "import sys; sys.stdout.buffer.write('café'.encode('utf-8'))"
-    result = await run_one(
+    result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "{code}"'),
     )

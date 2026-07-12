@@ -1,6 +1,6 @@
 """The run Gatekeeper: the internal control object at the provider seam.
 
-One Gatekeeper per run, created by `run_one`, carried to every node by
+One Gatekeeper per run, created by `run_commission`, carried to every node by
 reference inside `CallContext`, consulted by every governed LLM call and by
 `dispatch`. It holds only what is identical for every node: the resource
 fuses (LLM-call count, time, spend), the concurrency room, the combined
@@ -20,7 +20,7 @@ seam"):
   otherwise.
 
 Deliberately no public name. The caller configures the object entirely
-through `run_one` keyword arguments and never holds it: a user who could
+through `run_commission` keyword arguments and never holds it: a user who could
 construct one could share counters across unrelated runs or hand a subtree
 a fresh one, the fuse escape the no-swap rule exists to close.
 
@@ -54,10 +54,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# The run in progress for the current task tree. Set by `run_one` around the
+# The run in progress for the current task tree. Set by `run_commission` around the
 # root dispatch, reset in its finally; ContextVars propagate through await
 # and asyncio.gather, so every node in the tree sees the same run. `dispatch`
-# reads it for the outside-a-run and swapped-object refusals; `run_one` reads
+# reads it for the outside-a-run and swapped-object refusals; `run_commission` reads
 # it for the nested-entry refusal.
 current_gatekeeper: contextvars.ContextVar["Gatekeeper | None"] = contextvars.ContextVar(
     "_vibrantine_current_gatekeeper",
@@ -80,7 +80,7 @@ class RunHaltedError(Exception):
 class RunConfigError(ValueError):
     """A run configuration the Gatekeeper cannot honor, named.
 
-    Internal: raised by `build_catalog`, converted by `run_one` into a
+    Internal: raised by `build_catalog`, converted by `run_commission` into a
     validation failure result (errors are values at that boundary too).
     """
 
@@ -209,7 +209,7 @@ class _ProviderTicket:
 class Gatekeeper:
     """Per-run shared state: fuses, room, stop signal, provider-call log.
 
-    Constructed only by `run_one`; every governed LLM call passes through
+    Constructed only by `run_commission`; every governed LLM call passes through
     `provider_call`, and `dispatch` checks the time fuse as the second seam.
     """
 
@@ -249,8 +249,8 @@ class Gatekeeper:
         )
         # The room: N chairs shared by the whole tree, held around the
         # provider call only, so nested fan-out cannot multiply past N.
-        # Created here rather than lazily: run_one constructs the Gatekeeper
-        # inside a running event loop (invoke_sync wraps run_one in
+        # Created here rather than lazily: run_commission constructs the Gatekeeper
+        # inside a running event loop (run_commission_sync wraps run_commission in
         # asyncio.run), the object lives exactly one run, and it is not
         # user-constructible, so cross-loop reuse is impossible by
         # construction.
@@ -277,7 +277,7 @@ class Gatekeeper:
         # run_id. Rows are appended by `dispatch`, the one seam every
         # sanctioned call passes.
         self.dispatches: list[dict[str, Any]] = []
-        # The caller's live view of each log (run_one's on_llm_call /
+        # The caller's live view of each log (run_commission's on_llm_call /
         # on_dispatch kwargs), invoked once per row. Observational only, so
         # a raising callback is swallowed loudly rather than allowed to tear
         # the settle path.
@@ -348,7 +348,7 @@ class Gatekeeper:
             raise UnknownModelError(
                 f"model {effective!r} is not in this run's catalog "
                 f"(registered: {registered}). Register it in "
-                f"run_one(models=[...])."
+                f"run_commission(models=[...])."
             )
         return entry
 
@@ -392,7 +392,7 @@ class Gatekeeper:
         """Close every provider client this run vended.
 
         The catalog builds clients per run, so the run tears them down:
-        `run_one` awaits this in its finally, making the lifetime explicit
+        `run_commission` awaits this in its finally, making the lifetime explicit
         and symmetric. Scripted entries carry their own fakes and are never
         cached here, so nothing test-owned is touched. A failing close is
         hygiene trouble, never the run's: swallowed to a warning.

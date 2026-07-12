@@ -24,7 +24,7 @@ from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, Field
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.contract import (
     AudioPart,
     CallContext,
@@ -795,7 +795,7 @@ async def test_size_gate_measures_text_only_in_a_parts_list() -> None:
     # measured only the 10 tokens of text.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     commission = _HeavyImageProbe(max_input_tokens=40)
-    result = await run_one(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
+    result = await run_commission(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
     assert result.status == "success"
     assert len(fake.calls) == 1
 
@@ -805,7 +805,7 @@ async def test_size_gate_still_rejects_oversized_text_in_a_parts_list() -> None:
     # still fails the run before the provider is contacted.
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     commission = _HeavyTextProbe(max_input_tokens=40)
-    result = await run_one(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
+    result = await run_commission(commission, _PartialIn(query="q"), models=[scripted_model(fake)])
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "validation"
@@ -819,7 +819,7 @@ async def test_invalid_opening_message_failure_still_deposits_trace(tmp_path: Pa
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "x"})])])
     commission = _BadPartProbe()
-    result = await run_one(
+    result = await run_commission(
         commission,
         _PartialIn(query="q"),
         models=[scripted_model(fake)],
@@ -841,7 +841,7 @@ async def test_parts_list_run_completes_and_deposits_transcript(tmp_path: Path) 
     backend = FilesystemBackend(tmp_path)
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "seen"})])])
     commission = _DescribeProbe()
-    result = await run_one(
+    result = await run_commission(
         commission,
         _PartialIn(query="what is this?"),
         models=[scripted_model(fake)],

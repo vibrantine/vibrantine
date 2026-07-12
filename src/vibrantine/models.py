@@ -13,7 +13,7 @@ An entry is a *profile*: the one place a model configuration is done right.
 only in `params` (the same model at two temperatures); `name` defaults to
 `id`, so a catalog that never uses roles looks exactly as before.
 
-A run's models are defined once, at the front door: `run_one(models=[...])`
+A run's models are defined once, at the front door: `run_commission(models=[...])`
 is the run's catalog, and every Commission references an entry by name
 (`Commission(model="...")`) or takes the run default. A name not in the
 catalog fails fast (`UnknownModelError`, surfaced as a validation failure);
@@ -114,7 +114,7 @@ class UnknownModelError(Exception):
     Immediate and loud, converted to a `validation` failure at the Commission
     boundary. The pre-catalog silent fallback (an unknown id becoming a bare
     OpenRouter model) retired with the catalog: a caller who wants an
-    arbitrary model registers it explicitly in `run_one(models=[...])`.
+    arbitrary model registers it explicitly in `run_commission(models=[...])`.
     """
 
 

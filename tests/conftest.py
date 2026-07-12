@@ -1,6 +1,6 @@
-"""Shared test harness: open a run without going through run_one.
+"""Shared test harness: open a run without going through run_commission.
 
-Most tests exercise a Commission end-to-end and should just call `run_one`,
+Most tests exercise a Commission end-to-end and should just call `run_commission`,
 which builds the run's Gatekeeper like production. The fixture here serves
 the tests that probe interior machinery (`run_llm_loop` called directly,
 dispatch mechanics mid-run): it opens a real run scope (a Gatekeeper, the
@@ -46,13 +46,13 @@ async def open_run(
     backend: PersistenceBackend | None = None,
     record: PersistenceMode | None = None,
 ) -> AsyncGenerator[CallContext]:
-    """Open a run scope and yield a context carrying it, mirroring run_one.
+    """Open a run scope and yield a context carrying it, mirroring run_commission.
 
-    Deliberately unlike run_one, every fuse defaults to off (`budget_usd`
+    Deliberately unlike run_commission, every fuse defaults to off (`budget_usd`
     here is only the root allocation grant; arm the spend fuse explicitly
     with `spend_limit_usd`), so an interior test never trips a fuse it
     didn't arm and allocation tests stay pure. `models=` builds the run's
-    catalog exactly like run_one (empty auto-registers the system default);
+    catalog exactly like run_commission (empty auto-registers the system default);
     register `testing.scripted_model(...)` entries here for fake providers.
     """
     catalog, default = build_catalog(models, default_model)

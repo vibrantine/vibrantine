@@ -31,7 +31,7 @@ from vibrantine.examples.recursive_research import (
     ResearchOutput,
 )
 from vibrantine.models import Model
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.tools.fetch import FetchTool
 
 from .fixture_pages import (
@@ -108,7 +108,7 @@ async def test_direct_source_question_cites_target_and_avoids_trap() -> None:
     # figure. Trap: the neighbouring Saltgrass plant's 7,450 ML on the same
     # page; quoting it means the model confused the two plants.
     question = "How much water did the Meridian Vale desalination project produce in 2025?"
-    result = await run_one(
+    result = await run_commission(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_OUTPUT]),
         models=[EVAL_MODEL],
@@ -143,7 +143,7 @@ async def test_broad_question_covers_all_aspects_from_multiple_sources() -> None
         "For the Meridian Vale desalination project, summarize its 2025 water "
         "output, its power source, and its final construction cost."
     )
-    result = await run_one(
+    result = await run_commission(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_OUTPUT, URL_ENERGY, URL_COST]),
         models=[EVAL_MODEL],
@@ -169,7 +169,7 @@ async def test_conflicting_sources_preserve_both_accounts() -> None:
     # whether the disagreement is *framed* well (attributed, not averaged
     # away) is judged by a human from the transcript.
     question = "When did the Meridian Vale desalination project become operational?"
-    result = await run_one(
+    result = await run_commission(
         _agent(),
         ResearchInput(question=question, seed_urls=[URL_COMMISSION_GOV, URL_COMMISSION_NEWS]),
         models=[EVAL_MODEL],

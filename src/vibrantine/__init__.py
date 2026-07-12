@@ -3,10 +3,10 @@
 This module is the package's public boundary. Names listed in `__all__`
 are the SemVer-protected surface a third party may import and depend on:
 
-    from vibrantine import Commission, run_one, CommissionResult
+    from vibrantine import Commission, run_commission, CommissionResult
 
 The frozen surface is the *bones*: the contract envelope, the closed
-`Literal` vocabularies, the `run_one` / `invoke_sync` / `dispatch`
+`Literal` vocabularies, the `run_commission` / `run_commission_sync` / `dispatch`
 entry points, and the authoring-edge names a Commission author is taught
 to use (`estimate_tokens`, `deposit_llm_trace`, `DEFAULT_MAX_ITERATIONS`,
 and the `ContentPart` message vocabulary). Two honesty notes on that
@@ -27,8 +27,8 @@ else not in `__all__` (including the example Commissions in
 underscore-prefixed name) is internal and provisional: importable,
 but not covered by the stability promise. `Commission._run` is the
 override hook a custom Commission implements; the leading underscore marks
-it as the framework's to call. Invoke a Commission through `run_one` /
-`invoke_sync` / `dispatch` so run_id stamping, overflow enforcement, and
+it as the framework's to call. Invoke a Commission through `run_commission` /
+`run_commission_sync` / `dispatch` so run_id stamping, overflow enforcement, and
 persistence happen uniformly.
 
 This surface is minimized mercilessly. Every name in `__all__` is a
@@ -73,7 +73,7 @@ from vibrantine.models import (
     ollama,
     openai_compatible,
 )
-from vibrantine.orchestrator import invoke_sync, run_one
+from vibrantine.orchestrator import run_commission, run_commission_sync
 from vibrantine.persistence import FilesystemBackend, SqliteBackend
 
 __all__ = [
@@ -109,8 +109,8 @@ __all__ = [
     "openai_compatible",
     "ollama",
     # Entry points
-    "run_one",
-    "invoke_sync",
+    "run_commission",
+    "run_commission_sync",
     "dispatch",
     # Authoring
     "create_commission",

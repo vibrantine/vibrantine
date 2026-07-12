@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.tools.delete import DeleteInput, DeleteTool
 
 
@@ -16,7 +16,7 @@ async def test_delete_removes_existing_file(tmp_path: Path) -> None:
     target = tmp_path / "to-delete.txt"
     target.write_text("doomed", encoding="utf-8")
 
-    result = await run_one(DeleteTool(), DeleteInput(path=target))
+    result = await run_commission(DeleteTool(), DeleteInput(path=target))
 
     assert result.status == "success"
     assert result.error is None
@@ -28,7 +28,7 @@ async def test_delete_removes_existing_file(tmp_path: Path) -> None:
 async def test_delete_nonexistent_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such.txt"
 
-    result = await run_one(DeleteTool(), DeleteInput(path=missing))
+    result = await run_commission(DeleteTool(), DeleteInput(path=missing))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -40,7 +40,7 @@ async def test_delete_directory_returns_validation(tmp_path: Path) -> None:
     d = tmp_path / "actually-a-dir"
     d.mkdir()
 
-    result = await run_one(DeleteTool(), DeleteInput(path=d))
+    result = await run_commission(DeleteTool(), DeleteInput(path=d))
 
     assert result.status == "failure"
     assert result.error is not None
@@ -51,7 +51,7 @@ async def test_delete_directory_returns_validation(tmp_path: Path) -> None:
 
 
 async def test_delete_relative_path_returns_validation(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         DeleteTool(),
         DeleteInput(path=Path("relative.txt")),
     )
@@ -65,7 +65,7 @@ async def test_delete_cancelled_returns_cancelled(tmp_path: Path) -> None:
     target = tmp_path / "still-here.txt"
     target.write_text("preserved", encoding="utf-8")
 
-    result = await run_one(
+    result = await run_commission(
         DeleteTool(),
         DeleteInput(path=target),
         cancel=_AlwaysCancelled(),

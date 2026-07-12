@@ -187,7 +187,7 @@ honest, complete list.
 
 1. **The underscore vocabulary.** A leading underscore means internal, with
    named exceptions. `_run` is implement-only: you write it, you never call
-   it (callers always go through `run_one`, `invoke_sync`, or `dispatch`,
+   it (callers always go through `run_commission`, `run_commission_sync`, or `dispatch`,
    which is where the boundary guarantees live). `_succeed`, `_fail`, and
    `_emit` are supported author helpers despite the underscore; they stay
    protected until the authoring-surface freeze promotes them.
@@ -205,7 +205,7 @@ honest, complete list.
    Commission owns: part of its identity, set at construction.
    `capabilities` is what a branch is permitted: a grant that can narrow as
    it passes down the tree. `tool_ceiling` is what the whole run may ever
-   expose: immutable, set once at `run_one`. The menu a model actually sees
+   expose: immutable, set once at `run_commission`. The menu a model actually sees
    is the intersection of all three.
 
 4. **Money speaks three dialects.** `budget_exceeded` means one node's
@@ -236,7 +236,7 @@ what comes out, what it is called. Everything else is manufactured.
 ```python
 from pydantic import BaseModel, Field
 
-from vibrantine import create_commission, invoke_sync
+from vibrantine import create_commission, run_commission_sync
 
 
 class ResearchBriefInput(BaseModel):
@@ -261,7 +261,7 @@ research_brief = create_commission(
     output=ResearchBriefOutput,
 )
 
-result = invoke_sync(
+result = run_commission_sync(
     research_brief,
     ResearchBriefInput(
         question="What are the main risks in this proposal?",
@@ -331,7 +331,7 @@ class ResearchBriefCommission(Commission[ResearchBriefInput, ResearchBriefOutput
 
 The models and the calling code are the ones from the factory version; the
 input model just grows two defaulted fields (`audience` and `target_length`)
-for the new interior to read. Same `invoke_sync`, same envelope handling.
+for the new interior to read. Same `run_commission_sync`, same envelope handling.
 The implementation inside the Commission can evolve, and the caller still
 depends on the same input and output boundary. Subclassing and the rest of
 the custom-interior path are covered in
@@ -373,7 +373,7 @@ In the latest tagged release:
 - Core `Commission` contract.
 - `CommissionResult` envelope.
 - Typed input/output discipline with Pydantic v2.
-- `run_one`, `invoke_sync`, and `dispatch` entry points.
+- `run_commission`, `run_commission_sync`, and `dispatch` entry points.
 - `create_commission`: a deterministic authoring factory that builds a basic
   LLM-loop Commission from the crafted decisions (name, description, typed
   input/output, tools).
@@ -403,7 +403,7 @@ In the latest tagged release:
 On `main` since the latest tag, unreleased:
 
 - Run-wide governance at the provider seam: every LLM call in a run passes
-  one internal control object created by `run_one`, carrying three resource
+  one internal control object created by `run_commission`, carrying three resource
   fuses (an always-on LLM-call backstop, an opt-in time limit, and a spend
   fuse armed by the budget), a tree-wide concurrency room, an immutable
   tool-exposure ceiling, and an always-on provider-call log (`on_llm_call`
@@ -420,7 +420,7 @@ On `main` since the latest tag, unreleased:
   `on_dispatch`, queryable in a `dispatches` table beside the run
   records; content stays in the records, joined by run id.
 - The run model catalog: model profiles are defined once at
-  `run_one(models=[...])` and referenced by name from Commissions; a profile
+  `run_commission(models=[...])` and referenced by name from Commissions; a profile
   bundles the wire id, endpoint, prices, and provider call settings
   (`params`), so one model can serve several roles ("fast-cheap",
   "deep-thinker") that differ only in settings. The catalog vends the

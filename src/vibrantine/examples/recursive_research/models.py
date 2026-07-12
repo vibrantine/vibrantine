@@ -12,7 +12,7 @@ class RecursiveResearchModelMenu:
     level below the root. An unfilled seat falls back to `default`, then to
     the run's default model. Seats are pure names resolved against the run
     catalog (the distributed model *choice*; the Model objects live in
-    `run_one(models=[...])`). Dumb data: seat assignment happens in
+    `run_commission(models=[...])`). Dumb data: seat assignment happens in
     `__init__`.
     """
 

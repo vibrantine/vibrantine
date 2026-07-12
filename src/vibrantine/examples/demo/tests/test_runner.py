@@ -56,7 +56,7 @@ def test_key_message_never_blocks_ollama(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_menu_entries_build_commission_and_matching_input() -> None:
     # Builders take a model name (None = the run default), as the runner
-    # calls them; the session's Model object goes to run_one(models=[...]).
+    # calls them; the session's Model object goes to run_commission(models=[...]).
     for entry in MENU:
         commission, demo_input = entry.build(None)
         assert isinstance(demo_input, commission.input_type)

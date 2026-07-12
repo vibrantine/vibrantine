@@ -50,12 +50,12 @@ Evaluation tests answer "does this Commission do useful work?"
 Unit tests must require no credentials. LLM-backed Commissions script the
 model through the run's catalog: register
 `vibrantine.testing.scripted_model(ScriptedLLM([...]))` in
-`run_one(models=[...])`, with `llm_response` building each scripted reply.
+`run_commission(models=[...])`, with `llm_response` building each scripted reply.
 The model's intelligence is not under test; the Commission's behavior
 around the scripted response is.
 
 Tests are callers, so they use the caller's API: launch the Commission under
-test through the public entry points (`run_one` / `invoke_sync`), never by
+test through the public entry points (`run_commission` / `run_commission_sync`), never by
 calling the `_run` hook directly.
 `_run` is the hook authors implement, not the call surface, and a test that
 calls it raw skips the framework wrapping (run_id stamping, overflow enforcement,
@@ -99,7 +99,7 @@ invariant to pin, because scripted responses make costs deterministic:
    out_tokens=...)` so every child's cost is a known number, not a live
    variable.
 2. Run the coordinator through the entry points with the scripted models
-   registered in `run_one(models=[...])`.
+   registered in `run_commission(models=[...])`.
 3. Assert the parent's `result.cost.estimated_usd` equals the sum of the
    children's known costs, plus the parent's own scripted turns if it runs
    any.

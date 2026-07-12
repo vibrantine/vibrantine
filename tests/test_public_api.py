@@ -64,8 +64,8 @@ def test_the_exported_surface_is_locked_exactly() -> None:
         "openai_compatible",
         "ollama",
         # Entry points
-        "run_one",
-        "invoke_sync",
+        "run_commission",
+        "run_commission_sync",
         "dispatch",
         # Authoring factory: the supported fast path to a basic Commission.
         "create_commission",
@@ -99,11 +99,11 @@ def test_commission_constructor_surface_is_locked() -> None:
     ]
 
 
-def test_run_one_keyword_surface_is_locked() -> None:
-    # run_one is the widest single point on the surface and the first
+def test_run_commission_keyword_surface_is_locked() -> None:
+    # run_commission is the widest single point on the surface and the first
     # function every consumer meets; each keyword is a decision a caller may
     # have to make, so growth here is a deliberate act like everywhere else.
-    params = list(inspect.signature(vibrantine.run_one).parameters)
+    params = list(inspect.signature(vibrantine.run_commission).parameters)
     assert params == [
         "commission",
         "input",
@@ -123,8 +123,8 @@ def test_run_one_keyword_surface_is_locked() -> None:
         "record",
     ]
     # The sync wrapper is the same door with asyncio.run around it; its
-    # keywords may never drift from run_one's.
-    assert list(inspect.signature(vibrantine.invoke_sync).parameters) == params
+    # keywords may never drift from run_commission's.
+    assert list(inspect.signature(vibrantine.run_commission_sync).parameters) == params
 
 
 def test_call_context_surface_is_locked() -> None:
@@ -155,8 +155,8 @@ def test_provisional_commissions_are_not_in_the_frozen_surface() -> None:
 
 
 def test_entry_points_are_callable_from_the_top_level() -> None:
-    from vibrantine import dispatch, invoke_sync, run_one
+    from vibrantine import dispatch, run_commission, run_commission_sync
 
-    assert callable(run_one)
-    assert callable(invoke_sync)
+    assert callable(run_commission)
+    assert callable(run_commission_sync)
     assert callable(dispatch)

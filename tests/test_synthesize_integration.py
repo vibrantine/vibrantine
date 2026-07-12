@@ -20,7 +20,7 @@ from vibrantine.examples.synthesize import (
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 
 pytestmark = [
     pytest.mark.integration,
@@ -59,7 +59,7 @@ async def test_synthesize_against_real_openrouter_returns_grounded_summary() -> 
         ),
     ]
 
-    result = await run_one(
+    result = await run_commission(
         SynthesizeCommission(),
         SynthesizeInput(
             sources=sources,

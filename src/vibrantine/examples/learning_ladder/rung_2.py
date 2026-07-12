@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from vibrantine import create_commission, invoke_sync
+from vibrantine import create_commission, run_commission_sync
 from vibrantine.tools import ReadTool
 
 
@@ -44,7 +44,7 @@ file_answerer = create_commission(
 
 def main() -> None:
     here = Path(__file__).resolve()
-    result = invoke_sync(
+    result = run_commission_sync(
         file_answerer,
         FileQuestionInput(
             path=str(here),

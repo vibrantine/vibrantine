@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.tools.glob import GlobInput, GlobTool
 
 
@@ -25,7 +25,7 @@ def _populate(tmp_path: Path) -> None:
 async def test_glob_simple_pattern_matches_top_level(tmp_path: Path) -> None:
     _populate(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=tmp_path),
     )
@@ -40,7 +40,7 @@ async def test_glob_simple_pattern_matches_top_level(tmp_path: Path) -> None:
 async def test_glob_recursive_pattern_matches_nested(tmp_path: Path) -> None:
     _populate(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="**/*.py", base=tmp_path),
     )
@@ -54,7 +54,7 @@ async def test_glob_recursive_pattern_matches_nested(tmp_path: Path) -> None:
 async def test_glob_bounds_matches_and_signals_truncation(tmp_path: Path) -> None:
     _populate(tmp_path)  # two top-level .py files
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=tmp_path, max_matches=1),
     )
@@ -69,7 +69,7 @@ async def test_glob_bounds_matches_and_signals_truncation(tmp_path: Path) -> Non
 async def test_glob_under_cap_is_not_truncated(tmp_path: Path) -> None:
     _populate(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=tmp_path),
     )
@@ -82,7 +82,7 @@ async def test_glob_under_cap_is_not_truncated(tmp_path: Path) -> None:
 async def test_glob_returns_files_only_not_directories(tmp_path: Path) -> None:
     _populate(tmp_path)
     # Pattern that would match the `sub` directory too.
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*", base=tmp_path),
     )
@@ -98,7 +98,7 @@ async def test_glob_returns_files_only_not_directories(tmp_path: Path) -> None:
 async def test_glob_empty_match_returns_empty_list(tmp_path: Path) -> None:
     _populate(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.rs", base=tmp_path),
     )
@@ -109,7 +109,7 @@ async def test_glob_empty_match_returns_empty_list(tmp_path: Path) -> None:
 
 
 async def test_glob_relative_base_returns_validation(tmp_path: Path) -> None:
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=Path("relative")),
     )
@@ -122,7 +122,7 @@ async def test_glob_relative_base_returns_validation(tmp_path: Path) -> None:
 async def test_glob_nonexistent_base_returns_validation(tmp_path: Path) -> None:
     missing = tmp_path / "no-such-dir"
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=missing),
     )
@@ -136,7 +136,7 @@ async def test_glob_file_as_base_returns_validation(tmp_path: Path) -> None:
     f = tmp_path / "not-a-dir.txt"
     f.write_text("", encoding="utf-8")
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*", base=f),
     )
@@ -150,7 +150,7 @@ async def test_glob_matches_sorted(tmp_path: Path) -> None:
     for name in ["zebra.py", "alpha.py", "mango.py"]:
         (tmp_path / name).write_text("", encoding="utf-8")
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="*.py", base=tmp_path),
     )
@@ -164,7 +164,7 @@ async def test_glob_matches_sorted(tmp_path: Path) -> None:
 async def test_glob_cancelled_returns_cancelled(tmp_path: Path) -> None:
     _populate(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         GlobTool(),
         GlobInput(pattern="**/*.py", base=tmp_path),
         cancel=_AlwaysCancelled(),

@@ -104,7 +104,7 @@ Last pass: 2026-07-10, all green.
   (A `uv init` project added vibrantine via the public
   `git+https://github.com/vibrantine/vibrantine.git` URL pinned to a commit
   SHA, imported the full 36-name frozen surface including the multimodal
-  `ContentPart` members, ran `ReadTool` through `invoke_sync` with no API
+  `ContentPart` members, ran `ReadTool` through `run_commission_sync` with no API
   key, and imported the prompt-bearing `RecursiveResearchCommission` from
   the installed package. Note: `uv add git+...@<branch>` chokes on branch
   names containing slashes; pin a commit SHA or tag instead.)

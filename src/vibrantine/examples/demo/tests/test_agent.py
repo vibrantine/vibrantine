@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.contract import CallContext
 from vibrantine.examples.ask import AskCommission
 from vibrantine.examples.demo.agent import (
@@ -38,7 +38,7 @@ async def test_chat_turn_concludes_with_reply() -> None:
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"reply": "hello there"})])])
     agent = DemoAgentCommission(toolbox=())
 
-    result = await run_one(agent, ChatInput(message="hi"), models=[scripted_model(fake)])
+    result = await run_commission(agent, ChatInput(message="hi"), models=[scripted_model(fake)])
 
     assert result.status == "success"
     assert result.output is not None and result.output.reply == "hello there"
@@ -67,7 +67,7 @@ async def test_chat_turn_triggers_an_example_and_is_traced(tmp_path: Path) -> No
     agent = DemoAgentCommission(toolbox=(ask,), model="fixture/agent")
     backend = RecordingBackend()
 
-    result = await run_one(
+    result = await run_commission(
         agent,
         ChatInput(message="check the file"),
         models=[

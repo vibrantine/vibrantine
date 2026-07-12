@@ -12,7 +12,7 @@ from typing import ClassVar
 import pytest
 from pydantic import BaseModel, Field
 
-from vibrantine import CallContext, Commission, run_one
+from vibrantine import CallContext, Commission, run_commission
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 
@@ -41,7 +41,7 @@ async def test_scripted_llm_drives_a_real_commission() -> None:
     scripted = ScriptedLLM([llm_response(tool_calls=[("t1", "conclude", {"answer": "42"})])])
     probe = _Probe()
 
-    result = await run_one(probe, _In(question="?"), models=[scripted_model(scripted)])
+    result = await run_commission(probe, _In(question="?"), models=[scripted_model(scripted)])
 
     assert result.status == "success"
     assert result.output is not None and result.output.answer == "42"
@@ -57,7 +57,7 @@ async def test_responses_pop_in_order_and_calls_record_requests() -> None:
     )
     probe = _Probe()
 
-    result = await run_one(probe, _In(question="hello"), models=[scripted_model(scripted)])
+    result = await run_commission(probe, _In(question="hello"), models=[scripted_model(scripted)])
 
     assert result.output is not None and result.output.answer == "second"
     assert len(scripted.calls) == 2

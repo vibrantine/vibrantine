@@ -14,7 +14,7 @@ from vibrantine.contract import (
     CostMetrics,
     Provenance,
 )
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.persistence import FilesystemBackend
 from vibrantine.tools.fetch import FetchInput, FetchTool
 
@@ -60,10 +60,10 @@ class _BudgetProbeCommission(Commission[_BudgetProbeInput, _BudgetProbeOutput]):
         )
 
 
-async def test_run_one_success_through_fetch_commission() -> None:
+async def test_run_commission_success_through_fetch_commission() -> None:
     commission = FetchTool(transport=httpx.MockTransport(_handler_ok))
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         FetchInput(url="https://example.test/hi"),
         budget_usd=0.0,
@@ -75,10 +75,10 @@ async def test_run_one_success_through_fetch_commission() -> None:
     assert result.output.content == "hi"
 
 
-async def test_run_one_returns_errorstate_in_result_not_exception() -> None:
+async def test_run_commission_returns_errorstate_in_result_not_exception() -> None:
     commission = FetchTool(transport=httpx.MockTransport(_handler_500))
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         FetchInput(url="https://example.test/explode"),
         budget_usd=0.0,
@@ -91,8 +91,8 @@ async def test_run_one_returns_errorstate_in_result_not_exception() -> None:
     assert result.error.retryable is True
 
 
-async def test_run_one_passes_budget_into_callcontext() -> None:
-    result = await run_one(
+async def test_run_commission_passes_budget_into_callcontext() -> None:
+    result = await run_commission(
         _BudgetProbeCommission(),
         _BudgetProbeInput(),
         budget_usd=1.23,
@@ -103,12 +103,12 @@ async def test_run_one_passes_budget_into_callcontext() -> None:
     assert result.output.seen_budget == 1.23
 
 
-async def test_run_one_threads_backend_so_dispatch_persists(
+async def test_run_commission_threads_backend_so_dispatch_persists(
     tmp_path: Path,
 ) -> None:
     backend = FilesystemBackend(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         _BudgetProbeCommission(persistence_mode="always"),
         _BudgetProbeInput(),
         backend=backend,
@@ -119,11 +119,11 @@ async def test_run_one_threads_backend_so_dispatch_persists(
     assert refs == [result.run_id]
 
 
-async def test_run_one_record_switches_recording_on(tmp_path: Path) -> None:
+async def test_run_commission_record_switches_recording_on(tmp_path: Path) -> None:
     # The one-line on-switch: no per-node persistence_mode flipping needed.
     backend = FilesystemBackend(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         _BudgetProbeCommission(),
         _BudgetProbeInput(),
         backend=backend,
@@ -134,11 +134,11 @@ async def test_run_one_record_switches_recording_on(tmp_path: Path) -> None:
     assert await backend.list_references() == [result.run_id]
 
 
-async def test_run_one_no_backend_skips_persistence(tmp_path: Path) -> None:
+async def test_run_commission_no_backend_skips_persistence(tmp_path: Path) -> None:
     # Same Commission, but with no backend wired; nothing should be stored.
     backend = FilesystemBackend(tmp_path)
 
-    result = await run_one(
+    result = await run_commission(
         _BudgetProbeCommission(persistence_mode="always"),
         _BudgetProbeInput(),
         # backend deliberately omitted

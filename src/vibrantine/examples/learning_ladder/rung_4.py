@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from vibrantine import SqliteBackend, create_commission, invoke_sync
+from vibrantine import SqliteBackend, create_commission, run_commission_sync
 
 
 class RecipeInput(BaseModel):
@@ -68,7 +68,7 @@ def main() -> None:
     db = Path("ladder_runs.db")
     backend = SqliteBackend(db)
 
-    result = invoke_sync(
+    result = run_commission_sync(
         meal_planner,
         DinnerInput(theme="cozy winter evening"),
         budget_usd=0.05,

@@ -100,7 +100,7 @@ varies, the less a human or an AI assistant has to guess.
   seat is a pure catalog name resolved against the run's model catalog
   (a name paints that whole subtree), or the child's own menu type
   (fine-grained, recursively); the profiles the names resolve to live in
-  `run_one(models=[...])`, never here. The parent's `__init__` resolves
+  `run_commission(models=[...])`, never here. The parent's `__init__` resolves
   each seat with one fallback chain: named seat, then menu `default`,
   then the run's default. Dumb data, no behavior. The Commission
   declares its seats (identity); the caller fills them (capacity);
@@ -233,7 +233,7 @@ in `tools/`), or a Commission (belongs in `subcommissions/`). A local
   by the model catalog (2026-07-12): the menu's relation to model
   ownership (a seat is the distributed model *choice*, a bare catalog
   name; the profile it resolves to is defined once in
-  `run_one(models=[...])`), and per-seat client injection (dead: model
+  `run_commission(models=[...])`), and per-seat client injection (dead: model
   access flows only through the run's catalog, and `client=` is gone).
   What remains open is the seat-name vocabulary (per child class vs per
   subtree role), which needs a true multi-seat Commission to answer.

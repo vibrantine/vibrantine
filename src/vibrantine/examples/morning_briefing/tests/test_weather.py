@@ -7,7 +7,7 @@ from vibrantine.examples.morning_briefing.subcommissions.weather import (
     WeatherInput,
 )
 from vibrantine.examples.morning_briefing.tests.fakes import TURN_COST, make_weather
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 
 
 def test_construction_requires_a_source_url() -> None:
@@ -31,7 +31,7 @@ def test_user_message_carries_date_and_configured_source() -> None:
 
 async def test_success_returns_report_and_own_cost() -> None:
     weather, _, entry = make_weather(report="Mild and overcast all day.")
-    result = await run_one(
+    result = await run_commission(
         weather, WeatherInput(briefing_date="Monday 06 July 2026"), models=[entry]
     )
 

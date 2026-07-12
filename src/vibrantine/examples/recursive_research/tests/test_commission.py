@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.contract import estimate_tokens
 from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
@@ -88,7 +88,9 @@ async def test_rolls_up_child_cost_across_depth() -> None:
         max_depth=2,
     )
 
-    result = await run_one(agent, ResearchInput(question="q1"), models=[scripted_model(fake)])
+    result = await run_commission(
+        agent, ResearchInput(question="q1"), models=[scripted_model(fake)]
+    )
 
     assert result.status == "success", result.error
     assert len(fake.calls) == 5
@@ -111,7 +113,7 @@ async def test_model_menu_seats_reach_their_levels() -> None:
     menu = RecursiveResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
     agent = RecursiveResearchCommission(max_depth=1, models=menu)
 
-    result = await run_one(
+    result = await run_commission(
         agent,
         ResearchInput(question="q"),
         models=[
@@ -139,7 +141,7 @@ async def test_model_menu_default_fills_unnamed_seats() -> None:
     menu = RecursiveResearchModelMenu(default="menu-default", researcher="root-model")
     agent = RecursiveResearchCommission(max_depth=1, models=menu)
 
-    result = await run_one(
+    result = await run_commission(
         agent,
         ResearchInput(question="q"),
         models=[
@@ -178,7 +180,7 @@ async def test_oversized_sub_answer_reaches_parent_flagged_partial() -> None:
         max_depth=1,
     )
 
-    result = await run_one(agent, ResearchInput(question="q"), models=[scripted_model(fake)])
+    result = await run_commission(agent, ResearchInput(question="q"), models=[scripted_model(fake)])
 
     assert result.status == "success", result.error
     # Depth-first turn order: root delegates (0), child concludes (1), root
@@ -206,7 +208,7 @@ async def test_oversized_sub_answer_chopped_when_backend_wired(tmp_path: Path) -
         max_depth=1,
     )
 
-    result = await run_one(
+    result = await run_commission(
         agent, ResearchInput(question="q"), models=[scripted_model(fake)], backend=backend
     )
 
@@ -288,7 +290,7 @@ async def test_budget_ceiling_counts_children() -> None:
         max_depth=1,
     )
 
-    result = await run_one(
+    result = await run_commission(
         agent, ResearchInput(question="q"), models=[scripted_model(fake)], budget_usd=0.0005
     )
 

@@ -299,7 +299,7 @@ What the invoker holds.
 #### One run, one Gatekeeper at the provider seam
 
 - **Decision.** Every run gets one internal control object, created by
-  `run_one`, carried to every node by reference, and consulted by every
+  `run_commission`, carried to every node by reference, and consulted by every
   governed LLM call: the Gatekeeper, standing at the provider door as
   `dispatch`'s mirror. It holds only what is identical for every node:
   three resource fuses (LLM-call count, default on; time limit, opt-in;
@@ -307,11 +307,11 @@ What the invoker holds.
   calls in flight rather than coordinators, an immutable tool-exposure
   ceiling, the provider-call log (always on in memory, landing beside the
   run records as a queryable table when a backend is wired), the dispatch
-  register (the next decision), and the model catalog. `run_one` is the only entry into a run and `dispatch` the only
+  register (the next decision), and the model catalog. `run_commission` is the only entry into a run and `dispatch` the only
   path around inside one; each refuses the other's job, and `dispatch`
   refuses a context carrying a different run object, so the Gatekeeper can
   never be swapped mid-tree. It has no public name: the caller configures
-  it entirely through `run_one` keyword arguments.
+  it entirely through `run_commission` keyword arguments.
 - **Why.** The library mediates unit-to-unit calls, but a Commission's LLM
   call went straight to the provider, so every run-wide guarantee had
   nowhere to live except authoring discipline. What keeps the object from
@@ -348,7 +348,7 @@ What the invoker holds.
   - A public Gatekeeper type, and any grant stored in the shared object.
   - Structural fuses (depth, invocation count), which bound composition
     rather than resources.
-  - Nested `run_one` and hand-built-context entry: both doors refuse.
+  - Nested `run_commission` and hand-built-context entry: both doors refuse.
   - A second observability system: the provider log joins the record
     store, never replaces it.
   - Sandbox claims.
@@ -365,7 +365,7 @@ What the invoker holds.
   records, spend to the call log, all joined by run id). The register
   lives in `dispatch`, always on in memory, landing beside the run
   records as a queryable `dispatches` table when a backend is wired and
-  streaming live through `run_one(on_dispatch=)`. The seam enforces as
+  streaming live through `run_commission(on_dispatch=)`. The seam enforces as
   well as observes: after a fuse trips, `dispatch` refuses new
   invocations, so stop means stop for children, not just for provider
   calls. (Ruled 2026-07-12, superseding a per-tool "door" drafted the
@@ -390,7 +390,7 @@ What the invoker holds.
 
 #### The run's models are defined once; the catalog vends the clients
 
-- **Decision.** The caller registers the run's models once at `run_one`
+- **Decision.** The caller registers the run's models once at `run_commission`
   (registering nothing gets the system default), and every Commission
   names an entry or takes the run default. An entry is a *profile*: one
   model configuration done right in one place (wire id, endpoint,

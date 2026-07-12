@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.contract import CapabilitySet, ProgressEvent
 from vibrantine.examples.ask import AskCommission, AskInput
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
@@ -41,7 +41,7 @@ async def test_ask_happy_path_read_then_conclude(tmp_path: Path) -> None:
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="What is the capital of France?", file_path=file),
         models=[scripted_model(fake)],
@@ -70,7 +70,7 @@ async def test_ask_paginates_when_first_read_is_truncated(tmp_path: Path) -> Non
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="How many lines?", file_path=file),
         models=[scripted_model(fake)],
@@ -93,7 +93,7 @@ async def test_ask_exceeds_iteration_cap_returns_internal_failure(tmp_path: Path
     ]
     commission, fake = _commission(responses, max_iterations=3)
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -118,7 +118,7 @@ async def test_ask_no_tool_call_returns_internal_failure(tmp_path: Path) -> None
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -148,7 +148,7 @@ async def test_ask_budget_exceeded_after_first_llm_call(tmp_path: Path) -> None:
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -169,7 +169,7 @@ async def test_ask_cancellation_at_entry_makes_no_llm_call(tmp_path: Path) -> No
 
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -196,7 +196,7 @@ async def test_ask_tool_error_is_fed_back_and_llm_can_recover(tmp_path: Path) ->
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -218,7 +218,7 @@ async def test_ask_emits_loop_start_progress_event(tmp_path: Path) -> None:
 
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await run_one(
+    await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake)],
@@ -246,7 +246,7 @@ async def test_ask_unrestricted_capabilities_offer_read(tmp_path: Path) -> None:
     # Default ctx → capabilities.tools is None → unrestricted.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await run_one(
+    await run_commission(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         models=[scripted_model(fake)],
@@ -261,7 +261,7 @@ async def test_ask_capabilities_excluding_read_hide_it_from_the_menu(
     # Empty allow-list = deny all; read drops off the menu, conclude stays.
     commission, fake = _commission([llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])])
 
-    await run_one(
+    await run_commission(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         models=[scripted_model(fake)],
@@ -283,7 +283,7 @@ async def test_ask_forbidden_tool_call_bounces_as_unknown(tmp_path: Path) -> Non
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=tmp_path / "f.txt"),
         models=[scripted_model(fake)],
@@ -311,7 +311,7 @@ async def test_ask_budget_with_unpriced_model_refuses_before_any_call(
         [llm_response(tool_calls=[("c", "conclude", {"answer": "x"})])],
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],
@@ -335,7 +335,7 @@ async def test_ask_unpriced_model_without_budget_still_runs(tmp_path: Path) -> N
         [llm_response(tool_calls=[("c", "conclude", {"answer": "ok"})])],
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         AskInput(question="?", file_path=file),
         models=[scripted_model(fake, input_usd_per_million=None, output_usd_per_million=None)],

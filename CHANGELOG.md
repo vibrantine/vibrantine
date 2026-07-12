@@ -18,7 +18,7 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   envelope vocabulary plus `refused`). The run's complete node ledger,
   built for prompt-injection forensics: rows are metadata only and join
   the run records by run_id for verbatim content. Delivered live via
-  `run_one(on_dispatch=...)` (mirroring `on_llm_call`), and persisted at
+  `run_commission(on_dispatch=...)` (mirroring `on_llm_call`), and persisted at
   run end in one write (the root's own row included) to a new
   `dispatches` table beside `calls` through an optional duck-typed
   `store_dispatches`; rows share the call log's lifecycle, dying with the
@@ -45,7 +45,7 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   (the wire id), in `on_llm_call` dicts and the SQLite `calls` table.
 
 - **The Run Gatekeeper**: every run gets one internal control object,
-  created by `run_one`, standing at the provider seam as `dispatch`'s
+  created by `run_commission`, standing at the provider seam as `dispatch`'s
   mirror. It holds three resource fuses (an LLM-call backstop, default-on
   at 1,000; an opt-in `time_limit_seconds` checked at both seams; a spend
   fuse armed by `budget_usd` at the same number as the root grant), a
@@ -69,22 +69,23 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   a child's refusal unchanged keeps the claim. Node-level allocation
   exhaustion stays `budget_exceeded`: the line between the kinds is
   scope, not resource type.
-- **The run model catalog**: `run_one(models=[...], default_model=...)`
+- **The run model catalog**: `run_commission(models=[...],
+  default_model=...)`
   defines the run's models once; every Commission references an entry by
   name or takes the run default, unknown names fail fast, an empty
   catalog auto-registers the system default, and the catalog builds and
   vends the provider clients (one per distinct endpoint), so the
   framework owns provider access by construction.
-- **The call-log accessor**: `run_one(on_llm_call=...)` receives one
+- **The call-log accessor**: `run_commission(on_llm_call=...)` receives one
   plain dict per settled or refused provider call (caller, model,
   timestamps, tokens, cost, the node's grant, fuse state, how it ended).
   With a `SqliteBackend` wired, the rows also land at run end in a new
   `calls` table beside `records`, joined on run id (absorb, not
   replace), through an optional duck-typed `store_calls` the
   `PersistenceBackend` Protocol does not require.
-- `run_one` and `invoke_sync` also gain `capabilities`, `cancel`, and
-  `on_progress`, absorbing everything the hand-built-context entry used
-  to provide.
+- `run_commission` and `run_commission_sync` also gain `capabilities`,
+  `cancel`, and `on_progress`, absorbing everything the hand-built-context
+  entry used to provide.
 - `vibrantine.testing.scripted_model(fake)`: a catalog entry whose
   provider is a `ScriptedLLM`, defaulting to `FIXTURE_MODEL`'s id and
   pricing so cost assertions keep their dollars. The testing seam now
@@ -151,6 +152,12 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Changed
 
+- **Breaking:** the entry points are renamed: `run_one` becomes
+  `run_commission` and `invoke_sync` becomes `run_commission_sync`. Verb
+  plus object says what the door does (run this Commission as the root of
+  a new governed run), and the sync twin now derives from the async name,
+  so learning one name gives both. Migration: rename call sites; keywords,
+  return values, and behavior are unchanged.
 - **Breaking (behavior): stop means stop.** After a run fuse trips,
   `dispatch` refuses to start new invocations: the refused call returns
   an ordinary breaker-stamped failure value (kind `cancelled`, so the
@@ -173,12 +180,12 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   first parameter is renamed `name` → `id` to match `Model` and
   `ollama()` now that `name` means the profile name; positional callers
   are unaffected.
-- **Breaking:** `run_one` is the only way into a run and `dispatch` the
-  only way around inside one, each refusing the other's job: nested
-  `run_one` refuses ("you are inside a run; use dispatch"), `dispatch`
-  outside a run refuses ("you are outside a run; use run_one"), and
-  `dispatch` refuses a context that does not carry the run in progress,
-  so the run object can never be swapped mid-tree.
+- **Breaking:** `run_commission` is the only way into a run and `dispatch`
+  the only way around inside one, each refusing the other's job: nested
+  `run_commission` refuses ("you are inside a run; use dispatch"),
+  `dispatch` outside a run refuses ("you are outside a run; use
+  run_commission"), and `dispatch` refuses a context that does not carry
+  the run in progress, so the run object can never be swapped mid-tree.
 - **Breaking:** `Commission(client=...)` is removed; it was the
   raw-client escape sitting in the framework's own front door.
   `Commission(model=...)` narrows to a pure name (`str | None`) looked up
@@ -195,7 +202,7 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   nothing read) retires in favor of the run-wide room, and `run_halted`
   joins the frozen `ErrorKind` vocabulary.
 - **Breaking:** a wired backend now records everything by default:
-  `run_one(backend=...)` with `record=` unset behaves as
+  `run_commission(backend=...)` with `record=` unset behaves as
   `record="always"`, because handing the run a database is the "I care
   about logs" signal and keeping less is the active choice. Without a
   backend nothing changes (nothing is recorded); a node's explicit

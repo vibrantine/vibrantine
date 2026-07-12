@@ -16,7 +16,7 @@ A publishable library, not an application layer. The boundary and its rationale 
 
 Structural invariants. Breaking one is an architectural decision, not a quick fix.
 
-- **One interior hook**: `async _run(input, ctx) -> CommissionResult`, called only by `dispatch`; invoke through `run_one` / `invoke_sync` / `dispatch`. Extend `CallContext` for new orchestration concerns, never the `_run` signature.
+- **One interior hook**: `async _run(input, ctx) -> CommissionResult`, called only by `dispatch`; invoke through `run_commission` / `run_commission_sync` / `dispatch`. Extend `CallContext` for new orchestration concerns, never the `_run` signature.
 - **Errors are values.** No exception crosses the call boundary. Failures return `CommissionResult(status="failure"|"partial", error=ErrorState(...))`.
 - **Tree-structured invocations.** A Commission only waits on its own children. No peer messaging, shared state, or back-channels.
 - **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `design.md § Cost and provenance are structural`).
@@ -72,9 +72,9 @@ The full surface is on `CallContext`, but not every field changes behavior today
 - **`on_progress`**: emitted by Synthesize (`synthesis_pass`, `structured_pass`), NewsDigest (`fetching`, `synthesizing`), and MorningBriefing (`sections`, `executive_summary`, `written`). Coordinators forward `on_progress` to their children, so worker events bubble up under the original callback.
 - **`capabilities`**: allow-list of tool names, enforced by `run_llm_loop` (not by Commission bodies): the LLM's tool menu is the intersection of the Commission's toolbox and this set. `None` = unrestricted (root default); a set permits exactly those names, empty set permitting nothing. Python coordinators' hardcoded `dispatch` calls are ungated by design.
 
-There is no per-context concurrency field: provider-call concurrency is a run-wide bound (the Gatekeeper's room, `run_one(concurrency=)`), held around each provider call and shared by the whole tree. Coordinators may `asyncio.gather` freely; their LLM children queue at the room, not at the coordinator.
+There is no per-context concurrency field: provider-call concurrency is a run-wide bound (the Gatekeeper's room, `run_commission(concurrency=)`), held around each provider call and shared by the whole tree. Coordinators may `asyncio.gather` freely; their LLM children queue at the room, not at the coordinator.
 
-New Commissions should consult the enforced fields (`budget_usd`, `cancel`, `on_progress`) at their natural breakpoints; `capabilities` is enforced automatically by `run_llm_loop`. `cancel` is also the run's breaker: a fuse trip (`run_one`'s `max_llm_calls` / `time_limit_seconds` / `budget_usd`) flips the same signal, so checking it is how a Commission participates in run teardown.
+New Commissions should consult the enforced fields (`budget_usd`, `cancel`, `on_progress`) at their natural breakpoints; `capabilities` is enforced automatically by `run_llm_loop`. `cancel` is also the run's breaker: a fuse trip (`run_commission`'s `max_llm_calls` / `time_limit_seconds` / `budget_usd`) flips the same signal, so checking it is how a Commission participates in run teardown.
 
 ## Schema discipline (Pydantic types)
 
@@ -115,7 +115,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 - **Validation**: `pydantic >= 2`
 - **HTTP**: `httpx` (async)
 - **Tests**: `pytest`, `pytest-asyncio`
-- **LLM**: any OpenAI-compatible endpoint via the `openai` SDK with `base_url` swapped. A `Model` bundles identity, endpoint, and pricing facts (`models.py`); `ollama()` targets a local server and `openai_compatible()` covers any other provider. The run's models are defined once, in `run_one(models=[...])` (the catalog, which vends the clients); LLM-using Commissions accept `model` as a constructor argument, a pure catalog name, and are immutable post-construction. Unknown names fail fast. `max_input_tokens` derives at run time from the catalog entry's context window; `target_input_fraction` defaults to 0.75.
+- **LLM**: any OpenAI-compatible endpoint via the `openai` SDK with `base_url` swapped. A `Model` bundles identity, endpoint, and pricing facts (`models.py`); `ollama()` targets a local server and `openai_compatible()` covers any other provider. The run's models are defined once, in `run_commission(models=[...])` (the catalog, which vends the clients); LLM-using Commissions accept `model` as a constructor argument, a pure catalog name, and are immutable post-construction. Unknown names fail fast. `max_input_tokens` derives at run time from the catalog entry's context window; `target_input_fraction` defaults to 0.75.
 - **Lint + format**: `ruff` (replaces black, isort, flake8)
 - **Types**: `basedpyright` in strict mode
 
@@ -123,7 +123,7 @@ The principle: large tool results are *cursors over data*, not whole-data snapsh
 
 `OPENROUTER_API_KEY` is the only secret. Stored in `.env` (gitignored). A committed `.env.example` lists required variable names with empty values as the public template.
 
-- **Library**: the run's catalog vends the `AsyncOpenAI` clients lazily at the first provider call, one per distinct endpoint, reading the entry's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests register `vibrantine.testing.scripted_model(...)` entries in `run_one(models=[...])` instead. There is no `api_key` argument anywhere, and a missing key surfaces at the first provider call with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
+- **Library**: the run's catalog vends the `AsyncOpenAI` clients lazily at the first provider call, one per distinct endpoint, reading the entry's `api_key_env` (default `OPENROUTER_API_KEY`) from the environment at that point; a keyless `Model` (`api_key_env=None`, e.g. local Ollama) skips the check entirely. Tests register `vibrantine.testing.scripted_model(...)` entries in `run_commission(models=[...])` instead. There is no `api_key` argument anywhere, and a missing key surfaces at the first provider call with the env var named, not at construction. The library never reads `.env` itself; that's a dev/application concern.
 - **Dev + tests**: `uv run --env-file .env <cmd>`, or export in your shell. Both pick it up the same way.
 - **Test policy**: unit tests mock the OpenAI client and require no key. Integration tests are marked `@pytest.mark.integration` and skip when the key is absent. Never commit fixtures containing real API responses with embedded keys.
   LLM-driven Commissions should also grow heuristic evaluation cases with
@@ -148,7 +148,7 @@ src/
   vibrantine/
     __init__.py                       # public boundary: __all__ is the SemVer surface
     contract.py                       # core contract types, the Commission ABC, PersistenceBackend Protocol
-    orchestrator.py                   # run_one + invoke_sync entry points
+    orchestrator.py                   # run_commission + run_commission_sync entry points
     dispatch.py                       # wraps _run: run_id + parent_run_id + overflow + record + raise backstop + dispatch register + refuse-after-halt
     llm_tools.py                      # LLM-tool wrapper + the default LLM loop
     factory.py                        # create_commission authoring factory

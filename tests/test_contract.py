@@ -31,7 +31,7 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.models import ollama
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.testing import ScriptedLLM, scripted_model
 
 
@@ -252,7 +252,7 @@ async def test_run_catalog_entry_resolves_the_size_gate() -> None:
     # ~100-token opening message before any LLM call.
     fake = ScriptedLLM([])
 
-    result = await run_one(
+    result = await run_commission(
         _LongWindedProbe(),
         _PolicyProbeInput(),
         models=[scripted_model(fake, context_window=40)],
@@ -314,7 +314,7 @@ async def test_missing_key_fails_fast_with_the_env_var_named(
     # call; it crosses _run, so dispatch's backstop delivers it as a failure
     # value through the front door.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    result = await run_one(_BasicProbe(), _PolicyProbeInput())
+    result = await run_commission(_BasicProbe(), _PolicyProbeInput())
 
     assert result.status == "failure"
     assert result.error is not None

@@ -1,7 +1,7 @@
 """Dispatch helper for invoking Commissions through the framework.
 
 Every Commission invocation that crosses a contract boundary (top-level
-from `run_one`, child invocations from Python coordinators, tool
+from `run_commission`, child invocations from Python coordinators, tool
 dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
 `dispatch`. This is where:
 
@@ -27,7 +27,7 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
   - the dispatch register is kept: one always-on metadata row per
     sanctioned invocation (run ids, commission name, the node's
     self-declared `deterministic` flag, timing, status), the run's
-    complete node ledger, delivered live via `run_one(on_dispatch=...)`
+    complete node ledger, delivered live via `run_commission(on_dispatch=...)`
     and persisted at run end beside the provider-call log
   - after a fuse trips, new invocations are refused here (a "refused"
     register row, then a breaker-stamped failure value): stop means stop,
@@ -109,7 +109,7 @@ async def dispatch[InputT, OutputT](
     ctx: CallContext,
 ) -> CommissionResult[OutputT]:
     """Invoke `commission` with framework wrapping."""
-    # One front door, both directions enforced: run_one is the only way into
+    # One front door, both directions enforced: run_commission is the only way into
     # a run, dispatch the only way around inside one. A hand-built
     # CallContext used as an entry point would be a run with no Gatekeeper
     # at all, so it is refused rather than run ungoverned. Outside any run
@@ -121,7 +121,7 @@ async def dispatch[InputT, OutputT](
         raise RuntimeError(
             "dispatch was called outside a run; a hand-built CallContext has "
             "no run Gatekeeper, so nothing would govern its LLM calls. You "
-            "are outside a run; use run_one."
+            "are outside a run; use run_commission."
         )
     if ctx._gatekeeper is not gatekeeper:  # pyright: ignore[reportPrivateUsage]
         raise RuntimeError(
@@ -196,7 +196,7 @@ async def dispatch[InputT, OutputT](
             # Errors are values: a Commission that *raises* instead of
             # returning a failure (a custom-_run bug, a third-party
             # Commission) has broken the contract. Convert it here so the
-            # exception can't escape `run_one`, and so the failure still
+            # exception can't escape `run_commission`, and so the failure still
             # flows through stamping + persistence below. CancelledError is a
             # BaseException, not an Exception; task cancellation deliberately
             # propagates rather than being swallowed.
@@ -335,7 +335,7 @@ async def dispatch[InputT, OutputT](
             # Persistence is observability, not the work itself: a failing
             # backend (disk full, a third-party implementation bug) must not
             # destroy the result it was recording or let an exception cross
-            # the run_one boundary. Surface it through on_progress and the
+            # the run_commission boundary. Surface it through on_progress and the
             # log, and return the result anyway.
             logger.warning(
                 "persistence backend failed for %s run_id=%s: %s: %s",
@@ -575,7 +575,7 @@ def _exception_to_failure[OutputT](
 
     Upholding errors-as-values is the author's job, but dispatch is the seam
     that *guarantees* it: a raising `_run` becomes a failure result rather
-    than propagating out of `run_one`. Cost is a best-effort floor (ruled
+    than propagating out of `run_commission`. Cost is a best-effort floor (ruled
     2026-07-12): the node's own settled door calls, summed from the run
     log; children's envelopes unwound with the stack, so their spend is
     missing from this node's number (the run log still holds every row).

@@ -7,7 +7,7 @@ real FetchTool, the fixture model's cost constants, and pre-scripted section
 factories. Each factory names its Commission's model with a distinct fixture
 id and returns `(commission, fake, entry)`: the fake for call assertions, and
 the matching `scripted_model` catalog entry for the test to register in
-`run_one(models=[...])`.
+`run_commission(models=[...])`.
 """
 
 import json

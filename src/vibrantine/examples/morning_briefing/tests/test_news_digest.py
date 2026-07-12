@@ -10,7 +10,7 @@ from vibrantine.examples.morning_briefing.tests.fakes import (
     SYNTH_COST,
     make_digest,
 )
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.testing import AlwaysCancelled
 
 DATE = "Monday 06 July 2026"
@@ -40,7 +40,7 @@ async def test_success_returns_cited_digest_with_summed_cost() -> None:
         claims=CLAIMS,
         summary="A steady morning internationally.",
     )
-    result = await run_one(
+    result = await run_commission(
         digest, NewsDigestInput(briefing_date=DATE), budget_usd=0.50, models=[entry]
     )
 
@@ -61,7 +61,7 @@ async def test_partial_when_a_source_fails_lists_it() -> None:
     pages["https://news.test/world/b"] = (404, "gone")
     digest, _, entry = make_digest(field="world", pages=pages, claims=CLAIMS[:1])
 
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
+    result = await run_commission(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "partial"
     assert result.output is not None
@@ -74,7 +74,7 @@ async def test_all_sources_failing_fails_before_any_llm_call() -> None:
     pages = {url: (500, "boom") for url in PAGES}
     digest, fake, entry = make_digest(field="tech", pages=pages, claims=[])
 
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
+    result = await run_commission(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "failure"
     assert result.error is not None
@@ -90,7 +90,7 @@ async def test_synthesize_failure_propagates_its_error_kind() -> None:
         claims=[],
         synth_payload="not valid json at all",
     )
-    result = await run_one(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
+    result = await run_commission(digest, NewsDigestInput(briefing_date=DATE), models=[entry])
 
     assert result.status == "failure"
     assert result.error is not None
@@ -101,7 +101,7 @@ async def test_synthesize_failure_propagates_its_error_kind() -> None:
 async def test_cancellation_before_fetches_returns_cancelled() -> None:
     digest, fake, entry = make_digest(field="world", pages=PAGES, claims=[])
 
-    result = await run_one(
+    result = await run_commission(
         digest,
         NewsDigestInput(briefing_date=DATE),
         models=[entry],

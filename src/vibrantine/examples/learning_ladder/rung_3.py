@@ -10,7 +10,7 @@ into the parent's cost automatically.
 
 from pydantic import BaseModel, Field
 
-from vibrantine import create_commission, invoke_sync
+from vibrantine import create_commission, run_commission_sync
 
 
 class RecipeInput(BaseModel):
@@ -60,7 +60,7 @@ meal_planner = create_commission(
 
 
 def main() -> None:
-    result = invoke_sync(meal_planner, DinnerInput(theme="cozy winter evening"))
+    result = run_commission_sync(meal_planner, DinnerInput(theme="cozy winter evening"))
 
     if result.status != "success" or result.output is None:
         print(f"failed: {result.error}")

@@ -3,14 +3,14 @@
 The whole shape in one file. You craft the decisions no one can make for
 you: the input type, the output type, a name, and a description written
 for the LLM that might call this Commission. `create_commission`
-manufactures everything else. What comes back from `invoke_sync` is the
+manufactures everything else. What comes back from `run_commission_sync` is the
 result envelope every Commission returns: status, typed output, cost,
 provenance.
 """
 
 from pydantic import BaseModel, Field
 
-from vibrantine import create_commission, invoke_sync
+from vibrantine import create_commission, run_commission_sync
 
 
 class RecipeInput(BaseModel):
@@ -34,7 +34,7 @@ recipe_writer = create_commission(
 
 
 def main() -> None:
-    result = invoke_sync(recipe_writer, RecipeInput(dish="shakshuka"))
+    result = run_commission_sync(recipe_writer, RecipeInput(dish="shakshuka"))
 
     if result.status != "success" or result.output is None:
         print(f"failed: {result.error}")

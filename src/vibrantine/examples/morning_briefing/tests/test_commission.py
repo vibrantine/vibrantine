@@ -24,7 +24,7 @@ from vibrantine.examples.morning_briefing.tests.fakes import (
     make_weather,
 )
 from vibrantine.models import Model
-from vibrantine.orchestrator import run_one
+from vibrantine.orchestrator import run_commission
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM
 
 # Every LLM seat in the tree names its own scripted entry, so the run default
@@ -102,7 +102,7 @@ async def test_success_writes_briefing_with_all_sections(tmp_path: Path) -> None
     briefing, _, models = _briefing()
     out_path = tmp_path / "briefing.md"
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=out_path),
         budget_usd=0.50,
@@ -142,7 +142,7 @@ async def test_total_cost_sums_every_child(tmp_path: Path) -> None:
     # weather turn + two digests (Synthesize runs) + summarize turn.
     expected = TURN_COST + 2 * SYNTH_COST + TURN_COST
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         budget_usd=0.50,
@@ -161,7 +161,7 @@ async def test_failed_source_inside_a_section_makes_the_briefing_partial(
     # Only one source survives, so the scripted claims may cite index 0 only.
     briefing, _, models = _briefing(world_pages=pages, world_claims=WORLD_CLAIMS[:1])
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         models=models,
@@ -183,7 +183,7 @@ async def test_whole_section_failing_is_skipped_and_named(tmp_path: Path) -> Non
     briefing, _, models = _briefing(weather_fails=True)
     out_path = tmp_path / "b.md"
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=out_path),
         models=models,
@@ -210,7 +210,7 @@ async def test_all_sections_failing_fails_without_writing(tmp_path: Path) -> Non
     )
     out_path = tmp_path / "b.md"
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=out_path),
         models=models,
@@ -232,7 +232,7 @@ async def test_executive_summary_failure_degrades_instead_of_killing(
     briefing, _, models = _briefing(summarize_fails=True)
     out_path = tmp_path / "b.md"
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=out_path),
         models=models,
@@ -255,7 +255,7 @@ async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) 
     blocker.write_text("a file where a directory is needed", encoding="utf-8")
     out_path = blocker / "briefing.md"  # parent is a file, so mkdir raises
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=out_path),
         models=models,
@@ -272,7 +272,7 @@ async def test_unwritable_path_fails_with_real_accumulated_cost(tmp_path: Path) 
 async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) -> None:
     briefing, fakes, models = _briefing()
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         models=models,
@@ -290,7 +290,7 @@ async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:
     briefing, _, models = _briefing()
     events: list[ProgressEvent] = []
 
-    result = await run_one(
+    result = await run_commission(
         briefing,
         MorningBriefingInput(output_path=tmp_path / "b.md"),
         budget_usd=0.50,

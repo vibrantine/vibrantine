@@ -57,7 +57,7 @@ type ErrorKind = Literal[
     "budget_exceeded",
     "cancelled",
     "output_too_large",
-    # Whole-run teardown: a run fuse tripped and run_one rewrote the root.
+    # Whole-run teardown: a run fuse tripped and run_commission rewrote the root.
     # Node-level allocation exhaustion stays budget_exceeded; the line
     # between the two kinds is scope, not resource type.
     "run_halted",
@@ -281,7 +281,7 @@ class CallContext:
     # set it manually; dispatch threads it via ContextVar across nested calls.
     parent_run_id: str | None = None
     # PersistenceBackend the dispatch helper writes through. Wired by the
-    # caller (typically run_one); inherited by children automatically.
+    # caller (typically run_commission); inherited by children automatically.
     backend: PersistenceBackend | None = None
     # Caller's recording default for every node in the call tree, including
     # children spawned mid-run. Applies only to nodes whose own
@@ -289,7 +289,7 @@ class CallContext:
     # including "off", wins. None here too means recording stays off.
     record: PersistenceMode | None = None
     # The run's internal control object (fuses, room, stop signal, call
-    # log), created by run_one and carried to every node by reference.
+    # log), created by run_commission and carried to every node by reference.
     # Internal plumbing, not caller surface: never set it by hand. dispatch
     # refuses a context whose run object is not the run in progress, so a
     # replace() can rebuild grants but never smuggle in a fresh room, fresh
@@ -380,7 +380,7 @@ class Commission[InputT, OutputT](ABC):
     control flow is not the standard loop) overrides `_run` instead. The
     leading underscore marks ownership, not secrecy: authors implement it,
     the framework calls it (through `dispatch`), and nothing else touches
-    it. Invoke a Commission through `run_one` / `invoke_sync` / `dispatch`.
+    it. Invoke a Commission through `run_commission` / `run_commission_sync` / `dispatch`.
     """
 
     # Identity
@@ -508,7 +508,7 @@ class Commission[InputT, OutputT](ABC):
             self.toolbox = toolbox
         # The model *choice*: a pure name, looked up in the run's catalog
         # when the loop runs (None = the run default). Model objects (identity
-        # + endpoint + facts) live in the catalog, defined once at run_one;
+        # + endpoint + facts) live in the catalog, defined once at run_commission;
         # an unknown name fails fast there. The choice stays distributed:
         # each Commission carries which entry it uses, never the entry.
         # Non-LLM Commissions (tools, coordinators) inherit this inertly;
@@ -777,7 +777,7 @@ class Commission[InputT, OutputT](ABC):
             "validation",
             f"budget_usd was set but model {entry.id!r} is unpriced, so its "
             f"cost can't be tracked and the budget can't be enforced. "
-            f"Register the model with USD rates in run_one(models=...) "
+            f"Register the model with USD rates in run_commission(models=...) "
             f"(openai_compatible(...) with prices, or ollama() for a free "
             f"local model), or invoke without a budget.",
             retryable=False,

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from vibrantine import run_one
+from vibrantine import run_commission
 from vibrantine.contract import CallContext, ProgressEvent
 from vibrantine.examples.summarize import (
     SummarizeCommission,
@@ -41,7 +41,7 @@ async def test_summarize_happy_path_concludes_in_one_turn() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "A content cat."})])]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         SummarizeInput(content=_SOURCE, length="one_sentence"),
         models=[scripted_model(fake)],
@@ -101,7 +101,7 @@ async def test_summarize_empty_toolbox_offers_only_conclude() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await run_one(commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)])
+    await run_commission(commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)])
 
     assert _tool_names(fake.calls[0]) == {"conclude"}
 
@@ -120,7 +120,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         SummarizeInput(content=_SOURCE),
         models=[scripted_model(fake)],
@@ -138,7 +138,7 @@ async def test_summarize_budget_exceeded_after_first_llm_call() -> None:
 async def test_summarize_cancellation_at_entry_makes_no_llm_call() -> None:
     commission, fake = _commission([llm_response(tool_calls=None)])
 
-    result = await run_one(
+    result = await run_commission(
         commission,
         SummarizeInput(content=_SOURCE),
         models=[scripted_model(fake)],
@@ -161,7 +161,7 @@ async def test_summarize_free_text_is_nudged_then_fails_on_second_slip() -> None
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)]
     )
 
@@ -178,7 +178,7 @@ async def test_summarize_emits_loop_start_progress_event() -> None:
         [llm_response(tool_calls=[("c1", "conclude", {"summary": "x"})])]
     )
 
-    await run_one(
+    await run_commission(
         commission,
         SummarizeInput(content=_SOURCE),
         models=[scripted_model(fake)],
@@ -198,7 +198,7 @@ async def test_summarize_invalid_conclude_args_are_fed_back_then_recover() -> No
         ]
     )
 
-    result = await run_one(
+    result = await run_commission(
         commission, SummarizeInput(content=_SOURCE), models=[scripted_model(fake)]
     )
 

@@ -19,7 +19,7 @@ from vibrantine import (
     CommissionResult,
     CostMetrics,
     Provenance,
-    invoke_sync,
+    run_commission_sync,
 )
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools import (
@@ -52,7 +52,7 @@ def test_pure_tool_runs_without_a_key(tmp_path: Path, monkeypatch: pytest.Monkey
     f = tmp_path / "sample.txt"
     f.write_text("line one\nline two\n", encoding="utf-8")
 
-    res = invoke_sync(ReadTool(), ReadInput(path=f))
+    res = run_commission_sync(ReadTool(), ReadInput(path=f))
 
     assert res.status == "success"
     assert res.run_id is not None  # stamped by the entry point
@@ -108,7 +108,7 @@ def test_scripted_catalog_entry_runs_the_loop_without_a_key(
     fake = ScriptedLLM([llm_response(tool_calls=[("c1", "conclude", {"answer": "42"})])])
     commission = _BasicCommission()
 
-    res = invoke_sync(
+    res = run_commission_sync(
         commission,
         _AnswerInput(prompt="what is the answer?"),
         models=[scripted_model(fake)],
@@ -157,7 +157,7 @@ def test_override_both_is_allowed() -> None:
                 cost=CostMetrics(estimated_usd=0.0),
             )
 
-    res = invoke_sync(_Both(), _AnswerInput(prompt="x"))
+    res = run_commission_sync(_Both(), _AnswerInput(prompt="x"))
     assert res.status == "success"
     assert res.output is not None and res.output.answer == "from _run"
 
@@ -174,7 +174,7 @@ class _Raising(Commission[_AnswerInput, _AnswerOutput]):
 
 
 def test_exception_in_run_becomes_a_failure_value() -> None:
-    res = invoke_sync(_Raising(), _AnswerInput(prompt="x"))
+    res = run_commission_sync(_Raising(), _AnswerInput(prompt="x"))
     assert res.status == "failure"
     assert res.error is not None and res.error.kind == "internal"
 
@@ -198,7 +198,7 @@ class _CustomSuccess(Commission[_AnswerInput, _AnswerOutput]):
 
 
 def test_custom_success_path_runs() -> None:
-    res = invoke_sync(_CustomSuccess(), _AnswerInput(prompt="hi"))
+    res = run_commission_sync(_CustomSuccess(), _AnswerInput(prompt="hi"))
     assert res.status == "success"
     assert res.output is not None and res.output.answer == "HI"
 

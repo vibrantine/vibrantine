@@ -72,12 +72,12 @@ needed; `ReadTool` is a Commission that happens to contain no LLM:
 
 ```python
 # poke.py
-from vibrantine import invoke_sync
+from vibrantine import run_commission_sync
 from vibrantine.tools import ReadTool
 from vibrantine.tools.read import ReadInput
 from pathlib import Path
 
-result = invoke_sync(ReadTool(), ReadInput(path=Path("pyproject.toml").resolve()))
+result = run_commission_sync(ReadTool(), ReadInput(path=Path("pyproject.toml").resolve()))
 print(result.status)          # success
 print(result.output.content[:60])
 print(result.cost)            # estimated_usd=0.0, deterministic work is free
@@ -101,8 +101,8 @@ OPENROUTER_API_KEY=sk-or-...
 
 and run those steps with `uv run --env-file .env ...`.
 
-> One rule to carry through everything: invoke Commissions through `run_one`
-> / `invoke_sync` (or `dispatch` from inside another Commission). The `_run`
+> One rule to carry through everything: invoke Commissions through `run_commission`
+> / `run_commission_sync` (or `dispatch` from inside another Commission). The `_run`
 > hook is the framework's to call; the entry points are where it stamps run
 > ids and enforces output policy uniformly.
 
@@ -117,7 +117,7 @@ cost and provenance plumbing) is manufactured for you.
 ```python
 # recipe.py
 from pydantic import BaseModel, Field
-from vibrantine import create_commission, invoke_sync
+from vibrantine import create_commission, run_commission_sync
 
 class RecipeInput(BaseModel):
     dish: str = Field(description="The dish to write a recipe for.")
@@ -132,7 +132,7 @@ commission = create_commission(
     output=RecipeOutput,
 )
 
-result = invoke_sync(commission, RecipeInput(dish="shakshuka"))
+result = run_commission_sync(commission, RecipeInput(dish="shakshuka"))
 print(result.output.recipe)
 ```
 
@@ -381,7 +381,7 @@ This small constructor is a load-bearing convention:
   a cache) is built per-instance in `__init__` and passed via `toolbox=`,
   exactly as above.
 - **`model=None` means "the run's default model".** A model here is a pure
-  *name*, looked up in the run's catalog (`run_one(models=[...])`) when the
+  *name*, looked up in the run's catalog (`run_commission(models=[...])`) when the
   loop runs; the Model objects themselves are defined once, at the front
   door. Don't hardcode a model name in the class; let callers decide, and
   accept a `model=` override for when they do.
@@ -392,12 +392,12 @@ Now run it for real (this one needs the key):
 # tag_one.py
 from pathlib import Path
 
-from vibrantine import invoke_sync
+from vibrantine import run_commission_sync
 
 from doctag.commission import DocTagCommission
 from doctag.types import DocTagInput
 
-result = invoke_sync(
+result = run_commission_sync(
     DocTagCommission(),
     DocTagInput(file_path=Path("README.md").resolve()),
     budget_usd=0.10,
@@ -447,14 +447,14 @@ bounds are already on your Commission; this step is about knowing them.
 - **Iterations.** The loop gives up (as a failure, with cost) rather than
   spin forever; `max_iterations` is a constructor kwarg if the default is
   wrong for your job.
-- **The other run fuses.** `run_one(max_llm_calls=)` is an always-on
+- **The other run fuses.** `run_commission(max_llm_calls=)` is an always-on
   backstop (default 1,000) that stops a runaway loop even on a free or
   local model the spend fuse cannot see; pass `None` to disable it.
-  `run_one(time_limit_seconds=)` is an opt-in wall-clock bound for
+  `run_commission(time_limit_seconds=)` is an opt-in wall-clock bound for
   unattended runs. Both halt the run the same way the spend fuse does:
   new provider calls are refused, in-flight calls finish and count, and
   the root reports `run_halted`.
-- **Tool exposure.** `run_one(tool_ceiling=["fetch", "read"])` caps what
+- **Tool exposure.** `run_commission(tool_ceiling=["fetch", "read"])` caps what
   any model anywhere in the tree may be *offered*: the effective menu is
   always the Commission's toolbox, intersected with the branch's
   capability grant, intersected with this ceiling. Unlike a capability
@@ -464,7 +464,7 @@ bounds are already on your Commission; this step is about knowing them.
   does.
 - **The call log.** Every provider call in the run lands in a log, one
   plain dict per settled or refused call (who called, which model,
-  tokens, cost, how it ended). `run_one(on_llm_call=rows.append)` streams
+  tokens, cost, how it ended). `run_commission(on_llm_call=rows.append)` streams
   the rows to you live; with a `SqliteBackend` on the run they also land
   in a `calls` table beside the run records at run end. This is where a
   halted run's story stays reconstructable.
@@ -472,7 +472,7 @@ bounds are already on your Commission; this step is about knowing them.
   boundary (tools and Commissions alike) gets a metadata row: run ids,
   Commission name, the node's self-declared `deterministic` flag, timing,
   status. Always on, content-free (the row's run_id joins the run records
-  for the verbatim input and output). `run_one(on_dispatch=rows.append)`
+  for the verbatim input and output). `run_commission(on_dispatch=rows.append)`
   streams it live; with a `SqliteBackend` it lands in a `dispatches`
   table. A tool author sets `deterministic = True` in the class body to
   mark "no LLM in my interior"; it is log metadata only, and nothing ever
@@ -527,7 +527,7 @@ test; your Commission's behavior around the responses is.
 The doubles for this are supported library surface, in `vibrantine.testing`:
 
 - `scripted_model(scripted)`: a catalog entry served by your fake. Register
-  it in `run_one(models=[...])`; as the run's only entry it is the default
+  it in `run_commission(models=[...])`; as the run's only entry it is the default
   model, so the Commission under test needs no `model=` at all.
 - `ScriptedLLM(responses)`: the fake provider. Pops one response per LLM
   call, in order, and records every request it received in `calls` so you
@@ -549,7 +549,7 @@ The doubles for this are supported library surface, in `vibrantine.testing`:
 
 from pathlib import Path
 
-from vibrantine import invoke_sync
+from vibrantine import run_commission_sync
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 from doctag.commission import DocTagCommission
@@ -571,7 +571,7 @@ def test_concludes_with_typed_output(tmp_path: Path) -> None:
         ]
     )
 
-    result = invoke_sync(
+    result = run_commission_sync(
         DocTagCommission(),
         DocTagInput(file_path=doc),
         models=[scripted_model(scripted)],
@@ -679,7 +679,7 @@ from pathlib import Path
 
 import pytest
 
-from vibrantine import invoke_sync
+from vibrantine import run_commission_sync
 
 from doctag.commission import DocTagCommission
 from doctag.types import DocTagInput
@@ -714,7 +714,7 @@ def test_tags_reflect_subject_not_quoted_material(tmp_path: Path) -> None:
     doc = tmp_path / "memo.txt"
     doc.write_text(FIXTURE_MEMO, encoding="utf-8")
 
-    result = invoke_sync(
+    result = run_commission_sync(
         DocTagCommission(model=EVAL_MODEL),
         DocTagInput(file_path=doc),
         budget_usd=0.10,
@@ -927,7 +927,7 @@ child Commission rather than calling a provider directly: a raw call would
 bypass the run's private Gatekeeper. Library-owned custom provider flows use
 `deposit_llm_trace` internally; `SynthesizeCommission` is that internal
 worked example. Switching records on is also one
-line: `run_one(..., backend=FilesystemBackend(root))` reaches every node
+line: `run_commission(..., backend=FilesystemBackend(root))` reaches every node
 in the call tree, including children spawned mid-run. Wiring a backend is
 the "I care about logs" signal, so it defaults to recording everything
 (`record="always"`); pass `record="dev"` or `record="off"` when you want
@@ -1147,7 +1147,7 @@ research = CorpusResearchCommission(
     max_rounds=2,
 )
 
-result = invoke_sync(
+result = run_commission_sync(
     research,
     ResearchInput(question="How did the project's persistence design evolve?",
                   sources=["/abs/docs", "/abs/src"]),
@@ -1224,7 +1224,7 @@ from vibrantine import (
     OverflowPolicy, PersistenceMode,                       # policy vocabularies
     PersistedRecord, PersistenceBackend, FilesystemBackend, SqliteBackend,  # persistence
     Model, DEFAULT_MODEL, openai_compatible, ollama,      # models
-    run_one, invoke_sync, dispatch,                        # entry points
+    run_commission, run_commission_sync, dispatch,                        # entry points
     create_commission,                                     # authoring factory
     ContentPart, TextPart, ImagePart, AudioPart,           # message content parts
     DEFAULT_MAX_ITERATIONS, estimate_tokens, deposit_llm_trace,  # authoring edge
@@ -1297,7 +1297,7 @@ Constructor kwargs (all keyword-only):
 
 | kwarg | Default | Purpose |
 |---|---|---|
-| `model` | `None`, the run's default model | Which catalog entry the default loop uses: a pure name, looked up in `run_one(models=[...])` when the loop runs. Unknown names fail fast |
+| `model` | `None`, the run's default model | Which catalog entry the default loop uses: a pure name, looked up in `run_commission(models=[...])` when the loop runs. Unknown names fail fast |
 | `max_iterations` | `10` | LLM-loop cap |
 | `toolbox` | class default | Dependency-injection override |
 | `max_input_tokens` | unset: the catalog entry's context window, at run time | Input size gate; explicit `None` disables it, an int pins it |
@@ -1378,7 +1378,7 @@ with `dataclasses.replace` to hand a child a modified one.
 | `record` | `None` | Recording default for every node whose `persistence_mode` is `None`; a node's explicit mode wins |
 
 Provider-call concurrency is not a context field: it is a run-wide bound
-(`run_one(concurrency=)`), one room of chairs shared by the whole tree and
+(`run_commission(concurrency=)`), one room of chairs shared by the whole tree and
 held around each provider call only, so coordinators may fan out freely.
 
 ## The meanings of None
@@ -1414,8 +1414,8 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_one` | `async run_one(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, on_dispatch=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, dispatch register, model catalog) and the root `CallContext`. Refuses when called inside a run |
-| `invoke_sync` | sync wrapper over `run_one`, same kwargs | Scripts, REPL, tests |
+| `run_commission` | `async run_commission(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, on_dispatch=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, dispatch register, model catalog) and the root `CallContext`. Refuses when called inside a run |
+| `run_commission_sync` | sync wrapper over `run_commission`, same kwargs | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | The only way around inside a run: called from a custom `_run` with the ctx it received (or a `replace()` of it). Refuses outside a run, and refuses a hand-built context |
 
 ## The authoring factory
@@ -1473,7 +1473,7 @@ written as a selection prompt.
 ## Models and cost
 
 - The run's models are defined once, at the front door:
-  `run_one(models=[...])` is the run's catalog, and it vends the provider
+  `run_commission(models=[...])` is the run's catalog, and it vends the provider
   clients. A Commission carries only a *name* (`model=`, None = the run
   default) resolved against the catalog when its loop runs; a name not in
   the catalog fails fast. Never hardcode a model in a Commission body.
@@ -1517,7 +1517,7 @@ written as a selection prompt.
 - `PersistedRecord` carries input, full result, a ctx snapshot, and an
   optional LLM trace.
 - Modes: `off` / `on_failure` / `dev` / `always`. Wire a backend via
-  `run_one(..., backend=...)`; children inherit it automatically.
+  `run_commission(..., backend=...)`; children inherit it automatically.
 - A wired backend records everything by default: silence on `record=`
   means `"always"`, because handing the run a database is the "I care
   about logs" signal, and keeping less (`record="dev"`, `"on_failure"`,
@@ -1572,7 +1572,7 @@ Before you ship a Commission, confirm:
 - [ ] **State stays outside**: no memory held inside the Commission between
   calls; accumulation belongs to the caller or the coordinator's local
   scope.
-- [ ] **Launch via `run_one` / `invoke_sync`**, never by calling `_run`
+- [ ] **Launch via `run_commission` / `run_commission_sync`**, never by calling `_run`
   directly.
 - [ ] **Tested and evaluated**: contract tests with a `ScriptedLLM` from
   `vibrantine.testing`, a BRIEF with an efficacy bar, and eval cases per
