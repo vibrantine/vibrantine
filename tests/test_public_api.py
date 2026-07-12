@@ -99,6 +99,34 @@ def test_commission_constructor_surface_is_locked() -> None:
     ]
 
 
+def test_run_one_keyword_surface_is_locked() -> None:
+    # run_one is the widest single point on the surface and the first
+    # function every consumer meets; each keyword is a decision a caller may
+    # have to make, so growth here is a deliberate act like everywhere else.
+    params = list(inspect.signature(vibrantine.run_one).parameters)
+    assert params == [
+        "commission",
+        "input",
+        "budget_usd",
+        "models",
+        "default_model",
+        "max_llm_calls",
+        "time_limit_seconds",
+        "concurrency",
+        "tool_ceiling",
+        "capabilities",
+        "cancel",
+        "on_progress",
+        "on_llm_call",
+        "on_dispatch",
+        "backend",
+        "record",
+    ]
+    # The sync wrapper is the same door with asyncio.run around it; its
+    # keywords may never drift from run_one's.
+    assert list(inspect.signature(vibrantine.invoke_sync).parameters) == params
+
+
 def test_call_context_surface_is_locked() -> None:
     # CallContext is the extend-here seam for new orchestration concerns,
     # so it will legitimately grow; the lock makes each growth deliberate.
