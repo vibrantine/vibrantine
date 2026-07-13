@@ -51,7 +51,7 @@ version against a finished specimen.
 
 **What you'll need:** Python 3.12+, [uv](https://docs.astral.sh/uv/), and an
 [OpenRouter](https://openrouter.ai/) API key for the steps that run a live
-model (steps 0 and 8 only; everything else works offline).
+model (the Shortcut, step 4, and step 8; everything else works offline).
 
 ## Step 0: Proof of Life
 
@@ -275,15 +275,12 @@ Now the class skeleton that carries the identity:
 """DocTag Commission: read one document, return a summary and topic tags."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
-from vibrantine import CallContext, Commission, Model
+from vibrantine import CallContext, Commission
 from vibrantine.tools import ReadTool
 
 from doctag.types import DocTagInput, DocTagOutput
-
-if TYPE_CHECKING:
-    from openai import AsyncOpenAI
 
 _PROMPT = (Path(__file__).parent / "prompts" / "system.md").read_text(encoding="utf-8")
 
@@ -1489,6 +1486,11 @@ written as a selection prompt.
   with `Model(id=...)` for OpenRouter targets, `openai_compatible(id,
   address)` for any OpenAI-format endpoint, or `ollama(id)` for a local
   Ollama server.
+- Which entry is *the run default* (what `model=None` resolves to):
+  `run_commission(default_model=)` names it explicitly; without that, a
+  one-entry catalog's single entry is its own default, and a several-entry
+  catalog defaults to the system default if it is among the entries and
+  otherwise fails fast, asking for `default_model=`.
 - Pricing states: *priced*, *free* (a real $0, like local Ollama), or
   *unpriced* (unknown). Setting `budget_usd` on an unpriced model fails
   fast: the framework refuses to run a budget it cannot enforce. Prices
