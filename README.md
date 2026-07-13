@@ -73,6 +73,28 @@ That is the central thesis: if every act of delegated work has the same reliable
 boundary, larger agentic behavior can be built by nesting smaller units without
 losing the ability to inspect, test, budget, and recover.
 
+## Five Surfaces, Five Owners
+
+A Commission separates five concerns, and each has a different owner. Every
+knob in the library lives on exactly one of these surfaces, so this map is
+the one to hold:
+
+| # | Surface | Answers | Owner | Fixed when |
+| --- | --- | --- | --- | --- |
+| 1 | **Identity** (declaration) | What the Commission *is* | Commission author | Written into the class |
+| 2 | **Capacity** (construction) | What this instance *can do*, and its built-in limits | Builder | Built into the instance, immutable |
+| 3 | **Permission** (call-time context) | What this run is *allowed* to do | Caller | Per run |
+| 4 | **Task** (payload) | What this run is *asked* to solve | Caller | Per run |
+| 5 | **Result** (envelope) | What came *back*, and how to trust it | Framework + Commission | Returned by the call |
+
+Read it as a sentence of ownership: the author owns what it is, the builder
+owns what it can do, the caller owns both what it may do and what it must
+solve, and the framework guarantees the shape of what comes back.
+
+Two surfaces never bend: the declared boundary (identity's input and output
+types) and the result envelope. Those two promises are the contract. Every
+dial lives on the middle three surfaces.
+
 ## Result Envelopes
 
 Every Commission returns a `CommissionResult[T]`.
@@ -173,6 +195,60 @@ Python library, but the underlying contract is language-neutral: typed task,
 bounded work, structured result envelope, parent-mediated composition, cost,
 and provenance. A TypeScript implementation could uphold the same contract with
 different host-language ergonomics.
+
+## One Run, One Set of Controls
+
+`run_commission` is the only way to start a run, and `dispatch` is the only
+way to invoke work inside one. That single entry point is what makes
+run-wide guarantees possible: the caller sets the controls once, at the top,
+and every LLM call and every child invocation in the tree passes through the
+same seam. Nothing in the tree can swap them out or route around them.
+
+The controls, all keyword arguments on `run_commission`:
+
+- **A budget with a fuse.** `budget_usd` is one number doing two jobs: the
+  root's allocated grant, sliced down the tree as parents delegate, and a
+  run-wide spend fuse that halts the run at the caller's limit.
+- **Resource fuses.** An LLM-call backstop (default 1000, always armed), an
+  opt-in time limit (`time_limit_seconds`), and the spend fuse above. A
+  tripped fuse halts the run loudly and structurally: new invocations are
+  refused at the dispatch seam, in-flight work finishes and counts, and the
+  root returns a `run_halted` failure naming the fuse, with true total
+  spend reported.
+- **A tool-exposure ceiling.** `tool_ceiling` clamps every tool menu in the
+  tree, immutably, no matter what custom code does below. It bounds what
+  the whole run may ever touch.
+- **A concurrency room.** One tree-wide limit (default 16) on LLM calls in
+  flight, so a wide fan-out cannot stampede the provider.
+- **The model catalog.** `models=[...]` defines each model profile once
+  (wire id, prices, call settings) under a name for the role it plays;
+  every Commission references an entry by name or takes the run default.
+  The catalog vends the provider clients, unknown names fail fast, and
+  registering nothing gets the system default.
+
+Fuses bound what a run consumes, never how it is composed, and no node can
+read the run's running totals to steer by them: calls report in, control
+flows out. The point is a specific kind of trust: you can hand a tree real
+money and real tools, walk away, and know the worst case was set by you.
+
+## Observability
+
+Three tiers, matched to three needs:
+
+- **Watch:** stdlib logging, for a human following a run in a terminal.
+- **React:** live callbacks as the run proceeds. `on_progress` streams
+  Commission-level progress events, `on_llm_call` streams every provider
+  call with its spend, and `on_dispatch` streams every boundary crossing.
+- **Query:** persisted records, when a backend is wired (JSON files or
+  SQLite ship in the box). Records carry inputs, results, and full LLM
+  transcripts per node, linked by run id. With SQLite, two metadata tables
+  land beside them: `calls` (every provider call and its cost) and
+  `dispatches` (every invocation's lineage, timing, and status), so a
+  run's shape is queryable after the fact.
+
+The dispatch register behind that `dispatches` table is always on, even
+with no backend wired: every sanctioned invocation leaves a metadata row,
+tools and Commissions alike. The tree you ran is never a matter of memory.
 
 ## What You Must Actually Hold
 
@@ -337,6 +413,49 @@ depends on the same input and output boundary. Subclassing and the rest of
 the custom-interior path are covered in
 [docs/authoring.md](docs/authoring.md).
 
+## Testing Without an API Key
+
+`vibrantine.testing` scripts the model, not the framework. Register a
+scripted profile in the run's catalog and the full machinery runs for
+real against fake provider replies: validation, envelopes, cost
+accounting, persistence, all of it, with no key and no network. Here,
+`research_brief` and `brief_input` are the Commission and input from the
+minimal example above.
+
+```python
+from vibrantine import run_commission_sync
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
+
+fake = ScriptedLLM([
+    llm_response(tool_calls=[(
+        "c1",
+        "conclude",
+        {
+            "answer": "The proposal's main risks are dependency and demand.",
+            "key_claims": ["Depends on an unstable API.", "Demand unvalidated."],
+        },
+    )]),
+])
+
+result = run_commission_sync(
+    research_brief,
+    brief_input,
+    models=[scripted_model(fake)],
+)
+
+assert result.status == "success"
+assert fake.calls  # every request the Commission sent, inspectable
+```
+
+Running past the end of the script fails the test loudly rather than
+hanging, and `fake.calls` records exactly what the Commission sent
+(model, messages, tools), so tests can assert on behavior, not vibes.
+
+This is the contract lane: proving the boundary works. The second lane,
+proving a Commission is actually good at its stated task, has its own
+discipline. Both are covered in
+[docs/commission-testing.md](docs/commission-testing.md).
+
 ## Installation
 
 Vibrantine is not published to PyPI yet.
@@ -477,6 +596,10 @@ Start here:
   end against a live model, the composition patterns, and the full contract
   reference, machine-checked against the library in CI so the doc cannot
   silently drift from the code.
+- [docs/commission-testing.md](docs/commission-testing.md): how to prove a
+  Commission obeys the contract (scripted models, no key) and how to prove
+  it is good at its stated work (evaluation cases with pass/fail criteria
+  written before seeing output).
 
 Working notes live in [docs/working/](docs/working/); they promote into the
 live docs or retire.
