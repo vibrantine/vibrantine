@@ -307,8 +307,9 @@ What the invoker holds.
   calls in flight rather than coordinators, an immutable tool-exposure
   ceiling, the provider-call log (always on in memory, landing beside the
   run records as a queryable table when a backend is wired), the dispatch
-  register (the next decision), and the model catalog. `run_commission` is the only entry into a run and `dispatch` the only
-  path around inside one; each refuses the other's job, and `dispatch`
+  register (the next decision), and the model catalog. `run_commission`
+  is the only entry into a run and `dispatch` the only path around inside
+  one; each refuses the other's job, and `dispatch`
   refuses a context carrying a different run object, so the Gatekeeper can
   never be swapped mid-tree. It has no public name: the caller configures
   it entirely through `run_commission` keyword arguments.
@@ -476,8 +477,9 @@ What the invoker holds.
 
 - **Decision.** Complexity is judged at the boundary, not in the interior.
   The surfaces a user's head must hold (`vibrantine.__all__`, the
-  `Commission` constructor, `CallContext`) grow only under pressure from a
-  real, named consumer, never from convenience, symmetry, or anticipation.
+  `Commission` constructor, `run_commission`'s keywords, `CallContext`)
+  grow only under pressure from a real, named consumer, never from
+  convenience, symmetry, or anticipation.
   Each is pinned by an exact lock test in `tests/test_public_api.py`, so
   growing one is a deliberate act: the lock is edited in the same commit,
   and the justification travels with it. When a fix or feature can be
