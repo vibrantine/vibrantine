@@ -49,11 +49,10 @@ Audience-facing guides, not architecture.
 ## Working notes ([`working/`](working/))
 
 Working material, not live guidance; this folder shrinks as material
-promotes into the live docs or retires. Currently:
+promotes into the live docs or retires. Currently one note:
 [`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md),
-the decision record for the standard folder-sized Commission layout, and
-[`readme-building/PLAN.md`](working/readme-building/PLAN.md), the scaffold
-record of the 2026-07 README rebuild (its pages promoted 2026-07-14).
+the decision record for the standard folder-sized Commission layout, its
+sketches, and its open threads.
 
 The concept drafts that used to live under `working/concepts/` promoted
 into `authoring.md` (the five-surface ownership map, the boundary-type
