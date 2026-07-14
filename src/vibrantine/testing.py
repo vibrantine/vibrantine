@@ -51,6 +51,17 @@ from typing import Any
 
 from vibrantine.models import Model
 
+# The supported testing surface, locked in test_public_api.py like the
+# top level's __all__: this module is public by declaration, so its
+# exports grow with the same deliberateness.
+__all__ = [
+    "FIXTURE_MODEL",
+    "AlwaysCancelled",
+    "ScriptedLLM",
+    "llm_response",
+    "scripted_model",
+]
+
 # A priced Model for unit tests that assert on cost or budget arithmetic.
 # Deliberately not a real catalog slug: a run catalog containing it never
 # collides with a real model, so retiring, repricing, or renaming a real

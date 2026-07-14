@@ -20,6 +20,7 @@ from dataclasses import fields
 from typing import cast
 
 import vibrantine
+from vibrantine import testing
 
 
 def test_every_exported_name_resolves() -> None:
@@ -144,6 +145,37 @@ def test_call_context_surface_is_locked() -> None:
         "backend",
         "record",
         "_gatekeeper",
+    ]
+
+
+def test_testing_surface_is_locked_exactly() -> None:
+    # vibrantine.testing is supported surface by declaration (the testing
+    # half of the catalog's client-vending seam), so its exports are locked
+    # exactly like the top level's.
+    expected = {
+        "FIXTURE_MODEL",
+        "AlwaysCancelled",
+        "ScriptedLLM",
+        "llm_response",
+        "scripted_model",
+    }
+    assert set(testing.__all__) == expected
+    for name in testing.__all__:
+        assert getattr(testing, name, None) is not None, name
+
+
+def test_scripted_model_keyword_surface_is_locked() -> None:
+    # scripted_model is the door consumer tests ride; every keyword is a
+    # decision a test author may have to make, locked like Commission's.
+    params = list(inspect.signature(testing.scripted_model).parameters)
+    assert params == [
+        "scripted",
+        "id",
+        "name",
+        "params",
+        "context_window",
+        "input_usd_per_million",
+        "output_usd_per_million",
     ]
 
 
