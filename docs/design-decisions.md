@@ -329,7 +329,10 @@ the tree's, and honest at the one seam all work passes through.
 
 - **Decision.** Every Commission can declare an output budget and an
   overflow policy, enforced at dispatch: the boundary, not the
-  interior. Four policies: `reject` fails the result; `partial` keeps
+  interior. The cap is off by default (`max_output_tokens=None`): no
+  framework number fits every output type, so arming the defense is
+  the author's move, made knowing the deliverable's shape. Four
+  policies: `reject` fails the result; `partial` keeps
   the output and flags it on the envelope (the default);
   `truncate_with_reference` chops via the Commission's own
   `truncate_output` hook and force-persists the full version,

@@ -22,6 +22,12 @@ children it consults, not the work performed beneath them, so a tree
 can grow deep and wide while the top-level caller holds only the
 envelopes it decided from.
 
+The compression runs in both directions. The caller never holds the
+child's interior, and the child never holds the caller's: a dispatched
+Commission starts from its own prompt and the typed work order alone,
+not the parent's transcript, so a leaf deep in a tree pays nothing for
+the history above it.
+
 (Re-ruled 2026-07-14: across revisions the docs had drifted toward
 trust as the headline. Trust is the enabler; compression is the point.)
 

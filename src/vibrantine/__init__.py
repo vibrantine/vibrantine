@@ -1,4 +1,6 @@
-"""Vibrantine Commissions: a component model for AI agents.
+"""Vibrantine compresses complex AI behavior into typed tools an AI can
+call with a minimal footprint; in software terms, a component model for
+AI agents.
 
 This module is the package's public boundary. Names listed in `__all__`
 are the SemVer-protected surface a third party may import and depend on:

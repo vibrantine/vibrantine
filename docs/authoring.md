@@ -486,7 +486,11 @@ bounds are already on your Commission; this step is about knowing them.
   in-flight work finishes and is counted, and the register records a
   `refused` row for what never started.
 - **Output size.** `max_output_tokens` plus an `overflow_policy` say what
-  happens when the deliverable is oversized. DocTag's output is tiny, so the
+  happens when the deliverable is oversized. This guard rail is opt-in:
+  with no cap set (the default), nothing bounds how much of a calling
+  model's context your deliverable occupies, so a Commission that can
+  return large output should set the number its author knows is
+  reasonable. DocTag's output is tiny, so the
   defaults are fine; when you do set a policy, know that `"partial"` flags
   the oversize through the envelope but does not trim it. The one policy that
   does trim, `"truncate_with_reference"`, needs two things from you: a
@@ -1454,7 +1458,10 @@ What a basic Commission rides:
 - Dispatches tool calls through `dispatch`, feeds results back, and rolls
   child cost up into your result. Each child is dispatched with the
   remaining budget (the grant minus everything already spent), so ceilings
-  only shrink down the tree.
+  only shrink down the tree. A failed child comes back as its error's kind
+  and detail, the detail bounded for the transcript (a visible
+  `[truncated]` marker, never a silent cut; the envelope and any persisted
+  record keep the full text).
 - Under a budget, appends a one-line `[budget]` status (spent, grant,
   remaining) after each turn's tool results. Your system prompt can build
   on it: tell the model to keep a wrap-up reserve and conclude with what it
