@@ -660,13 +660,34 @@ def _budget_status(spent_usd: float, grant_usd: float) -> str:
     return f"[budget] spent ${spent_usd:.4f} of ${grant_usd:.4f} grant; ${remaining:.4f} remaining."
 
 
+# The transcript bound on a rendered error detail. The envelope keeps the
+# full text (errors are values; the caller's code may need every character),
+# but what enters the parent LLM's context is footprint, and a failure
+# envelope bypasses the output cap (overflow policy governs `output` only).
+# ~500 tokens is room for any actionable detail; past that the text is
+# diagnostics, which belong in the record, not the context.
+_ERROR_DETAIL_RENDER_CAP_CHARS = 2_000
+
+
+def _bounded_detail(detail: str) -> str:
+    """A child error's detail, bounded for the parent's transcript.
+
+    Truncation is marked, never silent; the result envelope (and any
+    persisted record) keeps the full text.
+    """
+    if len(detail) <= _ERROR_DETAIL_RENDER_CAP_CHARS:
+        return detail
+    return detail[:_ERROR_DETAIL_RENDER_CAP_CHARS] + " [truncated]"
+
+
 def _render_tool_result(result: CommissionResult[Any]) -> str:
     """Render a CommissionResult for the LLM.
 
     Success: the output alone. Partial: the output *and* the error in one
     object; partial output is usable by contract (it's what overflow_policy
     "partial" exists to preserve), so rendering only the error would throw
-    away the child's work. Failure: the error alone.
+    away the child's work. Failure: the error alone, its detail bounded for
+    the transcript.
     """
     if result.status == "success" and result.output is not None:
         if isinstance(result.output, BaseModel):
@@ -674,13 +695,15 @@ def _render_tool_result(result: CommissionResult[Any]) -> str:
         return json.dumps(result.output)
     if result.status == "partial" and result.output is not None:
         error = (
-            {"kind": result.error.kind, "detail": result.error.detail}
+            {"kind": result.error.kind, "detail": _bounded_detail(result.error.detail)}
             if result.error is not None
             else None
         )
         return json.dumps({"partial_output": _jsonable(result.output), "error": error})
     if result.error is not None:
-        return json.dumps({"error": {"kind": result.error.kind, "detail": result.error.detail}})
+        return json.dumps(
+            {"error": {"kind": result.error.kind, "detail": _bounded_detail(result.error.detail)}}
+        )
     return json.dumps({"error": {"kind": "internal", "detail": "empty result"}})
 
 

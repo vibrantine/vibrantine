@@ -6,6 +6,19 @@ All notable changes to Vibrantine are recorded here. The format follows
 public contract exported from `vibrantine.__all__`, plus the supported side
 doors its boundary docstring names (such as `vibrantine.testing`).
 
+## [Unreleased]
+
+### Changed
+
+- **Failed-child details are bounded in the parent's transcript**: when
+  the default LLM loop renders a child's failure (or a partial's error)
+  back to the calling model, the error `detail` is now capped at 2,000
+  characters with a visible `[truncated]` marker. The envelope and any
+  persisted record keep the full text; only the parent model's context
+  is bounded. Closes the one asymmetry in the footprint story: the
+  success path's size was cappable via `max_output_tokens`, the failure
+  path's was not.
+
 ## [0.6.0] - 2026-07-14
 
 ### Added

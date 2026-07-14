@@ -260,6 +260,96 @@ async def test_partial_child_result_renders_output_and_error(
     assert rendered["error"]["kind"] == "output_too_large"
 
 
+class _FailingTool(Commission[_PartialIn, _PartialOut]):
+    """Fails with an oversized detail, like a provider error with a long body."""
+
+    name: ClassVar[str] = "failing_probe"
+    description: ClassVar[str] = "Test probe returning a failure with a huge detail."
+    input_type: ClassVar[type] = _PartialIn
+    output_type: ClassVar[type] = _PartialOut
+
+    async def _run(
+        self,
+        input: _PartialIn,
+        ctx: CallContext,
+    ) -> CommissionResult[_PartialOut]:
+        return CommissionResult[_PartialOut](
+            status="failure",
+            error=ErrorState(
+                kind="internal",
+                detail="x" * 10_000,
+                retryable=False,
+            ),
+            provenance=Provenance(
+                source="failing_probe:test",
+                fetched_at=datetime.now(UTC),
+                confidence="grounded",
+            ),
+            cost=CostMetrics(estimated_usd=0.0),
+        )
+
+
+async def test_failed_child_detail_is_bounded_in_the_transcript(
+    open_test_run: OpenTestRun,
+) -> None:
+    # The envelope keeps the full detail (errors are values), but the
+    # rendered tool result is parent-context footprint: a failure envelope
+    # bypasses the output cap, so the render seam bounds the detail itself,
+    # with a visible truncation marker rather than a silent cut.
+    fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("t1", "failing_probe", {"query": "q"})]),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    async with open_test_run(models=_models(fake)) as ctx:
+        outcome = await run_llm_loop(
+            model=None,
+            commission_name="probe",
+            system_prompt="sys",
+            user_message="go",
+            toolbox=(_FailingTool(),),
+            output_type=_Out,
+            ctx=ctx,
+            max_iterations=3,
+        )
+    assert outcome.output is not None
+    second_call_messages = fake.calls[1]["messages"]
+    tool_msg = next(m for m in second_call_messages if m["role"] == "tool")
+    rendered = json.loads(tool_msg["content"])
+    detail = rendered["error"]["detail"]
+    assert len(detail) < 10_000
+    assert detail.endswith("[truncated]")
+
+
+async def test_short_child_detail_renders_untouched(
+    open_test_run: OpenTestRun,
+) -> None:
+    # The bound only fires on oversized details; the everyday short detail
+    # reaches the model verbatim, marker-free.
+    fake = ScriptedLLM(
+        [
+            llm_response(tool_calls=[("t1", "partial_probe", {"query": "q"})]),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    async with open_test_run(models=_models(fake)) as ctx:
+        await run_llm_loop(
+            model=None,
+            commission_name="probe",
+            system_prompt="sys",
+            user_message="go",
+            toolbox=(_PartialTool(),),
+            output_type=_Out,
+            ctx=ctx,
+            max_iterations=3,
+        )
+    second_call_messages = fake.calls[1]["messages"]
+    tool_msg = next(m for m in second_call_messages if m["role"] == "tool")
+    rendered = json.loads(tool_msg["content"])
+    assert rendered["error"]["detail"] == "Output exceeded cap; returned as partial."
+
+
 async def test_empty_system_prompt_sends_no_system_message(
     open_test_run: OpenTestRun,
 ) -> None:
