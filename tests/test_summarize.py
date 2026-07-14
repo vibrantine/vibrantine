@@ -61,8 +61,8 @@ def test_summarize_default_length_is_short() -> None:
 
 
 def test_summarize_rejects_empty_content() -> None:
-    # Summarizing nothing is a caller bug: guarded at construction, like
-    # Synthesize's empty `sources` and Classify's `min_length` on labels.
+    # Summarizing nothing is a caller bug: the input type refuses it at
+    # construction, before anything runs or spends.
     with pytest.raises(ValidationError):
         SummarizeInput(content="")
 

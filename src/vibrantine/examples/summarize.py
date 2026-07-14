@@ -26,10 +26,10 @@ from vibrantine.contract import CallContext, Commission
 SummaryLength = Literal["one_sentence", "short", "medium", "long"]
 """Qualitative target sizes for a summary.
 
-A closed vocabulary on the *input* (not the output), so it carries none of the
-dynamic-`output_type` tension that per-call labels raise for Classify. The
-prose meaning of each member is pinned in the system prompt; an LLM hits a
-described size far more reliably than an exact word count.
+A closed vocabulary on the *input* (not the output), so the typed output
+contract never varies per call. The prose meaning of each member is pinned
+in the system prompt; an LLM hits a described size far more reliably than
+an exact word count.
 """
 
 _SYSTEM_PROMPT = (
