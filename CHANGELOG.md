@@ -217,6 +217,15 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   else branch assumed every non-text part was an image: a part carrying an
   `image_url` field was silently sent as one, and anything else crashed
   the run with a raw AttributeError.
+- **Documentation restructured** around the core thesis (Vibrantine
+  compresses complex AI behavior into typed tools an AI can call with a
+  minimal footprint). The README is now a concise landing page; its
+  depth moved to two new pages, `docs/commission-model.md` (the boundary,
+  the five surfaces, the envelope, composition) and `docs/running.md`
+  (budgets, fuses, observability, the operator's list). `docs/design.md`
+  was rewritten as the design argument, with every settled ruling split
+  out to the new `docs/design-decisions.md`, the record to consult
+  before changing anything at a boundary.
 
 ## [0.5.0] - 2026-07-09
 

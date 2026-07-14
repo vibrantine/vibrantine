@@ -5,7 +5,8 @@ bones plus the entry points. Example Commissions and tools stay importable
 from their submodules but are deliberately *not* part of the frozen surface.
 
 The tests here are LOCKS, not floors. The public surface is minimized
-mercilessly (design.md § The public surface is minimized mercilessly):
+mercilessly (design-decisions.md § The public surface is minimized
+mercilessly):
 every exported name, constructor kwarg, and context field is permanent
 user-facing cognitive load, so each grows only under pressure from a real,
 named consumer. If you are here because a lock failed: the failure is the

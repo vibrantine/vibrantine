@@ -23,7 +23,7 @@ default below, so hello world configures nothing.
 Pricing is `float | None`. `None` means *unpriced/unknown*: the model simply
 carries no price here. `$0` (`0.0`) means *genuinely free*, e.g. a local Ollama
 model. The distinction matters: a call's cost rolls up structurally into its
-parents (`design.md § Cost and provenance are structural`), so an *unpriced*
+parents (`design-decisions.md § Cost and provenance are structural`), so an *unpriced*
 model anywhere in a
 tree silently under-reports the whole tree's cost; price it for accurate
 accounting. A Commission invoked with a `budget_usd` but an *unpriced* model

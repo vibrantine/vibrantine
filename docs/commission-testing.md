@@ -1,3 +1,5 @@
+<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Compatible with the re-ruled core (trust enables compression). Optional: evals could name the tool descriptor as a surface under test. Worklist: notes/working/thesis-review.md -->
+
 # Commission Testing
 
 How to prove a Commission still satisfies its contract and is effective at the
@@ -53,6 +55,36 @@ model through the run's catalog: register
 `run_commission(models=[...])`, with `llm_response` building each scripted reply.
 The model's intelligence is not under test; the Commission's behavior
 around the scripted response is.
+
+In full, the seam looks like this (an LLM-loop Commission whose declared
+output has `answer` and `key_claims` fields; the scripted reply concludes
+in one turn):
+
+```python
+from vibrantine import run_commission_sync
+from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
+
+fake = ScriptedLLM([
+    llm_response(tool_calls=[(
+        "c1",
+        "conclude",
+        {"answer": "The main risks are dependency and demand.",
+         "key_claims": ["Depends on an unstable API.", "Demand unvalidated."]},
+    )]),
+])
+
+result = run_commission_sync(
+    commission,
+    commission_input,
+    models=[scripted_model(fake)],
+)
+
+assert result.status == "success"
+assert fake.calls  # every request the Commission sent (model, messages, tools)
+```
+
+The full machinery runs for real around the fake replies: validation,
+envelopes, cost accounting, persistence.
 
 Tests are callers, so they use the caller's API: launch the Commission under
 test through the public entry points (`run_commission` / `run_commission_sync`), never by

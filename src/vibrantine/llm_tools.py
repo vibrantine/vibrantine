@@ -169,7 +169,8 @@ async def run_llm_loop[OutputT: BaseModel](
     # unrestricted for both. A forbidden tool is simply absent from the
     # menu, so any call to it falls through the unknown-tool branch below;
     # no separate gate. `conclude` is framework-injected and never gated.
-    # See docs/design.md.
+    # See docs/design-decisions.md (§ Capabilities bound what a Commission
+    # may do).
     allowed = ctx.capabilities.tools
     ceiling = gatekeeper.tool_ceiling
     permitted = [

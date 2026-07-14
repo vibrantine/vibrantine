@@ -126,7 +126,7 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
         gets re-synthesized upstream anyway. So the answer is halved until
         the whole output fits, and trailing claims are dropped only once the
         answer is gone. Deterministic throughout: no LLM in the overflow
-        path (design.md rules out LLM-summarized fallbacks).
+        path (design-decisions.md rules out LLM-summarized fallbacks).
         """
         marker = " …[truncated]"
         claims = list(output.claims)

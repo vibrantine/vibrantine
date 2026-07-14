@@ -1,3 +1,5 @@
+<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Re-read against the re-ruled core (AI as intended consumer, minimal footprint). Emphasis, not mechanics: name/description/input schema are the model-facing interface; check the opening framing. Worklist: notes/working/thesis-review.md -->
+
 # Authoring Commissions
 
 A Commission is one typed function with an LLM inside. You hand it a typed
@@ -1304,7 +1306,7 @@ Constructor kwargs (all keyword-only):
 Protected helpers available to a custom `_run`. The underscore warns
 *callers* off; for authors these are the supported interior surface,
 provisional until the authoring-surface freeze (see
-`design.md § Not built yet`):
+`design-decisions.md § Not built yet`):
 
 | Helper | Use |
 |---|---|

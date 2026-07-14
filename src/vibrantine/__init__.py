@@ -36,7 +36,8 @@ permanent claim on a user's memory, so the list grows only under pressure
 from a real, named consumer, never for convenience; when something can be
 solved with interior code instead of a new name, the interior wins. An
 exact lock test (`tests/test_public_api.py`) makes any growth a deliberate
-act. See `docs/design.md § The public surface is minimized mercilessly`.
+act. See `docs/design-decisions.md § The public surface is minimized
+mercilessly`.
 """
 
 from vibrantine.contract import (

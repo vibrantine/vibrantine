@@ -1,25 +1,32 @@
 # Vibrantine Docs
 
 Index of the docs directory. Start with the root [`README.md`](../README.md)
-for the public front door, then read `design.md` for the design record.
+for the public front door, then read `commission-model.md` to understand
+the model and `design.md` for the design argument.
 
 ## Public front door
 
 - [`../README.md`](../README.md): the source of truth: what Vibrantine
   is, why Commissions, what ships today, and where to go next.
 
-## Design record
+## Design
 
-- [`design.md`](design.md): why the library is shaped the way it is, what
-  that shape costs, and what is planned but not built. The goal and the
-  two-sentence core, every settled decision with its reason and what it
-  rules out, what the library refuses to do, the trades, what is not
-  built yet, and the thesis.
+- [`design.md`](design.md): the design argument: what the library is
+  for, the model that delivers it, why the boundary can be trusted,
+  what the library refuses to do, and what the guarantees cost.
+- [`design-decisions.md`](design-decisions.md): the ruling record:
+  every settled decision in one fixed shape (the decision, why, what it
+  rules out), plus the not-built list with the trigger that earns each
+  build. Consult it before changing anything at a boundary.
 
 ## Guides
 
 Audience-facing guides, not architecture.
 
+- [`commission-model.md`](commission-model.md): how the Commission
+  model works, conceptually. The boundary, the five surfaces, the
+  result envelope, and composition; what a Commission looks like to
+  the model that holds it as a tool.
 - [`authoring.md`](authoring.md): the one document about building
   Commissions, in three parts. Part I: a step-by-step tutorial building a
   first Commission in an external project against the frozen public surface,
@@ -27,6 +34,9 @@ Audience-facing guides, not architecture.
   composition, the custom-coordinator path, and where state lives. Part III:
   the contract reference, machine-checked in CI by
   `tests/test_external_authoring.py`.
+- [`running.md`](running.md): what you control and what you can see
+  when you run a Commission tree: budgets, fuses, observability, and
+  the short list of conventions an operator holds in their head.
 - [`commission-testing.md`](commission-testing.md): how to test Commissions
   at two levels: contract behavior with fake clients, and heuristic
   evaluation against explicit success/failure criteria.
@@ -39,10 +49,11 @@ Audience-facing guides, not architecture.
 ## Working notes ([`working/`](working/))
 
 Working material, not live guidance; this folder shrinks as material
-promotes into the live docs or retires. Currently one note:
+promotes into the live docs or retires. Currently:
 [`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md),
-the decision record for the standard folder-sized Commission layout, its
-sketches, and its open threads.
+the decision record for the standard folder-sized Commission layout, and
+[`readme-building/PLAN.md`](working/readme-building/PLAN.md), the scaffold
+record of the 2026-07 README rebuild (its pages promoted 2026-07-14).
 
 The concept drafts that used to live under `working/concepts/` promoted
 into `authoring.md` (the five-surface ownership map, the boundary-type

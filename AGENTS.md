@@ -2,11 +2,11 @@
 
 ## Vision
 
-A component model for AI agents. Each Commission is a typed, contracted, isolated unit of LLM-driven work: independently authored, independently testable, composable through declared interfaces rather than emergent coordination. LangGraph treats agents as nodes in a shared-state graph; CrewAI treats them as members of a natural-language collaboration; Vibrantine treats them as **components**.
+Vibrantine compresses complex AI behavior into typed tools an AI can call with a minimal footprint. The intended caller is a model; trust in the boundary is the enabler that makes discarding the interior safe. Each Commission is a typed, contracted, isolated unit of LLM-driven work: independently authored, independently testable, composable through declared interfaces rather than emergent coordination. LangGraph treats agents as nodes in a shared-state graph; CrewAI treats them as members of a natural-language collaboration; Vibrantine treats them as **components**.
 
 The thesis: the right primitive for AI work is a bounded, contracted, isolated unit, and everything else (persistence, autonomy, conversation, scheduling, cost ledgers, user surfaces) composes above that primitive without leaking back in.
 
-Read `docs/design.md` for what Vibrantine is, why, and how the pieces fit together. `docs/README.md` indexes the rest of the docs directory.
+Read `docs/design.md` for the design argument and `docs/design-decisions.md` for the ruling record. `docs/README.md` indexes the rest of the docs directory.
 
 ## Library scope
 
@@ -16,10 +16,12 @@ A publishable library, not an application layer. The boundary and its rationale 
 
 Structural invariants. Breaking one is an architectural decision, not a quick fix.
 
+**Consult the ruling record first.** Before growing the public surface, changing boundary behavior, or building an item from the not-built list, grep `docs/design-decisions.md` for the relevant entries. A collision between your work and a ruling is a stop-and-flag moment: surface it and wait. Rulings change by explicit re-rule, never by drift.
+
 - **One interior hook**: `async _run(input, ctx) -> CommissionResult`, called only by `dispatch`; invoke through `run_commission` / `run_commission_sync` / `dispatch`. Extend `CallContext` for new orchestration concerns, never the `_run` signature.
 - **Errors are values.** No exception crosses the call boundary. Failures return `CommissionResult(status="failure"|"partial", error=ErrorState(...))`.
 - **Tree-structured invocations.** A Commission only waits on its own children. No peer messaging, shared state, or back-channels.
-- **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `design.md § Cost and provenance are structural`).
+- **Cost and provenance are first-class.** Every result carries `CostMetrics` and `Provenance`. Costs roll up structurally on both the Python-coordinator and LLM-loop paths (see `design-decisions.md § Cost and provenance are structural`).
 - **Stateless across invocations.** No cross-invocation memory. The persistence layer stores run *records* for inspection; resumable state stays above the library.
 - **Prompts are internal.** Each Commission owns its system prompt; callers choose *which* Commission to invoke.
 
@@ -35,7 +37,7 @@ Complexity is judged at the public boundary, not in the interior. A Commission's
 - The three surfaces above are pinned by exact lock tests in `tests/test_public_api.py`. Growing one fails the suite until the lock is edited in the same commit; that failure is the moment to justify the growth, not an obstacle to silence. Same mechanism as the vocabulary-append rule.
 - This guards against a known failure mode of LLM-driven development specifically: each added knob, field, or helper reads as simple in isolation, and the sum is an unholdable surface. If you are an agent reading this while about to add one: the burden of proof is on the addition.
 
-See `docs/design.md § The public surface is minimized mercilessly` for the decision record.
+See `docs/design-decisions.md § The public surface is minimized mercilessly` for the decision record.
 
 ## Commission vs. tool
 
@@ -48,8 +50,8 @@ owned by a folder-sized Commission may live under that Commission's
 `tools/` slot. Both subclass `Commission[InputT, OutputT]` the same way
 (`max_input_tokens=None`, no model arg): identical contract, no LLM
 anywhere in the subtree. See
-[`docs/design.md § Three categories, no fourth`](docs/design.md) for
-the rationale and the Commission / Tool / application-code relationship.
+[`docs/design-decisions.md § Three categories, no fourth`](docs/design-decisions.md)
+for the rationale and the Commission / Tool / application-code relationship.
 
 ## Description prose: write for the LLM by default
 
@@ -191,7 +193,7 @@ Application-specific result types live alongside the Commission or function that
 
 ## Deferred work
 
-What is deliberately not built, each item with the trigger that builds it, lives in [`docs/design.md § Not built yet`](docs/design.md). Don't start an item on that list before its trigger arrives, and don't add machinery the list doesn't name without recording the decision there first. Anything above the library boundary stays out permanently (see § Library scope).
+What is deliberately not built, each item with the trigger that builds it, lives in [`docs/design-decisions.md § Not built yet`](docs/design-decisions.md). Don't start an item on that list before its trigger arrives, and don't add machinery the list doesn't name without recording the decision there first. Anything above the library boundary stays out permanently (see § Library scope).
 
 ## Git commits
 
@@ -211,10 +213,11 @@ across OpenRouter calls.
 
 ## Further reading
 
-Three documents cover Vibrantine, and each has one job:
+Four documents cover Vibrantine, and each has one job:
 
 - `README.md` (root): the source of truth: what Vibrantine is, what ships today, and why you would use it.
-- `docs/design.md`: the design record: the goal and the two-sentence core, every settled decision with its reason and what it rules out, what the library refuses to do, the trades, what is not built yet, and the thesis.
+- `docs/design.md`: the design argument: what the library is for, the model that delivers it, why the boundary can be trusted, the refusals, the trades, and the thesis.
+- `docs/design-decisions.md`: the ruling record: every settled decision with its reason and what it rules out, plus what is not built yet with its trigger.
 - `docs/authoring.md`: the builder's manual, machine-checked in CI.
 
 [`docs/README.md`](docs/README.md) indexes everything else: the testing standard, the release checklist, and the working notes under `docs/working/`. Process records and retired drafts live outside the repo.

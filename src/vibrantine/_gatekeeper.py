@@ -8,8 +8,8 @@ stop signal, and the provider-call log. Anything a node owns its own slice
 of (budget grant, capability grant, model choice) stays a distributed value
 on the context.
 
-Three invariants (docs/design.md, "One run, one Gatekeeper at the provider
-seam"):
+Three invariants (docs/design-decisions.md, "One run, one Gatekeeper at the
+provider seam"):
 
 - Calls report in, control flows out. Nodes never read the running totals
   here to decide anything; the log is observational only.
@@ -27,7 +27,7 @@ a fresh one, the fuse escape the no-swap rule exists to close.
 Trust boundary: an in-process control over the framework's own paths, not a
 sandbox. Custom Python can step around it (a raw client, raw file writes,
 sockets, a subprocess); those are deliberate escapes the framework does not
-claim to prevent. See docs/design.md for the canonical statement.
+claim to prevent. See docs/design-decisions.md for the canonical statement.
 """
 
 import asyncio

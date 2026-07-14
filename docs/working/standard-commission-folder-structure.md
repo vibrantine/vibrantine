@@ -1,3 +1,5 @@
+<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Light: consider whether BRIEF.md/description are written for the model reader as much as the human one. Worklist: notes/working/thesis-review.md -->
+
 # Standard Commission Folder Structure
 
 This note records the chosen standard layout for folder-sized Commissions,

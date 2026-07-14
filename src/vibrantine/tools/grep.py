@@ -7,8 +7,8 @@ discovery; pair with Read or Sample once an interesting match is found.
 The first tool whose result size can grow alarmingly: `max_matches`
 bounds it, with `truncated=True` signalling more remains. This is the
 tool that surfaces the tool-result-budgeting design question
-concretely (see `docs/design.md § Oversized output is a policy the
-caller picks`).
+concretely (see `docs/design-decisions.md § Oversized output is a
+policy the caller picks`).
 
 Unreadable files (binary content, permission denied, vanished mid-walk)
 are skipped silently during directory walks so one bad entry never
