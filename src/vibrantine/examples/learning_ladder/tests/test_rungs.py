@@ -39,3 +39,7 @@ def test_rung_4_is_rung_3_tree_unchanged() -> None:
     assert rung_4.meal_planner.description == rung_3.meal_planner.description
     assert rung_4.recipe_writer.name == rung_3.recipe_writer.name
     assert type(rung_4.meal_planner).system_prompt == type(rung_3.meal_planner).system_prompt
+    # The nesting is part of "the tree": both planners still hold their own
+    # recipe_writer as the sole tool.
+    assert rung_3.meal_planner.toolbox == (rung_3.recipe_writer,)
+    assert rung_4.meal_planner.toolbox == (rung_4.recipe_writer,)

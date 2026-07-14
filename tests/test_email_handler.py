@@ -7,6 +7,7 @@ handlers, so routing, dispatched-child cost rollup, and the
 heterogeneous-output flattening are all exercised end-to-end.
 """
 
+import json
 from types import SimpleNamespace
 
 from vibrantine import run_commission
@@ -125,6 +126,11 @@ async def test_email_handler_notify_route_dispatches_tool() -> None:
     assert result.output.notification_sent is True
     assert result.output.draft_text is None
     assert len(fake.calls) == 2
+    # The dispatch really happened: turn two's transcript carries the notify
+    # tool's own result. Without this, a broken NotifyUserTool would fail
+    # into the transcript and the scripted conclude would still pass above.
+    tool_msg = next(m for m in fake.calls[1]["messages"] if m["role"] == "tool")
+    assert json.loads(tool_msg["content"]) == {"delivered": True}
 
 
 async def test_email_handler_cancelled_before_loop_makes_no_call() -> None:
