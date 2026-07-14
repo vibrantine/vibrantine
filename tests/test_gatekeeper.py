@@ -331,22 +331,71 @@ async def test_spend_fuse_trips_and_reports_true_total_spend() -> None:
     assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
 
 
+async def _warm_run() -> None:
+    """One throwaway scripted run before a timed test.
+
+    A cold process spends hundreds of milliseconds of import and schema
+    build inside the first run_commission; raced against a time fuse, that
+    startup can eat the whole deadline and refuse call one at the door
+    (zero spend), a different story than the test is pinning.
+    """
+    await run_commission(_Probe(), _Q(question="?"), models=[_scripted([_conclude()])])
+
+
 async def test_time_fuse_trips_at_the_dispatch_seam() -> None:
-    # The first provider call is held open well past the deadline (well past
-    # Windows' coarse monotonic tick, too); the trip then fires at the next
-    # dispatch (the echo child), between LLM calls, not only at the door.
+    # The first provider call is held open well past the deadline; the trip
+    # then fires at the next dispatch (the echo child), between LLM calls,
+    # not only at the door.
+    await _warm_run()
+    rows: list[dict[str, Any]] = []
     probe = _Probe(toolbox=(_EchoTool(),))
     entry = _paced_entry(
         [llm_response(tool_calls=[("t1", "echo", {"text": "hi"})]), _conclude()],
-        delay=0.2,
+        delay=1.0,
     )
-    result = await run_commission(probe, _Q(question="?"), models=[entry], time_limit_seconds=0.05)
+    result = await run_commission(
+        probe,
+        _Q(question="?"),
+        models=[entry],
+        time_limit_seconds=0.25,
+        on_dispatch=rows.append,
+    )
     assert result.status == "failure"
     assert result.error is not None
     assert result.error.kind == "run_halted"
     assert "time fuse tripped" in result.error.detail
     # The held-open first call completed and is fully counted.
     assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+    # The seam, not just the door: the echo child was refused before it ran.
+    # Door-only enforcement would let it dispatch to success and stop the
+    # run one LLM call later, an identical envelope with a different ledger.
+    assert [row["status"] for row in rows if row["commission_name"] == "echo"] == ["refused"]
+
+
+async def test_time_fuse_trips_at_the_provider_door_between_turns() -> None:
+    # The door's own admission check, isolated: a toolbox-free loop leaves
+    # no dispatch between LLM calls, so when turn one outruns the deadline
+    # (a free-text reply, nudged without dispatching anything) the door is
+    # the only seam left to stop turn two.
+    await _warm_run()
+    rows: list[dict[str, Any]] = []
+    entry = _paced_entry([llm_response(content="thinking out loud"), _conclude()], delay=1.0)
+    result = await run_commission(
+        _Probe(),
+        _Q(question="?"),
+        models=[entry],
+        time_limit_seconds=0.25,
+        on_dispatch=rows.append,
+    )
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "run_halted"
+    assert "time fuse tripped" in result.error.detail
+    # The held-open first call completed and is fully counted.
+    assert math.isclose(result.cost.estimated_usd, COST_PER_DEFAULT_CALL)
+    # Door, not seam: nothing was dispatched between the turns, so the
+    # register carries only the root's own row.
+    assert [(row["commission_name"], row["status"]) for row in rows] == [("probe", "failure")]
 
 
 async def test_exactly_n_calls_do_not_trip_the_count_fuse() -> None:
@@ -1292,9 +1341,12 @@ async def test_dispatches_land_beside_records_in_sqlite(tmp_path: Any) -> None:
     assert result.status == "success"
 
     with sqlite3.connect(tmp_path / "runs.db") as conn:
+        # rowid, not ended_at: the register batches rows in settle order
+        # (echo before its root), and on a coarse system clock both rows can
+        # share one ended_at tick, leaving ORDER BY ended_at nondeterministic.
         rows = conn.execute(
             "SELECT root_run_id, run_id, parent_run_id, commission_name, "
-            "deterministic, status FROM dispatches ORDER BY ended_at"
+            "deterministic, status FROM dispatches ORDER BY rowid"
         ).fetchall()
         # The register's join: a row's run_id names the node's record, where
         # the content lives (metadata here, verbatim input/output there).
