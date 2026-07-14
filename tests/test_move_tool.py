@@ -3,13 +3,8 @@
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.move import MoveInput, MoveTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _make(p: Path, content: str = "x") -> Path:
@@ -178,7 +173,7 @@ async def test_move_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         MoveTool(),
         MoveInput(source=src, target=tmp_path / "dst.txt"),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

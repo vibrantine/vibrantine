@@ -3,13 +3,8 @@
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.glob import GlobInput, GlobTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _populate(tmp_path: Path) -> None:
@@ -167,7 +162,7 @@ async def test_glob_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         GlobTool(),
         GlobInput(pattern="**/*.py", base=tmp_path),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

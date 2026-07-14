@@ -3,13 +3,8 @@
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.write import WriteInput, WriteTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 async def test_write_creates_new_file(tmp_path: Path) -> None:
@@ -126,7 +121,7 @@ async def test_write_cancelled_before_write_returns_cancelled(tmp_path: Path) ->
     result = await run_commission(
         WriteTool(),
         WriteInput(path=path, content="should not land"),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

@@ -4,17 +4,12 @@ import re
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.grep import (
     GrepInput,
     GrepTool,
     _grep_file,  # pyright: ignore[reportPrivateUsage]
 )
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _make(tmp_path: Path, name: str, content: str) -> Path:
@@ -196,7 +191,7 @@ async def test_grep_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         GrepTool(),
         GrepInput(pattern=r"x", path=tmp_path),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

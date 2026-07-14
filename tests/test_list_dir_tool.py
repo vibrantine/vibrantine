@@ -6,13 +6,8 @@ from pathlib import Path
 import pytest
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.list_dir import ListDirInput, ListDirTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 async def test_list_dir_returns_files_and_directories(tmp_path: Path) -> None:
@@ -126,7 +121,7 @@ async def test_list_dir_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         ListDirTool(),
         ListDirInput(path=tmp_path),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

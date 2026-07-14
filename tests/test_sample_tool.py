@@ -4,18 +4,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.sample import (
     LINE_CAP_CHARS,
     SampleInput,
     SampleTool,
     _sample_file,  # pyright: ignore[reportPrivateUsage]
 )
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _make(tmp_path: Path, name: str, content: str) -> Path:
@@ -150,7 +145,7 @@ async def test_sample_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         SampleTool(),
         SampleInput(path=path),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

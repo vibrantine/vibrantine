@@ -9,18 +9,12 @@ import sys
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.shell import (
     ShellInput,
     ShellTool,
     _decode,  # pyright: ignore[reportPrivateUsage]
 )
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
-
 
 _PYTHON = sys.executable
 
@@ -87,7 +81,7 @@ async def test_shell_cancelled_before_launch_returns_cancelled(tmp_path: Path) -
     result = await run_commission(
         ShellTool(),
         ShellInput(command=f'"{_PYTHON}" -c "print(\'should not run\')"'),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

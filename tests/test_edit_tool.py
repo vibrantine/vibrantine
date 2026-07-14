@@ -3,13 +3,8 @@
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.edit import EditInput, EditTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _make_file(tmp_path: Path, name: str, content: str) -> Path:
@@ -210,7 +205,7 @@ async def test_edit_cancelled_before_edit_returns_cancelled(tmp_path: Path) -> N
     result = await run_commission(
         EditTool(),
         EditInput(path=path, old_string="world", new_string="earth"),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

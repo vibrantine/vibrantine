@@ -8,13 +8,8 @@ from pathlib import Path
 import pytest
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.read import ReadInput, ReadTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _make_file(tmp_path: Path, name: str, content: str) -> Path:
@@ -191,7 +186,7 @@ async def test_read_cancelled_before_read_returns_cancelled(tmp_path: Path) -> N
     result = await run_commission(
         ReadTool(),
         ReadInput(path=path),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

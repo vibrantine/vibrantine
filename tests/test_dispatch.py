@@ -356,7 +356,7 @@ async def test_explicit_mode_beats_ctx_record(tmp_path: Path, open_test_run: Ope
 
 
 async def test_dispatch_no_backend_skips_even_with_active_mode(
-    tmp_path: Path, open_test_run: OpenTestRun
+    open_test_run: OpenTestRun,
 ) -> None:
     stub = _Stub(persistence_mode="always")
     # No backend on ctx → nothing to persist to → result still flows.
@@ -384,25 +384,6 @@ async def test_dispatch_persisted_record_has_chain_and_payloads(
     assert loaded.result["status"] == "success"
 
 
-class _ExplodingBackend:
-    """A PersistenceBackend whose store always raises."""
-
-    async def store(self, record: object) -> None:
-        raise OSError("disk full")
-
-    async def load(self, run_id: str) -> None:
-        return None
-
-    async def list_references(self, *, parent_run_id: str | None = None) -> list[str]:
-        return []
-
-    async def delete(self, run_id: str) -> None:
-        return None
-
-    async def delete_older_than(self, cutoff: datetime) -> int:
-        return 0
-
-
 async def test_dispatch_failing_backend_does_not_destroy_the_result(
     open_test_run: OpenTestRun,
 ) -> None:
@@ -410,7 +391,7 @@ async def test_dispatch_failing_backend_does_not_destroy_the_result(
     # break errors-as-values or eat the result it was recording.
     events: list[ProgressEvent] = []
     stub = _Stub(persistence_mode="always")
-    async with open_test_run(backend=_ExplodingBackend(), on_progress=events.append) as ctx:
+    async with open_test_run(backend=_FailingBackend(), on_progress=events.append) as ctx:
         result = await dispatch(stub, _Input(q="?"), ctx)
 
     assert result.status == "success"

@@ -3,13 +3,8 @@
 from pathlib import Path
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.delete import DeleteInput, DeleteTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 async def test_delete_removes_existing_file(tmp_path: Path) -> None:
@@ -68,7 +63,7 @@ async def test_delete_cancelled_returns_cancelled(tmp_path: Path) -> None:
     result = await run_commission(
         DeleteTool(),
         DeleteInput(path=target),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"

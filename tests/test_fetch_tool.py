@@ -5,13 +5,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from vibrantine import run_commission
+from vibrantine.testing import AlwaysCancelled
 from vibrantine.tools.fetch import FetchInput, FetchTool
-
-
-class _AlwaysCancelled:
-    @property
-    def is_cancelled(self) -> bool:
-        return True
 
 
 def _handler_ok(request: httpx.Request) -> httpx.Response:
@@ -168,7 +163,7 @@ async def test_fetch_cancelled_before_request_returns_cancelled() -> None:
     result = await run_commission(
         tool,
         FetchInput(url="https://example.test/anything"),
-        cancel=_AlwaysCancelled(),
+        cancel=AlwaysCancelled(),
     )
 
     assert result.status == "failure"
