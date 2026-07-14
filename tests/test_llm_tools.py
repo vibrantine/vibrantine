@@ -22,6 +22,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
+import httpx
+import openai
+import pytest
 from pydantic import BaseModel, Field
 
 from vibrantine import run_commission
@@ -460,7 +463,7 @@ async def test_exhausted_grant_starves_later_children_at_zero(
     open_test_run: OpenTestRun,
 ) -> None:
     # The first child overspends the grant; the second's ceiling clamps at
-    # 0.0 rather than going negative, and the loop's own post-turn check
+    # 0.0 rather than going negative, and the next turn's pre-flight gate
     # then ends the run as budget_exceeded.
     probe = _BudgetProbe(cost_usd=0.25)
     fake = ScriptedLLM(
@@ -774,6 +777,159 @@ async def test_second_free_text_reply_fails_the_loop(open_test_run: OpenTestRun)
     assert outcome.error is not None
     assert outcome.error.kind == "internal"
     assert "twice" in outcome.error.detail
+
+
+async def test_invalid_tool_arguments_feed_back_without_dispatch(
+    open_test_run: OpenTestRun,
+) -> None:
+    # The loop's promise: a malformed tool call is a nudgeable slip, fed
+    # back to the LLM as a validation tool result, never raised and never
+    # dispatched. Turn one's arguments are not JSON at all; turn two's
+    # parse but miss the required field; turn three concludes normally.
+    probe = _BudgetProbe(cost_usd=0.0)
+    unparseable = SimpleNamespace(
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=None,
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="t1",
+                            type="function",
+                            function=SimpleNamespace(name="budget_probe", arguments="{not json"),
+                        )
+                    ],
+                )
+            )
+        ],
+    )
+    fake = ScriptedLLM(
+        [
+            unparseable,
+            llm_response(tool_calls=[("t2", "budget_probe", {"wrong_field": "no query"})]),
+            llm_response(tool_calls=[("c1", "conclude", {"answer": "done"})]),
+        ]
+    )
+    async with open_test_run(models=_models(fake)) as ctx:
+        outcome = await run_llm_loop(
+            model=None,
+            commission_name="probe",
+            system_prompt="sys",
+            user_message="go",
+            toolbox=(probe,),
+            output_type=_Out,
+            ctx=ctx,
+            max_iterations=3,
+        )
+    assert outcome.error is None
+    assert outcome.output is not None
+    # Neither bad call reached the tool.
+    assert probe.seen_budgets == []
+    # Both slips came back as validation tool results the LLM can act on.
+    tool_msgs = [m for m in fake.calls[2]["messages"] if m["role"] == "tool"]
+    assert len(tool_msgs) == 2
+    for msg in tool_msgs:
+        rendered = json.loads(str(msg["content"]))
+        assert rendered["error"]["kind"] == "validation"
+        assert "Invalid input" in rendered["error"]["detail"]
+
+
+class _RaisingLLM:
+    """A provider double whose create always raises: the classification seam."""
+
+    def __init__(self, exc: Exception) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._exc = exc
+
+        async def create(**kwargs: Any) -> SimpleNamespace:
+            self.calls.append(kwargs)
+            raise self._exc
+
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+
+
+def _provider_request() -> httpx.Request:
+    return httpx.Request("POST", "https://fixture.invalid/v1/chat/completions")
+
+
+@pytest.mark.parametrize(
+    ("make_exc", "expected_kind", "expected_retryable", "needle"),
+    [
+        pytest.param(
+            lambda: openai.RateLimitError(
+                "slow down",
+                response=httpx.Response(429, request=_provider_request()),
+                body=None,
+            ),
+            "rate_limit",
+            True,
+            "Rate limit",
+            id="rate-limit",
+        ),
+        pytest.param(
+            lambda: openai.APIStatusError(
+                "bad request",
+                response=httpx.Response(400, request=_provider_request()),
+                body=None,
+            ),
+            "internal",
+            False,
+            "LLM provider error",
+            id="deterministic-4xx",
+        ),
+        pytest.param(
+            lambda: openai.APIStatusError(
+                "upstream unavailable",
+                response=httpx.Response(503, request=_provider_request()),
+                body=None,
+            ),
+            "internal",
+            True,
+            "LLM provider error",
+            id="transient-5xx",
+        ),
+        pytest.param(
+            lambda: openai.APIConnectionError(request=_provider_request()),
+            "internal",
+            True,
+            "LLM provider error",
+            id="connection-trouble",
+        ),
+    ],
+)
+async def test_provider_errors_classify_kind_and_retryability(
+    open_test_run: OpenTestRun,
+    make_exc: "Callable[[], Exception]",
+    expected_kind: str,
+    expected_retryable: bool,
+    needle: str,
+) -> None:
+    # The except ladder's order is load-bearing (RateLimitError is an
+    # APIStatusError is an APIError): the rate-limit case fails here if a
+    # broader arm moves above a narrower one. Retryability is the contract:
+    # 429, 5xx, and connection trouble may clear; a plain 4xx is
+    # deterministic and must not invite a retry.
+    raising = _RaisingLLM(make_exc())
+    async with open_test_run(models=_models(cast("ScriptedLLM", raising))) as ctx:
+        outcome = await run_llm_loop(
+            model=None,
+            commission_name="probe",
+            system_prompt="sys",
+            user_message="go",
+            toolbox=(),
+            output_type=_Out,
+            ctx=ctx,
+            max_iterations=3,
+        )
+    assert len(raising.calls) == 1
+    assert outcome.output is None
+    assert outcome.error is not None
+    assert outcome.error.kind == expected_kind
+    assert outcome.error.retryable is expected_retryable
+    assert needle in outcome.error.detail
+    # The raising call recorded no usage; nothing is invented.
+    assert outcome.in_tokens == 0 and outcome.out_tokens == 0
 
 
 async def test_empty_provider_choices_fail_as_loop_error(open_test_run: OpenTestRun) -> None:
