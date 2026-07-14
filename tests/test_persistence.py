@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from vibrantine.contract import PersistedRecord, PersistenceBackend
 from vibrantine.persistence import FilesystemBackend, SqliteBackend
@@ -106,6 +107,32 @@ async def test_store_then_load_round_trip(make_backend: BackendFactory) -> None:
     assert loaded.run_id == record.run_id
     assert loaded.commission_name == record.commission_name
     assert loaded.mode == "always"
+
+
+async def test_round_trip_preserves_every_field(make_backend: BackendFactory) -> None:
+    # Pydantic equality is field-wise: one assertion pins full fidelity of
+    # the record through the backend, including the microsecond timestamp,
+    # the lineage pointer, the trace, and non-ASCII content.
+    backend = make_backend()
+    record = PersistedRecord(
+        run_id="full-1",
+        parent_run_id="parent-1",
+        commission_name="démo",
+        mode="always",
+        created_at=datetime(2026, 7, 14, 12, 30, 45, 123456, tzinfo=UTC),
+        input={"q": "what about ünicode? 囲碁"},
+        result={"status": "success", "cost": {"estimated_usd": 0.00123, "in_tokens": 10}},
+        ctx_snapshot={"budget_usd": 1.5},
+        llm_trace=[
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "héllo"},
+        ],
+    )
+
+    await backend.store(record)
+    loaded = await backend.load("full-1")
+
+    assert loaded == record
 
 
 async def test_load_missing_returns_none(make_backend: BackendFactory) -> None:
@@ -200,7 +227,8 @@ async def test_on_failure_mode_evicts_records_past_retention(
     await backend.store(_record(run_id="old", mode="on_failure", created_at=old_failure))
     await backend.store(_record(run_id="young", mode="on_failure", created_at=young_failure))
 
-    # Storing a third on_failure record triggers pruning of the old one.
+    # Pruning runs on every store, so by the time all three are in, the
+    # over-retention record is gone.
     await backend.store(_record(run_id="trigger", mode="on_failure"))
 
     survivors = set(await backend.list_references())
@@ -242,6 +270,39 @@ async def test_dev_pruning_does_not_touch_other_modes(make_backend: BackendFacto
     survivors = set(await backend.list_references())
     assert "kept-failure" in survivors
     assert "kept-always" in survivors
+
+
+# --- FilesystemBackend-specific: corrupt-record tolerance --------------------
+
+
+async def test_filesystem_pruning_skips_corrupt_records(tmp_path: Path) -> None:
+    # The documented tolerance: a corrupt file must neither crash the prune
+    # (that would defeat "don't fill the disk") nor be evicted by it
+    # (pruning only ever removes records it could read). Both prune paths
+    # run: the dev ring buffer and the on_failure cutoff sweep.
+    backend = FilesystemBackend(tmp_path, dev_ring_buffer_size=1)
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+
+    await backend.store(_record(run_id="d-0", mode="dev"))
+    await backend.store(_record(run_id="d-1", mode="dev"))
+    await backend.store(_record(run_id="f-0", mode="on_failure"))
+
+    assert corrupt.read_text(encoding="utf-8") == "{not json"
+    assert await backend.load("d-1") is not None
+    assert await backend.load("f-0") is not None
+
+
+async def test_filesystem_load_and_listing_still_raise_on_corrupt(tmp_path: Path) -> None:
+    # The tolerance is pruning-only: reading a corrupt record explicitly is
+    # an error the caller must see, never a silent None or a skipped entry.
+    backend = FilesystemBackend(tmp_path)
+    (tmp_path / "corrupt.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        await backend.load("corrupt")
+    with pytest.raises(ValidationError):
+        await backend.list_references()
 
 
 # --- FilesystemBackend-specific: path safety --------------------------------
