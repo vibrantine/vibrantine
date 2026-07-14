@@ -13,7 +13,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from vibrantine import CallContext, Commission, create_commission, run_commission
+from vibrantine import (
+    DEFAULT_MAX_ITERATIONS,
+    CallContext,
+    Commission,
+    create_commission,
+    run_commission,
+)
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools import ReadTool
 
@@ -36,6 +42,8 @@ def _commission(
     description: str = "Writes a recipe for a named dish.",
     toolbox: "tuple[Commission[Any, Any], ...]" = (),
     system_prompt: str | None = None,
+    model: str | None = None,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
 ) -> Commission[RecipeInput, RecipeOutput]:
     return create_commission(
         name=name,
@@ -44,6 +52,8 @@ def _commission(
         output=RecipeOutput,
         toolbox=toolbox,
         system_prompt=system_prompt,
+        model=model,
+        max_iterations=max_iterations,
     )
 
 
@@ -112,6 +122,48 @@ def test_tools_land_in_the_toolbox() -> None:
 
 def test_default_toolbox_is_empty() -> None:
     assert _commission().toolbox == ()
+
+
+async def test_model_choice_reaches_the_run_catalog() -> None:
+    # Two profiles registered, the factory's model= naming the non-default:
+    # the run consuming the chosen fake (and only it) pins that the choice
+    # survived the passthrough into the built Commission.
+    default_fake = ScriptedLLM([])
+    chosen_fake = ScriptedLLM(
+        [llm_response(tool_calls=[("c1", "conclude", {"recipe": "Chosen."})])]
+    )
+    commission = _commission(model="chosen-seat")
+
+    result = await run_commission(
+        commission,
+        RecipeInput(dish="soup"),
+        models=[
+            scripted_model(default_fake, name="default-seat"),
+            scripted_model(chosen_fake, name="chosen-seat"),
+        ],
+        default_model="default-seat",
+    )
+
+    assert result.status == "success", result.error
+    assert default_fake.calls == []
+    assert len(chosen_fake.calls) == 1
+
+
+async def test_max_iterations_bounds_the_loop() -> None:
+    # A cap of one with a free-text first reply: the loop must end after
+    # that single turn, proving max_iterations= reached the loop unchanged
+    # (the default cap would grant the scripted second turn).
+    fake = ScriptedLLM([llm_response(content="prose, no tool call")])
+    commission = _commission(max_iterations=1)
+
+    result = await run_commission(
+        commission, RecipeInput(dish="soup"), models=[scripted_model(fake)]
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert "iteration cap of 1" in result.error.detail
+    assert len(fake.calls) == 1
 
 
 def test_two_factory_calls_share_nothing() -> None:
