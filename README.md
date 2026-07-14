@@ -33,7 +33,7 @@ same.
 - **Dependencies:** three (`pydantic` v2, `httpx`, `openai` as the
   client for any OpenAI-compatible endpoint; OpenRouter by default).
 - **Status:** early-stage, pre-1.0. Releases are git tags; latest is
-  `v0.5.0`. Not on PyPI yet, so `pip install vibrantine` will not
+  `v0.6.0`. Not on PyPI yet, so `pip install vibrantine` will not
   install this project.
 - **License:** MIT.
 - **Requires:** an `OPENROUTER_API_KEY` for LLM-backed runs. Tests and
@@ -147,7 +147,7 @@ Not on PyPI yet. Pin a release tag (see `CHANGELOG.md`) rather than
 `main`:
 
 ```bash
-uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.5.0"
+uv add "vibrantine @ git+https://github.com/vibrantine/vibrantine.git@v0.6.0"
 ```
 
 Set `OPENROUTER_API_KEY` in the environment before running LLM-backed

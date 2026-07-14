@@ -13,10 +13,9 @@ provisional, or future work.
 Last pass: 2026-07-10.
 
 - [x] Keep `pyproject.toml` at a pre-release version unless a package release is
-  intentional. (0.5.0, matching the intentional v0.5.0 tag; Unreleased
-  changes sit on main awaiting the next cut.)
+  intentional. (0.6.0, matching the intentional v0.6.0 tag.)
 - [x] Keep README installation guidance git-based until PyPI publishing is
-  intentional. (Pinned to the v0.5.0 tag.)
+  intentional. (Pinned to the v0.6.0 tag.)
 - [x] Make the README maturity language match the repo's real state: early,
   referenceable, not fully launched. ("Early-stage software ... not yet on
   PyPI.")
