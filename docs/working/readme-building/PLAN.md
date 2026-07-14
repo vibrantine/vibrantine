@@ -15,11 +15,9 @@ crammed.
 **Thesis re-ruling 2026-07-14 (user, same evening):** the core thesis
 was re-centered: a Commission abstracts complex behavior so that AI can
 use it with a minimalistic footprint. AI is the intended consumer;
-trust is the enabler that makes discarding the interior safe. Every
-live doc and every draft here now carries a THESIS REVIEW marker; the
-worklist is `notes/working/thesis-review.md`. The locked landing
-wording is subject to an explicit re-rule under this thesis before
-promotion.
+trust is the enabler that makes discarding the interior safe. The
+docs-wide thesis review this triggered completed 2026-07-14: every
+marker resolved, the landing wording re-ruled before promotion.
 
 ## Principles
 

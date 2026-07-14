@@ -1,5 +1,3 @@
-<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Process doc; check any "what Vibrantine is" phrasing against the re-ruled core only. Worklist: notes/working/thesis-review.md -->
-
 # Pre-Release Checklist
 
 This checklist is for the current public-reference cut: a repository that can

@@ -1,5 +1,3 @@
-<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Compatible with the re-ruled core (trust enables compression). Optional: evals could name the tool descriptor as a surface under test. Worklist: notes/working/thesis-review.md -->
-
 # Commission Testing
 
 How to prove a Commission still satisfies its contract and is effective at the
@@ -176,6 +174,14 @@ Prefer deterministic or cheap heuristic checks first:
 Use judge-model evaluation only when deterministic checks cannot express the
 quality bar. Judge prompts are themselves test assets: keep them stable, version
 them with the cases, and treat changed judge prompts as evaluation changes.
+
+One more surface deserves cases: the tool descriptor. When a Commission
+sits in a coordinating model's toolbox, its name, description, and input
+schema are everything that model decides from. An eval can score that
+decision directly: does the coordinator call the Commission when it
+should, with well-formed input, and leave it alone when it should not? A
+failure there usually traces to description prose, not interior code, and
+rewriting the description is an evaluation change like any other.
 
 ## Where Tests Live
 

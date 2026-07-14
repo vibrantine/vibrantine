@@ -1,5 +1,3 @@
-<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Light: consider whether BRIEF.md/description are written for the model reader as much as the human one. Worklist: notes/working/thesis-review.md -->
-
 # Standard Commission Folder Structure
 
 This note records the chosen standard layout for folder-sized Commissions,
@@ -150,6 +148,12 @@ names the success criteria, failure criteria, and evaluation cases that define
 whether the Commission is effective. Claims that matter should be enforced by
 tests or active heuristic evaluation, because prose drifts under years of
 agentic edits.
+
+The BRIEF's reader is the next maintainer, and under this regime that is as
+likely a dev agent as a human; plain language serves both. The *calling*
+model never reads BRIEF.md: its whole surface is the Commission's name,
+description, and input schema, whose LLM-facing discipline lives in
+authoring.md.
 
 ## Tests Are Colocated
 

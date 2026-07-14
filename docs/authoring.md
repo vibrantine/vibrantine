@@ -1,5 +1,3 @@
-<!-- THESIS REVIEW 2026-07-14 | NEEDS REVIEW | Re-read against the re-ruled core (AI as intended consumer, minimal footprint). Emphasis, not mechanics: name/description/input schema are the model-facing interface; check the opening framing. Worklist: notes/working/thesis-review.md -->
-
 # Authoring Commissions
 
 A Commission is one typed function with an LLM inside. You hand it a typed
@@ -8,6 +6,12 @@ input, and you always get a typed result envelope back: `success`, `partial`, or
 in this document exists to make that promise trustworthy: the types make the
 work order precise, the tests make the boundary provable, and the evals make
 the quality claim falsifiable.
+
+The caller you are authoring for is often itself a model. Wired into a
+toolbox, your whole Commission appears as one tool: its name, its
+description, its input schema. However much work you build inside, that
+small surface is all the calling model holds, so the quality of those
+three things is the quality of its decisions.
 
 That is also the whole contract, stated as a rule:
 
