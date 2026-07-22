@@ -402,6 +402,32 @@ the tree's, and honest at the one seam all work passes through.
   kwargs and fields ahead of a demonstrated consumer; options as a
   substitute for a decision.
 
+#### External-agent exposure is an outward adapter
+
+- **Decision.** A small optional adapter under `vibrantine.mcp.server`
+  may expose an application-supplied set of Commission objects as
+  ordinary MCP tools. The first named consumer is a repository-local
+  stdio server for Codex and Claude Code. Each valid tool call is one
+  independent `run_commission` root invocation through an
+  application-supplied runner, and its complete `CommissionResult`
+  envelope crosses the protocol boundary. The application chooses the
+  exposed objects and all run policy; the adapter translates names,
+  schemas, arguments, cancellation, and results. The implementation
+  plan is
+  [`working/commission-as-local-mcp-spec.md`](working/commission-as-local-mcp-spec.md).
+  (Ruled 2026-07-23.)
+- **Why.** The Commission boundary already has the identity, selection
+  prose, typed input, typed result, error, cost, provenance, and governed
+  entry point an external tool surface needs. Codex and Claude Code are
+  the real consumers that trigger the previously deferred adapter, while
+  a repository-local application supplies the composition root the
+  library deliberately refuses to own.
+- **Rules out.** MCP concepts in `Commission`, `CallContext`, the
+  Gatekeeper, or the top-level public surface; automatic Commission
+  discovery or a generic call-by-name registry; implicit host context;
+  shared state between MCP calls; adapter-owned routing, run policy, or
+  tool-menu policy; building the inward MCP client at the same time.
+
 ## Not built yet
 
 The design is whole; the implementation is not. One discipline: every
@@ -429,9 +455,11 @@ ruling record.
   with a Commission ("this worker may never exceed $0.01", the
   capacity half of budgeting), taking the minimum with the caller's
   grant. Trigger: the same tiered workload.
-- **Adapters.** Small wrappers exposing any Commission as a tool to
-  external agent systems, MCP first. Trigger: the first external
-  consumer that wants one.
+- **Inward MCP adapter.** Wrapping selected operations from external MCP
+  servers as explicitly placed Vibrantine Tools remains parked. Trigger:
+  the outward adapter has shipped on stable MCP v2 and a real Commission
+  needs one external MCP operation; the parked working specification is
+  then reviewed against what the outward implementation taught us.
 - **Multimodal output, and further input modalities.** Image and audio
   *input* are built: typed parts (`TextPart` / `ImagePart` /
   `AudioPart`), verified live against the default model (2026-07).

@@ -48,11 +48,23 @@ Audience-facing guides, not architecture.
 
 ## Working notes ([`working/`](working/))
 
-Working material, not live guidance; this folder shrinks as material
-promotes into the live docs or retires. Currently one note:
-[`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md),
-the decision record for the standard folder-sized Commission layout, its
-sketches, and its open threads.
+Working implementation material, not claims about what currently ships. A
+working document authorizes boundary work only when the ruling record links to
+it; this folder shrinks as material promotes into live docs or retires. Current
+notes:
+
+- [`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md):
+  the decision record for the standard folder-sized Commission layout, its
+  sketches, and its open threads.
+- [`commission-as-local-mcp-spec.md`](working/commission-as-local-mcp-spec.md):
+  ratified implementation plan for exposing an explicit set of Commissions as
+  tools on a repository-local MCP server.
+- [`compose-sonnet-commission-spec.md`](working/compose-sonnet-commission-spec.md):
+  the deliberately unmistakable first Commission and compatibility smoke test
+  for the local MCP adapter.
+- [`external-mcp-tools-for-commissions-spec.md`](working/external-mcp-tools-for-commissions-spec.md):
+  parked proposal for application-owned MCP connections and explicitly bound
+  Tool proxies supplied to selected Commission toolboxes.
 
 The concept drafts that used to live under `working/concepts/` promoted
 into `authoring.md` (the five-surface ownership map, the boundary-type
