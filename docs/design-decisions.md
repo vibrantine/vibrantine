@@ -416,7 +416,7 @@ the tree's, and honest at the one seam all work passes through.
   plan is
   [`working/commission-as-local-mcp-spec.md`](working/commission-as-local-mcp-spec.md).
   Initial development uses the currently released SDK v1 line through
-  the temporary range `mcp>=1.27,<2`. Stable SDK v2 is an explicit
+  the temporary range `mcp>=1.28,<2`. Stable SDK v2 is an explicit
   replacement trigger, not an optional upgrade: the adapter must move
   in place to `mcp>=2,<3`, remove its v1 dependency and v1-specific
   tests, and pass the complete compatibility plan before release. No

@@ -621,9 +621,9 @@ protocol types remain behind the adapter boundary and do not enter
 
 Initial development targets the stable official MCP Python SDK v1 line and the
 stable `2025-11-25` protocol so implementation can proceed against released
-software. On 2026-07-23 the latest stable v1 release is 1.27.2, so the temporary
-dependency range is `mcp>=1.27,<2`, with the exact resolved version recorded in
-`uv.lock`.
+software. On 2026-07-23 the resolved stable v1 release is 1.28.1, so the
+temporary dependency range is `mcp>=1.28,<2`, with the exact resolved version
+recorded in `uv.lock`.
 
 This range exists only to unblock initial development against released
 software. It is a development bridge, not a lasting compatibility promise or
