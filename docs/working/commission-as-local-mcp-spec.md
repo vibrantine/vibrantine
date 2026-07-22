@@ -1,8 +1,10 @@
 # Exposing Commissions Through a Local MCP Server
 
-Status: ratified implementation plan. The ruling lives in
-[`design-decisions.md`](../design-decisions.md); this document specifies the
-approved work but does not describe a feature that ships yet.
+Status: temporary SDK v1 implementation complete as a development bridge.
+Inspector and SDK-client compatibility pass; named-host compatibility remains
+incomplete, and the mandatory SDK v2 replacement remains. This document still
+does not describe a feature that ships yet. The ruling lives in
+[`design-decisions.md`](../design-decisions.md).
 
 ## Executive Summary
 
@@ -744,6 +746,35 @@ Crowded direct menus and routing Commissions are later application evaluations,
 not first-implementation gates. The adapter treats every registered Commission
 identically, so no routing-specific server behavior is waiting to be designed.
 
+#### Temporary v1 checkpoint: 2026-07-23
+
+The temporary v1 implementation has the following compatibility evidence:
+
+- MCP Inspector 0.21.2 discovers exactly
+  `compose_vibrantine_sonnet`, including its complete input and specialized
+  result schemas.
+- An official Python SDK stdio client discovers the same tool, invokes it
+  through the repository launcher and OpenRouter, receives a successful full
+  envelope with a title and exactly 14 lines, and shuts down cleanly. The live
+  invocation took roughly 40 seconds.
+- Codex CLI 0.144.6 discovers and selects the exact server, tool, and valid
+  subject argument, but reports `user cancelled MCP tool call` after roughly
+  five seconds. Repeating with host approval policy set to `never` produces the
+  same result. Because the identical launcher completes through the official
+  client, this is currently a host-specific cancellation observation, not a
+  reason to change the adapter contract.
+- Claude Code 2.1.214 cannot reach MCP discovery in the available environment:
+  its organization rejects Claude Code subscription access with HTTP 403
+  before an API turn begins. The attempt uses zero tokens and makes no MCP
+  request, so it is an environment/authentication blocker rather than a pass or
+  failure of the adapter.
+
+These observations do not satisfy the named-host release gate. Retry both
+hosts after the mandatory SDK v2 migration; retry Claude Code sooner only when
+working host credentials are available. If the Codex cancellation persists on
+stable v2, stop and re-rule as specified above instead of preserving v1 or
+adding a host-specific compatibility path.
+
 ## Acceptance Criteria
 
 - An unmodified Commission can be explicitly registered as a local MCP tool.
@@ -770,7 +801,8 @@ identically, so no routing-specific server behavior is waiting to be designed.
 
 ## Implementation Readiness
 
-No open review question blocks the first implementation. Broader menus,
-routing-Commission comparisons, progress forwarding, Streamable HTTP, and the
-inward client adapter each require their own named pressure after this local
-stdio path is proven; none belongs in the first slice by anticipation.
+No open review question blocks completion of the temporary v1 implementation.
+Named-host compatibility still blocks release as recorded above. Broader
+menus, routing-Commission comparisons, progress forwarding, Streamable HTTP,
+and the inward client adapter each require their own named pressure after this
+local stdio path is proven; none belongs in the first slice by anticipation.
