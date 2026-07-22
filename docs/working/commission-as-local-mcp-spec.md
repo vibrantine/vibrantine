@@ -621,11 +621,16 @@ protocol types remain behind the adapter boundary and do not enter
 
 Initial development targets the stable official MCP Python SDK v1 line and the
 stable `2025-11-25` protocol so implementation can proceed against released
-software. The provisional dependency range is `mcp>=1.28,<2`, with the exact
-resolved version recorded in `uv.lock`.
+software. On 2026-07-23 the latest stable v1 release is 1.27.2, so the temporary
+dependency range is `mcp>=1.27,<2`, with the exact resolved version recorded in
+`uv.lock`.
 
-This is a development bridge, not a lasting compatibility promise. Migration
-starts as soon as the official Python SDK v2 line is stable:
+This range exists only to unblock initial development against released
+software. It is a development bridge, not a lasting compatibility promise or
+a supported-version strategy. The official Python SDK v2 stable release is an
+explicit replacement trigger: migration starts as soon as that release is
+available, without waiting for another feature request or a later cleanup
+cycle:
 
 - migrate the adapter in place to `mcp>=2,<3` and the `2026-07-28` protocol;
 - use the official SDK's protocol behavior rather than adding Vibrantine-owned

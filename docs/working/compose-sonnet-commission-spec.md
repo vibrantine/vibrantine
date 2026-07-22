@@ -1,7 +1,6 @@
 # Compose Sonnet Commission
 
-Status: ratified as the first outward-MCP compatibility Commission; not yet
-implemented.
+Status: implemented as the first outward-MCP compatibility Commission.
 
 ## Purpose
 
