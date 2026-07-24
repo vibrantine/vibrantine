@@ -1288,7 +1288,7 @@ Behavior slots (class attributes, instance-overridable via constructor):
 |---|---|---|
 | `system_prompt` | `None` | The Commission's own prompt; `None` is fine for tools and coordinators |
 | `toolbox` | `()` | What the LLM loop may dispatch; instance override via `toolbox=` kwarg |
-| `persistence_mode` | `None` | `PersistenceMode`; `None` = no opinion, follow the caller's `record=` default. An explicit mode, `"off"` included, beats the caller |
+| `persistence_mode` | `None` | `PersistenceMode`; a node default used only when `run_commission(record=...)` is `None`. An explicit application policy governs every node |
 | `max_output_tokens` | `None` | Output cap; `None` = no enforcement |
 | `overflow_policy` | `"partial"` | `OverflowPolicy`; enforced by `dispatch` |
 
@@ -1381,8 +1381,6 @@ with `dataclasses.replace` to hand a child a modified one.
 | `cancel` | `NEVER_CANCELLED` | Yes: checked at natural breakpoints; returns `cancelled`. Also the run's breaker: a fuse trip (`max_llm_calls`, `time_limit_seconds`, the `budget_usd` spend fuse) flips this same signal |
 | `on_progress` | `None` | Observability callback (`ProgressEvent`) |
 | `parent_run_id` | `None` | Threaded by `dispatch`; read-only to bodies |
-| `backend` | `None` | `PersistenceBackend` to write through |
-| `record` | `None` | Recording default for every node whose `persistence_mode` is `None`; a node's explicit mode wins |
 
 Provider-call concurrency is not a context field: it is a run-wide bound
 (`run_commission(concurrency=)`), one room of chairs shared by the whole tree and
@@ -1400,10 +1398,10 @@ table is the one consolidated view, for re-entry after time away:
 | `model=` | The run's default model | Same |
 | `max_input_tokens=` | Size gate disabled (the standard tool shape) | Auto-resolve from the run catalog entry's context window, at run time |
 | `max_output_tokens=` | No output cap | The class default (itself `None` unless the class says otherwise) |
-| `persistence_mode=` | No opinion: follow the caller's `record` | The class default (itself `None` unless the class says otherwise) |
+| `persistence_mode=` | No opinion: follow application policy, then the wired default | The class default (itself `None` unless the class says otherwise) |
 | `system_prompt` | This Commission needs none (tools, coordinators) | n/a: a class attribute, not a kwarg |
 | `CallContext.budget_usd` | No spending ceiling | Same |
-| `CallContext.record` | Recording stays off for nodes with no opinion | Same |
+| `run_commission(record=...)` | Defer to each node's `persistence_mode`, then the wired default | Same |
 | `CapabilitySet.tools` | Unrestricted: the whole toolbox is on the menu | Same |
 | `CostMetrics.in_tokens` / `out_tokens` (read side) | No LLM turn ran in this call | n/a; `0` means a turn ran and counted nothing |
 
@@ -1421,7 +1419,7 @@ entry points stamp `run_id`, thread `parent_run_id`, enforce
 
 | Entry point | Shape | Use |
 |---|---|---|
-| `run_commission` | `async run_commission(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, on_dispatch=None, backend=None, record=None)` | The only way into a run: builds the run's internal control object (fuses, room, call log, dispatch register, model catalog) and the root `CallContext`. Refuses when called inside a run |
+| `run_commission` | `async run_commission(commission, input, *, budget_usd=None, models=(), default_model=None, max_llm_calls=1000, time_limit_seconds=None, concurrency=16, tool_ceiling=None, capabilities=None, cancel=None, on_progress=None, on_llm_call=None, on_dispatch=None, backend=None, record=None)` | The only way into a run: builds the private runtime (fuses, room, ledgers, model catalog, persistence binding) and the root `CallContext`. Refuses when called inside a run |
 | `run_commission_sync` | sync wrapper over `run_commission`, same kwargs | Scripts, REPL, tests |
 | `dispatch` | `async dispatch(commission, input, ctx)` | The only way around inside a run: called from a custom `_run` with the ctx it received (or a `replace()` of it). Refuses outside a run, and refuses a hand-built context |
 
@@ -1537,10 +1535,11 @@ written as a selection prompt.
   means `"always"`, because handing the run a database is the "I care
   about logs" signal, and keeping less (`record="dev"`, `"on_failure"`,
   `"off"`) is the active choice. Without a backend nothing is recorded.
-  `record=` is the caller's default for every node whose own
-  `persistence_mode` is `None` (the class default). A node's explicit
-  mode, `"off"` included, beats the caller's default; silence follows the
-  room, a spoken choice is kept.
+  A non-`None` `record=` is application policy and governs every node.
+  When it is `None`, a node's explicit `persistence_mode` supplies that
+  node's default; when neither has an opinion, the wired default applies.
+  Explicit `record="off"` also prevents `truncate_with_reference` from
+  force-persisting a full output.
 
 ## Authoring discipline
 

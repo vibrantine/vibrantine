@@ -94,9 +94,9 @@ the honest, complete list.
    default, 1000, is armed). `time_limit_seconds=None` is no deadline.
    `tool_ceiling=None` is no ceiling, while an empty list is a ceiling
    that exposes nothing. Unrestricted capabilities permit everything,
-   while an empty allow-list permits nothing. `record=None` follows the
-   backend's default, and a node's `persistence_mode=None` means "no
-   opinion, follow the caller."
+   while an empty allow-list permits nothing. `record=None` defers to each
+   node's `persistence_mode`, then to the wired backend's default; a node's
+   `persistence_mode=None` means "no opinion."
 
 3. **Three words for tool restriction, three owners.** `toolbox` is
    what a Commission owns: part of its identity, set at construction.
@@ -116,9 +116,9 @@ the honest, complete list.
 
 5. **Persistence has an order of precedence.** Nothing records without
    a backend; wiring one is the "I care about logs" signal and defaults
-   to recording everything. From there, a node's explicit
-   `persistence_mode` beats the caller's `record=`, which beats the
-   wired default.
+   to recording everything. A non-`None` application `record=` governs
+   every node. When it is `None`, a node's explicit `persistence_mode`
+   supplies that node's default, followed by the wired default.
 
 Everything not on this list is either enforced by the machine or
 written down where the machine checks it

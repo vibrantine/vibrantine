@@ -4,9 +4,9 @@ One Gatekeeper per run, created by `run_commission`, carried to every node by
 reference inside `CallContext`, consulted by every governed LLM call and by
 `dispatch`. It holds only what is identical for every node: the resource
 fuses (LLM-call count, time, spend), the concurrency room, the combined
-stop signal, and the provider-call log. Anything a node owns its own slice
-of (budget grant, capability grant, model choice) stays a distributed value
-on the context.
+stop signal, the provider and dispatch ledgers, and the application's
+persistence binding. Anything a node owns its own slice of (budget grant,
+capability grant, model choice) stays a distributed value on the context.
 
 Three invariants (docs/design-decisions.md, "One run, one Gatekeeper at the
 provider seam"):
@@ -41,7 +41,12 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from vibrantine.contract import CancelToken, ErrorState
+from vibrantine.contract import (
+    CancelToken,
+    ErrorState,
+    PersistenceBackend,
+    PersistenceMode,
+)
 from vibrantine.models import DEFAULT_MODEL, Model, UnknownModelError
 
 # `Model.params` keys the framework itself sets on every provider call. A
@@ -207,7 +212,7 @@ class _ProviderTicket:
 
 
 class Gatekeeper:
-    """Per-run shared state: fuses, room, stop signal, provider-call log.
+    """Per-run shared state: control, ledgers, and persistence binding.
 
     Constructed only by `run_commission`; every governed LLM call passes through
     `provider_call`, and `dispatch` checks the time fuse as the second seam.
@@ -225,6 +230,8 @@ class Gatekeeper:
         tool_ceiling: frozenset[str] | None = None,
         on_call: Callable[[dict[str, Any]], None] | None = None,
         on_dispatch: Callable[[dict[str, Any]], None] | None = None,
+        backend: PersistenceBackend | None = None,
+        record: PersistenceMode | None = None,
     ) -> None:
         # The run's model catalog (see build_catalog): one registry of
         # entries per run, defined at the front door. Model *choice* stays
@@ -283,6 +290,11 @@ class Gatekeeper:
         # the settle path.
         self._on_call = on_call
         self._on_dispatch = on_dispatch
+        # Application-owned persistence stays behind the runtime boundary:
+        # dispatch reads this private run object, while Commission bodies see
+        # neither value in their CallContext.
+        self.backend: PersistenceBackend | None = backend
+        self.record: PersistenceMode | None = record
 
     def _append_row(self, row: dict[str, Any]) -> None:
         self.calls.append(row)

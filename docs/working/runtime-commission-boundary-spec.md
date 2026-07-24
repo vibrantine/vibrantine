@@ -1,8 +1,8 @@
 # The Runtime–Commission Boundary
 
-Status: ratified for implementation before the next release. This document
-records the approved correction to the runtime–Commission boundary. The ruling
-record authorizes the work; implementation has not started.
+Status: implemented for the next release. This document records the approved
+correction to the runtime–Commission boundary and the contract the
+implementation follows.
 
 ## Executive Summary
 
@@ -31,10 +31,10 @@ The application supplies persistence to the Vibrantine runtime. The runtime
 records the work. The Commission interior does not receive or operate the
 application's persistence backend.
 
-Today, `CallContext.backend` and `CallContext.record` cross that boundary.
-They are used by `dispatch`, not by any shipped Commission. This correction
-moves that persistence plumbing behind the runtime boundary. The
-application-facing `run_commission` shape stays intact.
+Before this correction, `CallContext.backend` and `CallContext.record` crossed
+that boundary. They were used by `dispatch`, not by any shipped Commission.
+The implementation moves that persistence plumbing behind the runtime
+boundary. The application-facing `run_commission` shape stays intact.
 
 ## The Four Roles
 
@@ -162,9 +162,9 @@ The intended internal flow is:
 
 At no point does a Commission body need the backend.
 
-## Current Boundary Leak
+## Corrected Boundary Leak
 
-`CallContext` currently exposes:
+Before implementation, `CallContext` exposed:
 
 ```python
 backend: PersistenceBackend | None
@@ -172,28 +172,27 @@ record: PersistenceMode | None
 ```
 
 The backend protocol includes storage, loading, listing, and deletion. A custom
-Commission can therefore reach application-owned persistence even though
-persistence is unrelated to its task.
+Commission could therefore reach application-owned persistence even though
+persistence was unrelated to its task.
 
 This is a modularity problem before it is a security problem. Trusted
 components should still receive only the dependencies needed to fulfill their
 contract.
 
-A repository search currently finds no shipped Commission reading
-`ctx.backend` or `ctx.record`. Their operational uses are inside `dispatch`.
-That makes them runtime plumbing rather than Commission runtime conditions.
+A repository search found no shipped Commission reading `ctx.backend` or
+`ctx.record`. Their operational uses were inside `dispatch`, confirming that
+they were runtime plumbing rather than Commission runtime conditions.
 
-## Ratified Contract Change
+## Implemented Contract Change
 
 Remove `backend` and `record` from the Commission-facing `CallContext`.
 
 Keep `backend=` and `record=` on `run_commission`, because they are application
 run policy.
 
-Carry those values through private runtime machinery available to `dispatch`,
-not through the context given to `_run`. The exact private implementation may
-use the existing Gatekeeper, a private runtime carrier, or internal context
-variables. The choice must preserve one invariant:
+The implementation carries those values on the existing private Gatekeeper,
+available to `dispatch` but not through the context given to `_run`. It
+preserves the governing invariant:
 
 > Supported Commission code cannot obtain the persistence backend from its
 > input or `CallContext`.

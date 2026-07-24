@@ -280,14 +280,6 @@ class CallContext:
     # Commission bodies can read this for provenance/logging; they should not
     # set it manually; dispatch threads it via ContextVar across nested calls.
     parent_run_id: str | None = None
-    # PersistenceBackend the dispatch helper writes through. Wired by the
-    # caller (typically run_commission); inherited by children automatically.
-    backend: PersistenceBackend | None = None
-    # Caller's recording default for every node in the call tree, including
-    # children spawned mid-run. Applies only to nodes whose own
-    # `persistence_mode` is None (no opinion); a node's explicit mode,
-    # including "off", wins. None here too means recording stays off.
-    record: PersistenceMode | None = None
     # The run's internal control object (fuses, room, stop signal, call
     # log), created by run_commission and carried to every node by reference.
     # Internal plumbing, not caller surface: never set it by hand. dispatch
@@ -412,10 +404,9 @@ class Commission[InputT, OutputT](ABC):
 
     # Policy: class default; override per-instance via __init__ kwargs.
     # Not ClassVar; instance assignment is a supported override path.
-    # `persistence_mode` None means "no opinion": the node follows the
-    # caller's `CallContext.record` default (off when that is unset too).
-    # An explicit mode, including "off", is the node's own word and beats
-    # the caller: silence follows the room, a spoken choice is kept.
+    # `persistence_mode` None means "no opinion": when the application also
+    # leaves run_commission(record=...) unset, the wired backend decides the
+    # default. An explicit application recording policy governs every node.
     persistence_mode: PersistenceMode | None = None
     max_output_tokens: int | None = None
     overflow_policy: OverflowPolicy = "partial"

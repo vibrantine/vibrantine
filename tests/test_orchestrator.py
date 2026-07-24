@@ -42,12 +42,14 @@ class _BudgetProbeCommission(Commission[_BudgetProbeInput, _BudgetProbeOutput]):
     description: ClassVar[str] = "Test Commission that echoes ctx.budget_usd."
     input_type: ClassVar[type] = _BudgetProbeInput
     output_type: ClassVar[type] = _BudgetProbeOutput
+    seen_ctx: CallContext | None = None
 
     async def _run(
         self,
         input: _BudgetProbeInput,
         ctx: CallContext,
     ) -> CommissionResult[_BudgetProbeOutput]:
+        self.seen_ctx = ctx
         return CommissionResult[_BudgetProbeOutput](
             status="success",
             output=_BudgetProbeOutput(seen_budget=ctx.budget_usd),
@@ -101,6 +103,17 @@ async def test_run_commission_passes_budget_into_callcontext() -> None:
     assert result.status == "success"
     assert result.output is not None
     assert result.output.seen_budget == 1.23
+
+
+async def test_run_commission_hides_persistence_from_callcontext() -> None:
+    probe = _BudgetProbeCommission()
+
+    result = await run_commission(probe, _BudgetProbeInput())
+
+    assert result.status == "success"
+    assert probe.seen_ctx is not None
+    assert not hasattr(probe.seen_ctx, "backend")
+    assert not hasattr(probe.seen_ctx, "record")
 
 
 async def test_run_commission_threads_backend_so_dispatch_persists(

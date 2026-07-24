@@ -1225,6 +1225,30 @@ async def test_calls_land_beside_records_in_sqlite(tmp_path: Any) -> None:
     assert joined and all(a == b for a, b in joined)
 
 
+async def test_record_off_keeps_runtime_ledgers_in_sqlite(tmp_path: Any) -> None:
+    import sqlite3
+
+    from vibrantine.persistence import SqliteBackend
+
+    backend = SqliteBackend(tmp_path / "runs.db")
+    result = await run_commission(
+        _Probe(),
+        _Q(question="?"),
+        models=[_scripted([_conclude()])],
+        backend=backend,
+        record="off",
+    )
+
+    assert result.status == "success"
+    with sqlite3.connect(tmp_path / "runs.db") as conn:
+        record_count = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+        call_count = conn.execute("SELECT COUNT(*) FROM calls").fetchone()[0]
+        dispatch_count = conn.execute("SELECT COUNT(*) FROM dispatches").fetchone()[0]
+    assert record_count == 0
+    assert call_count == 1
+    assert dispatch_count == 1
+
+
 async def test_a_backend_without_store_calls_is_skipped_gracefully(tmp_path: Any) -> None:
     # The Protocol is untouched: a backend that never heard of the call log
     # or the dispatch register (FilesystemBackend, any third-party

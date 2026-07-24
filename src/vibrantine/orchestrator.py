@@ -142,14 +142,16 @@ async def run_commission[InputT, OutputT](
         # The dispatch register's live twin: one dict per finished or
         # refused dispatch, the run's node ledger as it grows.
         on_dispatch=on_dispatch,
+        # Persistence is application run policy retained by the private
+        # runtime. It never enters the Commission-facing CallContext.
+        backend=backend,
+        record=record,
     )
     ctx = CallContext(
         budget_usd=budget_usd,
         capabilities=capabilities if capabilities is not None else CapabilitySet(),
         cancel=RunCancel(cancel if cancel is not None else NEVER_CANCELLED, gatekeeper),
         on_progress=on_progress,
-        backend=backend,
-        record=record,
         _gatekeeper=gatekeeper,
     )
     token = current_gatekeeper.set(gatekeeper)
