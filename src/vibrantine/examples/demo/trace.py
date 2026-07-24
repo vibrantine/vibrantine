@@ -2,8 +2,9 @@
 
 A worked example of the application layer consuming the public persistence
 contract: `dispatch` writes one `PersistedRecord` per completed sub-call
-through `CallContext.backend`, so a backend that narrates each `store` gives
-live completion events, and the finished records render as a cost tree.
+through the private runtime's backend, so a backend that narrates each
+`store` gives live completion events, and the finished records render as a
+cost tree.
 Nothing here reaches past the public surface; if the trace can't be rendered
 from `PersistedRecord`s alone, the record shape is what should improve.
 """

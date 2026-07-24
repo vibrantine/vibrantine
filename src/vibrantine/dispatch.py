@@ -10,10 +10,9 @@ dispatches from `run_llm_loop` and the LLM-tool wrapper) calls
     `asyncio.gather` over child dispatches keeps the chain correct)
   - `overflow_policy` is enforced on the returned result
   - recording is decided and honored: the node's explicit
-    `persistence_mode` wins, a node with no opinion (None) follows the
-    caller's `CallContext.record` default (silence with a backend wired
-    means "always"), and the record is written through
-    `CallContext.backend` if one is wired
+    `persistence_mode` supplies a default only when the application leaves
+    `run_commission(record=...)` unset; the private runtime retains that
+    policy and the backend, and dispatch writes through it
   - the LLM loop's transcript is collected: dispatch hangs a context-local
     trace mailbox before calling `_run`, `run_llm_loop` deposits its
     message history into it on the way out, and whatever landed is written
@@ -264,8 +263,8 @@ async def dispatch[InputT, OutputT](
     # and before composing any diagnostic that claims where they live.
     log_persistence = "unavailable"
     if parent is None:
-        log_persistence = await _persist_call_log(ctx.backend, my_run_id, gatekeeper.calls)
-        await _persist_dispatch_log(ctx.backend, my_run_id, gatekeeper.dispatches)
+        log_persistence = await _persist_call_log(gatekeeper.backend, my_run_id, gatekeeper.calls)
+        await _persist_dispatch_log(gatekeeper.backend, my_run_id, gatekeeper.dispatches)
 
     # Only the root speaks run_halted; mid-tree nodes ride the ordinary
     # cancellation path. The rewrite is causal, not coincidental: it claims
@@ -291,7 +290,13 @@ async def dispatch[InputT, OutputT](
                 "cost": CostMetrics(estimated_usd=gatekeeper.observed_spend_usd),
             }
         )
-    result, full_result = _apply_overflow_policy(result, commission, ctx_for_run)
+    result, full_result = _apply_overflow_policy(
+        result,
+        commission,
+        ctx_for_run,
+        has_backend=gatekeeper.backend is not None,
+        record=gatekeeper.record,
+    )
     logger.info(
         "%s finished status=%s cost=$%.6f run_id=%s",
         commission.name,
@@ -300,25 +305,26 @@ async def dispatch[InputT, OutputT](
         my_run_id,
     )
 
-    # Effective recording mode: the node's explicit persistence_mode wins;
-    # a node with no opinion (None) follows the caller's ctx.record default.
-    # Silence with a backend wired means "always": handing the run a
-    # database is the "I care about logs" signal, and keeping less is the
-    # active choice (ruled 2026-07-12). Silence without one stays off.
-    mode = commission.persistence_mode
-    if mode is None:
-        default_mode: PersistenceMode = "always" if ctx.backend is not None else "off"
-        mode = ctx.record if ctx.record is not None else default_mode
+    # Effective recording mode: an explicit application policy governs every
+    # node. Only when the application has no opinion may the node supply its
+    # default; silence with a backend wired means "always", and silence
+    # without one stays off.
+    if gatekeeper.record is not None:
+        mode = gatekeeper.record
+    elif commission.persistence_mode is not None:
+        mode = commission.persistence_mode
+    else:
+        mode = "always" if gatekeeper.backend is not None else "off"
 
     # truncate_with_reference forces this run's record on: the chopped
     # envelope references the full output by run_id, so the full (pre-chop)
     # result must be the one persisted or the reference points at nothing.
     # The record's mode is "always" because the policy, not the recording
     # configuration, demanded it.
-    if full_result is not None:
+    if full_result is not None and gatekeeper.record is None:
         mode = "always"
 
-    if ctx.backend is not None and _should_persist(mode, result.status):
+    if gatekeeper.backend is not None and _should_persist(mode, result.status):
         record = _build_record(
             run_id=my_run_id,
             parent_run_id=parent,
@@ -330,7 +336,7 @@ async def dispatch[InputT, OutputT](
             llm_trace=llm_trace,
         )
         try:
-            await ctx.backend.store(record)
+            await gatekeeper.backend.store(record)
         except Exception as exc:
             # Persistence is observability, not the work itself: a failing
             # backend (disk full, a third-party implementation bug) must not
@@ -647,6 +653,9 @@ def _apply_overflow_policy[InputT, OutputT](
     result: CommissionResult[OutputT],
     commission: Commission[InputT, OutputT],
     ctx: CallContext,
+    *,
+    has_backend: bool,
+    record: PersistenceMode | None,
 ) -> tuple[CommissionResult[OutputT], CommissionResult[OutputT] | None]:
     """Enforce the Commission's output cap on the result.
 
@@ -702,7 +711,15 @@ def _apply_overflow_policy[InputT, OutputT](
             )
         return result, None
     if policy == "truncate_with_reference":
-        return _truncate_with_reference(result, output, commission, ctx, estimated, cap)
+        return _truncate_with_reference(
+            result,
+            output,
+            commission,
+            estimated,
+            cap,
+            has_backend=has_backend,
+            record=record,
+        )
     return result, None  # unreachable; appeases exhaustiveness checks
 
 
@@ -710,18 +727,28 @@ def _truncate_with_reference[InputT, OutputT](
     result: CommissionResult[OutputT],
     output: OutputT,
     commission: Commission[InputT, OutputT],
-    ctx: CallContext,
     estimated: int,
     cap: int,
+    *,
+    has_backend: bool,
+    record: PersistenceMode | None,
 ) -> tuple[CommissionResult[OutputT], CommissionResult[OutputT] | None]:
     """Chop the output; hand the full result back for forced persistence.
 
-    Three conditions must hold, or the policy degrades to `partial` with the
-    full output preserved (non-breaking, never silent): a backend to persist
-    the full version, a Commission whose `truncate_output` knows how to chop
-    its own output type, and a chop that actually fits the cap.
+    Four conditions must hold, or the policy degrades to `partial` with the
+    full output preserved (non-breaking, never silent): the application did
+    not explicitly disable recording, a backend can persist the full version,
+    the Commission knows how to chop its output type, and the chop fits.
     """
-    if ctx.backend is None:
+    if record == "off":
+        return _overflow_degrade(
+            result,
+            estimated,
+            cap,
+            "the application explicitly disabled recording, so the full output "
+            "cannot be persisted for reference",
+        ), None
+    if not has_backend:
         return _overflow_degrade(
             result,
             estimated,

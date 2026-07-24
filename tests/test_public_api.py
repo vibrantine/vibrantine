@@ -142,8 +142,6 @@ def test_call_context_surface_is_locked() -> None:
         "cancel",
         "on_progress",
         "parent_run_id",
-        "backend",
-        "record",
         "_gatekeeper",
     ]
 

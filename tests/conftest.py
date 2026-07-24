@@ -66,14 +66,14 @@ async def open_run(
         tool_ceiling=tool_ceiling,
         on_call=on_llm_call,
         on_dispatch=on_dispatch,
+        backend=backend,
+        record=record,
     )
     ctx = CallContext(
         budget_usd=budget_usd,
         capabilities=capabilities if capabilities is not None else CapabilitySet(),
         cancel=RunCancel(cancel if cancel is not None else NEVER_CANCELLED, gatekeeper),
         on_progress=on_progress,
-        backend=backend,
-        record=record,
         _gatekeeper=gatekeeper,
     )
     token = current_gatekeeper.set(gatekeeper)

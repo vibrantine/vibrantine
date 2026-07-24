@@ -304,7 +304,7 @@ async def test_dispatch_no_opinion_with_a_backend_defaults_to_always(
     # the node and record= means "always", and keeping less is the active
     # choice (record="off"/"dev"). Ruled 2026-07-12.
     backend = FilesystemBackend(tmp_path)
-    stub = _Stub()  # persistence_mode None (no opinion), no ctx.record either
+    stub = _Stub()  # persistence_mode None (no opinion), no run policy either
     async with open_test_run(backend=backend) as ctx:
         result = await dispatch(stub, _Input(q="?"), ctx)
 
@@ -314,12 +314,11 @@ async def test_dispatch_no_opinion_with_a_backend_defaults_to_always(
     assert loaded.mode == "always"
 
 
-async def test_ctx_record_switches_on_the_whole_tree(
+async def test_run_record_switches_on_the_whole_tree(
     tmp_path: Path, open_test_run: OpenTestRun
 ) -> None:
-    # The caller's record= default reaches every no-opinion node, parent and
-    # child alike, with no per-node flipping; the record stores the effective
-    # mode the node ran under.
+    # The application's record= policy reaches every node, parent and child,
+    # with no per-node flipping; the record stores the effective mode.
     backend = FilesystemBackend(tmp_path)
     child = _Stub()
     parent = _Parent(child)
@@ -335,21 +334,37 @@ async def test_ctx_record_switches_on_the_whole_tree(
     assert loaded.mode == "always"
 
 
-async def test_explicit_off_vetoes_ctx_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
+async def test_run_record_always_overrides_node_off(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="off")
     async with open_test_run(backend=backend, record="always") as ctx:
-        await dispatch(stub, _Input(q="?"), ctx)
+        result = await dispatch(stub, _Input(q="?"), ctx)
 
-    assert await backend.list_references() == []
+    assert await backend.list_references() == [result.run_id]
+    loaded = await backend.load(cast("str", result.run_id))
+    assert loaded is not None
+    assert loaded.mode == "always"
 
 
-async def test_explicit_mode_beats_ctx_record(tmp_path: Path, open_test_run: OpenTestRun) -> None:
-    # Node says on_failure, caller says always: the node's word is kept, so
-    # this success is not recorded.
+async def test_run_record_always_overrides_node_on_failure(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
     backend = FilesystemBackend(tmp_path)
     stub = _Stub(persistence_mode="on_failure")
     async with open_test_run(backend=backend, record="always") as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
+
+    assert await backend.list_references() == [result.run_id]
+
+
+async def test_run_record_off_overrides_node_always(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
+    backend = FilesystemBackend(tmp_path)
+    stub = _Stub(persistence_mode="always")
+    async with open_test_run(backend=backend, record="off") as ctx:
         await dispatch(stub, _Input(q="?"), ctx)
 
     assert await backend.list_references() == []
@@ -522,6 +537,50 @@ async def test_dispatch_truncate_without_backend_degrades_to_partial(
     assert result.error is not None
     assert result.error.kind == "output_too_large"
     assert "backend" in result.error.detail
+
+
+async def test_dispatch_truncate_with_run_record_off_degrades_to_partial(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
+    backend = FilesystemBackend(tmp_path)
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="short",
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    async with open_test_run(backend=backend, record="off") as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
+
+    assert result.status == "partial"
+    assert result.output is not None and result.output.a == big
+    assert result.error is not None
+    assert "explicitly disabled recording" in result.error.detail
+    assert await backend.list_references() == []
+
+
+async def test_dispatch_truncate_keeps_run_on_failure_mode(
+    tmp_path: Path, open_test_run: OpenTestRun
+) -> None:
+    backend = FilesystemBackend(tmp_path)
+    big = "x" * 4000
+    chopper = _Chopper(
+        chop_to="short",
+        result=_success_result(answer=big),
+        persistence_mode="off",
+        max_output_tokens=10,
+        overflow_policy="truncate_with_reference",
+    )
+    async with open_test_run(backend=backend, record="on_failure") as ctx:
+        result = await dispatch(chopper, _Input(q="?"), ctx)
+
+    assert result.status == "partial"
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None
+    assert record.mode == "on_failure"
+    assert record.result["output"]["a"] == big
 
 
 async def test_dispatch_truncate_without_hook_degrades_to_partial(

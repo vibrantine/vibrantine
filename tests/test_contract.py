@@ -123,7 +123,7 @@ class _CappedProbe(_PolicyProbe):
 def test_omitting_policy_kwargs_falls_back_to_class_defaults() -> None:
     probe = _PolicyProbe()
 
-    # None = no recording opinion: the node follows the caller's ctx.record.
+    # None = no recording opinion: runtime policy or the wired default decides.
     assert probe.persistence_mode is None
     assert probe.max_output_tokens is None
     assert probe.overflow_policy == "partial"
