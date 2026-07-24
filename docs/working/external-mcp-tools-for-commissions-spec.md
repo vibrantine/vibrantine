@@ -1,15 +1,15 @@
 # Feeding External MCP Tools Into Commissions
 
-Status: parked working proposal. It does not authorize implementation. Review
-resumes only after the outward adapter ships on stable MCP v2 and a real
-Commission needs an external MCP operation.
+Status: active in two slices. The reusable typed binding helper is implemented
+against the pinned SDK v1 line; the DeepWiki repository-documentation proof
+remains. Declarative mapping, onboarding, and broader integration machinery
+stay parked until a real consumer earns each one.
 
-## Parked Proposal
+## Active First Slice
 
-If its trigger is later met, reconsider an optional MCP client adapter that
-lets an application bind selected tools from an external MCP server into
-ordinary Vibrantine Tool objects, then place those objects explicitly into
-chosen Commission toolboxes.
+The optional MCP client adapter lets an application bind selected tools from
+an external MCP server into ordinary Vibrantine Tool objects, then place those
+objects explicitly into chosen Commission toolboxes.
 
 Connection does not imply exposure. Discovery does not imply binding. Binding
 does not imply placement. Placement does not override the run's capability
@@ -49,10 +49,10 @@ called its send operation `go`.
 
 ## Relation to Existing Rulings
 
-The current deferred adapter ruling speaks only about exposing Commissions to
-external agent systems. Before this client adapter is implemented,
-[`design-decisions.md`](../design-decisions.md#not-built-yet) must be re-ruled to
-cover both directions.
+The ruling record now covers both directions separately: outward exposure
+translates Commissions into MCP tools, while inward binding translates selected
+MCP operations into ordinary Vibrantine Tools. Neither adapter enters the core
+contract.
 
 This proposal preserves the existing decisions:
 
@@ -137,21 +137,22 @@ generated code.
 
 ## Proposed Developer Shape
 
-Names are provisional. The boundary is more important than the spelling:
+The first reusable surface is explicit and deliberately small:
 
 ```python
-from vibrantine.mcp import connect_mcp, bind_mcp_tool
+from vibrantine.mcp.client import bind_mcp_tool, open_mcp_http
 
 
-async with connect_mcp(xyzmail_config) as xyzmail:
+async with open_mcp_http(xyzmail_url) as xyzmail:
     email_read = bind_mcp_tool(
         connection=xyzmail,
         remote_name="peek",
         name="email_read",
         description="Read one email by its stable message identifier.",
-        input_type=ReadEmailInput,
-        output_type=ReadEmailOutput,
-        mapping=read_mapping,
+        input=ReadEmailInput,
+        output=ReadEmailOutput,
+        encode=encode_read_request,
+        decode=decode_read_result,
     )
 
     email_send = bind_mcp_tool(
@@ -159,9 +160,10 @@ async with connect_mcp(xyzmail_config) as xyzmail:
         remote_name="go",
         name="email_send",
         description="Send an already reviewed email message.",
-        input_type=SendEmailInput,
-        output_type=SendEmailOutput,
-        mapping=send_mapping,
+        input=SendEmailInput,
+        output=SendEmailOutput,
+        encode=encode_send_request,
+        decode=decode_send_result,
     )
 
     attend = AttendToEmail(
@@ -430,14 +432,14 @@ Vibrantine package.
 ## Implementation Sequence
 
 1. Re-rule adapters to cover both MCP directions and name the consumer.
-2. Define the private connection seam and test it with an in-memory MCP server.
-3. Implement one explicitly typed structured-content Tool proxy.
-4. Add cancellation, timeout, provenance, and error mapping.
-5. Add local-name/remote-name mapping and collision checks.
-6. Add the bounded declarative mapping interpreter.
-7. Add schema fingerprints and stale-binding refusal.
-8. Prove nested toolbox exposure with the XYZMAIL email workflow.
-9. Only then prototype onboarding-Commission proposals and generic fallback.
+2. Define the private connection seam and test it with a fake SDK session.
+3. Implement the reusable explicitly typed binding helper.
+4. Add cancellation, timeout, provenance, error mapping, and payload bounds.
+5. Prove the helper against DeepWiki repository documentation.
+6. Add local-name/remote-name mapping beyond explicit encoder/decoder functions
+   only when a second consumer repeats the need.
+7. Add schema fingerprints, onboarding proposals, or generic fallbacks only
+   when their own consumers arrive.
 
 ## Test Plan
 
@@ -482,8 +484,8 @@ their own credentials.
 
 1. Is the first supported output subset—structured JSON plus explicit text
    fallback—large enough for the first real consumer?
-2. Should the optional package ship the declarative mapping interpreter in the
-   first slice, or first prove only explicit typed developer bindings?
+2. What repeated mapping need, if any, would justify a declarative interpreter
+   beyond the explicit typed encoder/decoder functions?
 3. Which provider-neutral domain contract, if any, is the first no-code proof:
    email, calendar, or a smaller service?
 4. Does the application need a long-lived connection manager immediately, or

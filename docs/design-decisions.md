@@ -445,7 +445,37 @@ the tree's, and honest at the one seam all work passes through.
   Gatekeeper, or the top-level public surface; automatic Commission
   discovery or a generic call-by-name registry; implicit host context;
   shared state between MCP calls; adapter-owned routing, run policy, or
-  tool-menu policy; building the inward MCP client at the same time.
+  tool-menu policy. The original restriction on building the inward
+  adapter at the same time was retired when its own consumer arrived;
+  the two adapters remain separate surfaces and lifecycles.
+
+#### External MCP operations enter as explicitly bound Tools
+
+- **Decision.** The optional `vibrantine.mcp.client` adapter may open an
+  application-owned MCP connection and bind one selected remote operation
+  behind one stable local Tool contract. The application supplies the
+  remote operation name, local LLM-facing identity, Pydantic input/output
+  types, and any explicit argument or result translation, then injects the
+  returned Tool into only the Commissions that need it. The adapter owns
+  SDK translation, timeout and cancellation handling, bounded result
+  normalization, error conversion, and provenance. Initial development
+  targets the already-pinned SDK v1 line; stable SDK v2 replaces that
+  implementation in place later, without a dual-version path.
+- **Why.** Repository documentation supplied through a public MCP server is
+  the first named consumer. Treating a remote operation as an ordinary Tool
+  preserves the existing composition rule: toolbox membership places the
+  dependency, capabilities narrow its use, and `dispatch` records the call.
+  Connection mechanics are reusable library integration code, while server
+  choice, credentials, operation approval, mappings, and placement remain
+  application policy. No application service needs to become ambient
+  runtime state.
+- **Rules out.** MCP connections or catalogs in `CallContext` or the
+  Gatekeeper; adding MCP keywords to `run_commission`; automatic exposure of
+  a server's discovered tool list; a generic model-visible
+  `call_mcp_tool(name, arguments)` escape hatch; trusting remote names,
+  descriptions, schemas, annotations, or errors as local policy; MCP client
+  exports from the top-level `vibrantine` surface.
+  (Ruled 2026-07-25.)
 
 ## Not built yet
 
@@ -474,11 +504,6 @@ ruling record.
   with a Commission ("this worker may never exceed $0.01", the
   capacity half of budgeting), taking the minimum with the caller's
   grant. Trigger: the same tiered workload.
-- **Inward MCP adapter.** Wrapping selected operations from external MCP
-  servers as explicitly placed Vibrantine Tools remains parked. Trigger:
-  the outward adapter has shipped on stable MCP v2 and a real Commission
-  needs one external MCP operation; the parked working specification is
-  then reviewed against what the outward implementation taught us.
 - **Multimodal output, and further input modalities.** Image and audio
   *input* are built: typed parts (`TextPart` / `ImagePart` /
   `AudioPart`), verified live against the default model (2026-07).

@@ -59,12 +59,9 @@ notes:
 - [`commission-as-local-mcp-spec.md`](working/commission-as-local-mcp-spec.md):
   ratified implementation plan for exposing an explicit set of Commissions as
   tools on a repository-local MCP server.
-- [`compose-sonnet-commission-spec.md`](working/compose-sonnet-commission-spec.md):
-  the deliberately unmistakable first Commission and compatibility smoke test
-  for the local MCP adapter.
 - [`external-mcp-tools-for-commissions-spec.md`](working/external-mcp-tools-for-commissions-spec.md):
-  parked proposal for application-owned MCP connections and explicitly bound
-  Tool proxies supplied to selected Commission toolboxes.
+  active implementation plan for application-owned MCP connections and
+  explicitly bound Tool proxies supplied to selected Commission toolboxes.
 - [`runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md):
   implemented correction keeping application persistence inside the private
   per-run Vibrantine runtime rather than exposing it to Commission interiors

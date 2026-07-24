@@ -8,6 +8,16 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Added
+
+- **Explicit external MCP Tool bindings**: the optional
+  `vibrantine.mcp.client` adapter opens an application-owned Streamable HTTP
+  connection and binds one selected remote MCP operation behind a stable local
+  Pydantic Tool contract. Bound Tools use ordinary constructor injection,
+  dispatch logging, capability narrowing, cancellation, timeout, bounded
+  results, structured failures, and provenance without adding MCP state to
+  `CallContext`, the Gatekeeper, or the top-level package surface.
+
 ### Changed
 
 - **Breaking — persistence is private runtime policy**: `CallContext` no

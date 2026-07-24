@@ -153,13 +153,13 @@ First repository-local MCP server
 └── compose_vibrantine_sonnet
 ```
 
-The deliberately unmistakable first tool is specified in
-[`compose-sonnet-commission-spec.md`](compose-sonnet-commission-spec.md). It is
-a smoke test for discovery, argument construction, invocation, and result
-return—not a claim that one-tool servers are the intended final topology. The
-first launcher uses `vibrantine_commissions` as its host-configuration server
-name so the resulting tool identity is also unmistakable when a host qualifies
-it with the server name.
+The deliberately unmistakable first tool is implemented by
+[`ComposeSonnetCommission`](../../src/vibrantine/examples/compose_sonnet.py).
+It is a smoke test for discovery, argument construction, invocation, and
+result return—not a claim that one-tool servers are the intended final
+topology. The first launcher uses `vibrantine_commissions` as its
+host-configuration server name so the resulting tool identity is also
+unmistakable when a host qualifies it with the server name.
 
 A later application may expose a broader menu such as research, verification,
 email, and document Commissions. Flat does not mean structureless: each listed
