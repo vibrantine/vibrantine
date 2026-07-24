@@ -361,8 +361,8 @@ the tree's, and honest at the one seam all work passes through.
   A non-`None` application `record=` value governs every node. When it
   is `None`, a node's explicit `persistence_mode` supplies that node's
   default; when neither has an opinion, a wired backend means
-  `"always"` and no backend means `"off"`. Ratified for implementation
-  before the next release; see
+  `"always"` and no backend means `"off"`. Implemented for the next
+  release; see
   [`working/runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md).
 - **Why.** "What did fan #7 actually return" must be answerable after
   the fact, or a hundred-unit tree is only debuggable while still in

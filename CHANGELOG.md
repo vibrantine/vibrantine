@@ -13,8 +13,8 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 - **Breaking — persistence is private runtime policy**: `CallContext` no
   longer exposes `backend` or `record`. Applications still configure both
   on `run_commission`; the private per-run runtime carries them through the
-  whole Commission tree and `dispatch` records every node. A non-`None`
-  application `record=` now governs every node, while
+  whole Commission tree and `dispatch` applies the recording policy to every
+  node. A non-`None` application `record=` now governs every node, while
   `Commission.persistence_mode` supplies a default only when the application
   leaves `record=None`. Explicit `record="off"` also prevents
   `truncate_with_reference` from force-persisting a full output.
