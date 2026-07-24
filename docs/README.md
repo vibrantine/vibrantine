@@ -65,6 +65,10 @@ notes:
 - [`external-mcp-tools-for-commissions-spec.md`](working/external-mcp-tools-for-commissions-spec.md):
   parked proposal for application-owned MCP connections and explicitly bound
   Tool proxies supplied to selected Commission toolboxes.
+- [`runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md):
+  ratified plan to keep application persistence inside the private per-run
+  Vibrantine runtime rather than exposing it to Commission interiors through
+  `CallContext`, scheduled before the next release.
 
 The concept drafts that used to live under `working/concepts/` promoted
 into `authoring.md` (the five-surface ownership map, the boundary-type

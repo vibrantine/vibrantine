@@ -337,9 +337,10 @@ the tree's, and honest at the one seam all work passes through.
   `truncate_with_reference` chops via the Commission's own
   `truncate_output` hook and force-persists the full version,
   reachable by the run_id named on the envelope (degrading to
-  `partial`, never silently, when there is no backend, no hook, or a
-  failed store); `flag` keeps the output and emits only a progress
-  event, an explicit opt-out for callers that watch progress.
+  `partial`, never silently, when there is no backend, no hook, a
+  failed store, or the application explicitly set `record="off"`);
+  `flag` keeps the output and emits only a progress event, an explicit
+  opt-out for callers that watch progress.
 - **Why.** An oversized child result poisons an LLM-loop parent's
   context, and the parent cannot defend itself after the fact. The
   budget lives in the contract because the victim is upstream of the
@@ -352,15 +353,27 @@ the tree's, and honest at the one seam all work passes through.
 
 - **Decision.** Any invocation can persist a full record of its run
   (input, result, context snapshot, trace) to a backend the caller
-  supplies at runtime. Children persist as independent records linked
-  by run id.
+  supplies to `run_commission`. The backend and recording default
+  remain inside the private per-run runtime and never enter the
+  Commission-facing `CallContext`; `dispatch` records through that
+  runtime after the Commission body returns. Children persist as
+  independent records linked by run id under the same runtime binding.
+  A non-`None` application `record=` value governs every node. When it
+  is `None`, a node's explicit `persistence_mode` supplies that node's
+  default; when neither has an opinion, a wired backend means
+  `"always"` and no backend means `"off"`. Ratified for implementation
+  before the next release; see
+  [`working/runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md).
 - **Why.** "What did fan #7 actually return" must be answerable after
   the fact, or a hundred-unit tree is only debuggable while still in
   memory. Records are for inspection; the state decision already rules
-  out records quietly becoming memory.
+  out records quietly becoming memory. Persistence is runtime plumbing,
+  not a dependency of the work unit: exposing a storage service to a
+  Commission breaks the silo even when every Commission is trusted.
 - **Rules out.** A framework memory system growing out of the record
-  store; backends wired at construction (the backend is a runtime
-  concern, so it travels in the call context).
+  store; backends wired at Commission construction; persistence
+  backends exposed through `CallContext`; a node overriding an explicit
+  application recording policy.
 
 #### None keeps a meaning per knob; the sentinel absorbs "unset"
 
