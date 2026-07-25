@@ -1,0 +1,1832 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Third-Party Adoption Surface Review — Vibrantine</title>
+  <style>
+    :root {
+      --ink: #10213a;
+      --ink-soft: #42516a;
+      --paper: #f4f7fb;
+      --panel: #ffffff;
+      --line: #cad5e5;
+      --line-strong: #91a6c4;
+      --blueprint: #153c78;
+      --signal: #316ee8;
+      --signal-soft: #e9f0ff;
+      --aqua: #d9f2f0;
+      --aqua-ink: #17685f;
+      --amber: #f2b84b;
+      --amber-soft: #fff3d7;
+      --red: #c34855;
+      --red-soft: #fdebed;
+      --green: #2f7d66;
+      --green-soft: #e6f4ef;
+      --shadow: 0 18px 45px rgba(20, 46, 84, 0.09);
+      --radius: 18px;
+      --display: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      --body: "Segoe UI", Inter, Arial, sans-serif;
+      --utility: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(49, 110, 232, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(49, 110, 232, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 32px 32px;
+      font-family: var(--body);
+      font-size: 16px;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--blueprint);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover {
+      color: var(--signal);
+    }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--amber);
+      outline-offset: 4px;
+      border-radius: 3px;
+    }
+
+    code {
+      padding: 0.1rem 0.35rem;
+      border: 1px solid #dbe3ef;
+      border-radius: 5px;
+      background: #f4f7fb;
+      color: #17385f;
+      font-family: var(--utility);
+      font-size: 0.88em;
+    }
+
+    .shell {
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 26px;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 34px;
+      align-items: start;
+    }
+
+    .rail {
+      position: sticky;
+      top: 22px;
+      max-height: calc(100vh - 44px);
+      overflow: auto;
+      padding: 22px 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 12px 28px rgba(20, 46, 84, 0.06);
+      backdrop-filter: blur(14px);
+    }
+
+    .rail-mark {
+      display: grid;
+      grid-template-columns: 12px 1fr;
+      gap: 11px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .rail-mark::before {
+      content: "";
+      border-radius: 99px;
+      background:
+        linear-gradient(
+          to bottom,
+          var(--green) 0 24%,
+          var(--amber) 24% 54%,
+          var(--red) 54% 77%,
+          var(--signal) 77% 100%
+        );
+    }
+
+    .rail-kicker,
+    .eyebrow,
+    .section-kicker,
+    .metric-label,
+    .finding-id,
+    .stage-num,
+    .priority,
+    .snapshot-label {
+      font-family: var(--utility);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .rail-kicker {
+      color: var(--signal);
+    }
+
+    .rail-title {
+      margin-top: 3px;
+      font-family: var(--display);
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.12;
+    }
+
+    .rail nav {
+      display: grid;
+      gap: 3px;
+    }
+
+    .rail nav a {
+      padding: 7px 10px;
+      border-left: 2px solid transparent;
+      color: var(--ink-soft);
+      font-size: 0.88rem;
+      text-decoration: none;
+    }
+
+    .rail nav a:hover {
+      border-left-color: var(--signal);
+      background: var(--signal-soft);
+      color: var(--blueprint);
+    }
+
+    .rail-note {
+      margin-top: 22px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: 0.78rem;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      min-height: 440px;
+      padding: clamp(34px, 6vw, 78px);
+      border-radius: 26px;
+      color: #fff;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(126, 196, 255, 0.24), transparent 27%),
+        linear-gradient(135deg, #102b55 0%, #153c78 58%, #1b5598 100%);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -58px;
+      bottom: -90px;
+      width: 390px;
+      height: 390px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 42px rgba(255, 255, 255, 0.045),
+        0 0 0 92px rgba(255, 255, 255, 0.025);
+    }
+
+    .hero .eyebrow {
+      position: relative;
+      z-index: 1;
+      color: #a9cffd;
+    }
+
+    .hero h1 {
+      position: relative;
+      z-index: 1;
+      max-width: 920px;
+      margin: 22px 0 18px;
+      font-family: var(--display);
+      font-size: clamp(3rem, 7vw, 6.5rem);
+      font-weight: 700;
+      letter-spacing: -0.055em;
+      line-height: 0.95;
+    }
+
+    .hero h1 span {
+      color: #9fd9ff;
+    }
+
+    .hero-deck {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+      margin: 0;
+      color: #e2ecf9;
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+      line-height: 1.55;
+    }
+
+    .hero-verdict {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 30px;
+      padding: 10px 15px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.09);
+      color: #fff;
+      font-family: var(--utility);
+      font-size: 0.78rem;
+    }
+
+    .hero-verdict::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 0 5px rgba(242, 184, 75, 0.15);
+    }
+
+    .snapshot {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 48px;
+    }
+
+    .snapshot-item {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 9px 22px rgba(20, 46, 84, 0.04);
+    }
+
+    .snapshot-label {
+      color: var(--ink-soft);
+    }
+
+    .snapshot-value {
+      display: block;
+      margin-top: 5px;
+      font-family: var(--display);
+      font-size: 1.28rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    section {
+      scroll-margin-top: 25px;
+      margin: 0 0 62px;
+    }
+
+    .section-kicker {
+      color: var(--signal);
+    }
+
+    h2 {
+      max-width: 880px;
+      margin: 8px 0 16px;
+      font-family: var(--display);
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      letter-spacing: -0.035em;
+      line-height: 1.06;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-family: var(--display);
+      font-size: 1.42rem;
+      line-height: 1.2;
+    }
+
+    h4 {
+      margin: 0 0 7px;
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    .lede {
+      max-width: 900px;
+      margin: 0 0 26px;
+      color: var(--ink-soft);
+      font-size: 1.09rem;
+    }
+
+    .verdict-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+      gap: 20px;
+      padding: 28px;
+      border: 1px solid #acc1df;
+      border-left: 7px solid var(--signal);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .verdict-panel p {
+      margin: 0;
+    }
+
+    .verdict-side {
+      padding-left: 22px;
+      border-left: 1px solid var(--line);
+    }
+
+    .verdict-side strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--red);
+      font-family: var(--utility);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric {
+      min-height: 148px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--panel);
+    }
+
+    .metric-value {
+      display: block;
+      margin: 4px 0 3px;
+      color: var(--blueprint);
+      font-family: var(--display);
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      line-height: 1;
+    }
+
+    .metric-note {
+      color: var(--ink-soft);
+      font-size: 0.87rem;
+      line-height: 1.42;
+    }
+
+    .scorecard {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: 0 10px 26px rgba(20, 46, 84, 0.05);
+    }
+
+    .scorecard th,
+    .scorecard td {
+      padding: 15px 17px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .scorecard th {
+      background: #eaf0f8;
+      color: var(--blueprint);
+      font-family: var(--utility);
+      font-size: 0.73rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .scorecard tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .signal {
+      display: inline-flex;
+      min-width: 82px;
+      justify-content: center;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-family: var(--utility);
+      font-size: 0.69rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .signal.strong {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .signal.mixed {
+      background: var(--amber-soft);
+      color: #875b06;
+    }
+
+    .signal.weak {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .adoption-path {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(120px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding: 22px 2px 16px;
+    }
+
+    .adoption-path::before {
+      content: "";
+      position: absolute;
+      top: 54px;
+      right: 4%;
+      left: 4%;
+      height: 2px;
+      background: var(--line-strong);
+    }
+
+    .path-node {
+      position: relative;
+      z-index: 1;
+      min-height: 154px;
+      padding: 0 10px 12px;
+      text-align: center;
+    }
+
+    .path-dot {
+      width: 22px;
+      height: 22px;
+      margin: 22px auto 14px;
+      border: 5px solid var(--panel);
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px currentColor;
+      background: currentColor;
+    }
+
+    .path-node.good {
+      color: var(--green);
+    }
+
+    .path-node.friction {
+      color: #a36b00;
+    }
+
+    .path-node.risk {
+      color: var(--red);
+    }
+
+    .path-node h4 {
+      color: var(--ink);
+      font-size: 0.87rem;
+    }
+
+    .path-node p {
+      margin: 3px 0 0;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      line-height: 1.35;
+    }
+
+    .stage-list {
+      display: grid;
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) minmax(260px, 0.78fr);
+      gap: 22px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .stage-num {
+      display: flex;
+      width: 48px;
+      height: 48px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #aac2e6;
+      border-radius: 50%;
+      color: var(--signal);
+      background: var(--signal-soft);
+      font-size: 0.9rem;
+    }
+
+    .stage p {
+      margin: 0;
+    }
+
+    .stage-observation {
+      color: var(--ink-soft);
+    }
+
+    .stage-opportunity {
+      padding: 16px 18px;
+      border-radius: 12px;
+      background: #f0f5fb;
+      font-size: 0.92rem;
+    }
+
+    .stage-opportunity strong {
+      color: var(--blueprint);
+    }
+
+    .finding-list {
+      display: grid;
+      gap: 17px;
+    }
+
+    .finding {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 22px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: 0 8px 20px rgba(20, 46, 84, 0.04);
+    }
+
+    .finding-tag {
+      align-self: start;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .finding-tag.high {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .finding-tag.medium {
+      background: var(--amber-soft);
+      color: #875b06;
+    }
+
+    .finding-tag.validation {
+      background: var(--signal-soft);
+      color: var(--signal);
+    }
+
+    .finding-tag.resolved {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .finding-id {
+      display: block;
+    }
+
+    .priority {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.62rem;
+    }
+
+    .finding h3 {
+      margin-bottom: 7px;
+    }
+
+    .finding p {
+      margin: 0 0 11px;
+    }
+
+    .evidence {
+      color: var(--ink-soft);
+      font-size: 0.89rem;
+    }
+
+    .recommendation {
+      padding: 13px 15px;
+      border-left: 3px solid var(--signal);
+      background: #f2f6fc;
+      color: #263b58;
+      font-size: 0.92rem;
+    }
+
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .plan-card {
+      padding: 23px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .plan-card.now {
+      border-top: 6px solid var(--red);
+    }
+
+    .plan-card.next {
+      border-top: 6px solid var(--amber);
+    }
+
+    .plan-card.later {
+      border-top: 6px solid var(--signal);
+    }
+
+    .plan-card h3 {
+      margin-top: 7px;
+    }
+
+    .plan-card ol,
+    .plan-card ul,
+    .guardrails ul,
+    .test-protocol ol {
+      margin: 14px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    .plan-card li,
+    .guardrails li,
+    .test-protocol li {
+      margin: 8px 0;
+    }
+
+    .plan-card .effort {
+      color: var(--ink-soft);
+      font-family: var(--utility);
+      font-size: 0.72rem;
+    }
+
+    .test-protocol {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+      gap: 26px;
+      padding: 28px;
+      border-radius: var(--radius);
+      color: #ecf4ff;
+      background: var(--blueprint);
+      box-shadow: var(--shadow);
+    }
+
+    .test-protocol h3,
+    .test-protocol h4 {
+      color: #fff;
+    }
+
+    .test-protocol p {
+      margin-top: 0;
+      color: #cfddf0;
+    }
+
+    .success-box {
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .success-box ul {
+      margin: 10px 0 0;
+      padding-left: 1.1rem;
+    }
+
+    .guardrails {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 17px;
+    }
+
+    .guardrail {
+      padding: 22px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .guardrail.keep {
+      border-left: 6px solid var(--green);
+    }
+
+    .guardrail.avoid {
+      border-left: 6px solid var(--red);
+    }
+
+    details {
+      margin-top: 20px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--blueprint);
+      font-weight: 700;
+    }
+
+    .evidence-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 24px;
+      margin: 16px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    .evidence-list li {
+      break-inside: avoid;
+    }
+
+    .close {
+      padding: 36px;
+      border: 1px solid #9ab1d1;
+      border-radius: 22px;
+      background:
+        linear-gradient(135deg, rgba(49, 110, 232, 0.09), rgba(217, 242, 240, 0.55)),
+        var(--panel);
+    }
+
+    .close blockquote {
+      max-width: 930px;
+      margin: 0;
+      font-family: var(--display);
+      font-size: clamp(1.7rem, 3vw, 2.55rem);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+    }
+
+    .close p {
+      max-width: 820px;
+      margin-bottom: 0;
+      color: var(--ink-soft);
+    }
+
+    footer {
+      padding: 8px 4px 34px;
+      color: var(--ink-soft);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 1100px) {
+      .report-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        position: static;
+        max-height: none;
+      }
+
+      .rail nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .snapshot,
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .stage {
+        grid-template-columns: 58px minmax(0, 1fr);
+      }
+
+      .stage-opportunity {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        padding: 12px;
+      }
+
+      .rail nav {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 34px 24px 44px;
+      }
+
+      .snapshot,
+      .metric-grid,
+      .plan-grid,
+      .guardrails,
+      .evidence-list,
+      .test-protocol,
+      .verdict-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .verdict-side {
+        padding: 18px 0 0;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .stage {
+        grid-template-columns: 1fr;
+      }
+
+      .stage-opportunity {
+        grid-column: auto;
+      }
+
+      .finding {
+        grid-template-columns: 1fr;
+      }
+
+      .finding-tag {
+        width: 120px;
+      }
+
+      .scorecard {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        font-size: 11pt;
+      }
+
+      .shell {
+        width: 100%;
+        padding: 0;
+      }
+
+      .report-grid {
+        display: block;
+      }
+
+      .rail {
+        display: none;
+      }
+
+      .hero {
+        min-height: auto;
+        color: var(--ink);
+        background: #e9f0fa;
+        box-shadow: none;
+      }
+
+      .hero .eyebrow,
+      .hero-deck {
+        color: var(--ink);
+      }
+
+      .hero h1 span {
+        color: var(--blueprint);
+      }
+
+      .hero-verdict {
+        color: var(--ink);
+        border-color: var(--line-strong);
+      }
+
+      section,
+      .finding,
+      .stage,
+      .plan-card,
+      .metric {
+        break-inside: avoid;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="report-grid">
+      <aside class="rail" aria-label="Report navigation">
+        <div class="rail-mark">
+          <div>
+            <div class="rail-kicker">Adoption audit</div>
+            <div class="rail-title">Third-party surface review</div>
+          </div>
+        </div>
+        <nav>
+          <a href="#verdict">Executive verdict</a>
+          <a href="#scope">Scope and method</a>
+          <a href="#inventory">Surface inventory</a>
+          <a href="#journey">Adoption journey</a>
+          <a href="#findings">Priority findings</a>
+          <a href="#opportunities">Improvement plan</a>
+          <a href="#validation">Outside-developer test</a>
+          <a href="#guardrails">Architectural guardrails</a>
+          <a href="#evidence">Evidence register</a>
+        </nav>
+        <p class="rail-note">
+          Snapshot: 25 July 2026<br>
+          Workspace: <code>v0.6.0-23-gd8bf9c7-dirty</code><br>
+          Perspective: experienced Python developer, new to Vibrantine.
+        </p>
+      </aside>
+
+      <main>
+        <header class="hero">
+          <div class="eyebrow">Vibrantine · Third-party adoption surface</div>
+          <h1>The contract is strong.<br><span>The reveal is late.</span></h1>
+          <p class="hero-deck">
+            Vibrantine’s core model is coherent and unusually disciplined. The adoption risk
+            comes from sequencing: a newcomer sees a typed provider call first, then meets a
+            broad runtime and authoring vocabulary before the library’s most distinctive
+            payoff—complex behavior compressed into a trustworthy typed tool—has been made
+            tangible.
+          </p>
+          <div class="hero-verdict">Material adoption risk; primarily a disclosure problem, not an architectural failure</div>
+        </header>
+
+        <div class="snapshot" aria-label="Audit snapshot">
+          <div class="snapshot-item">
+            <span class="snapshot-label">Current validation</span>
+            <span class="snapshot-value">540 passed</span>
+          </div>
+          <div class="snapshot-item">
+            <span class="snapshot-label">Frozen exports</span>
+            <span class="snapshot-value">35 names</span>
+          </div>
+          <div class="snapshot-item">
+            <span class="snapshot-label">Run front door</span>
+            <span class="snapshot-value">16 parameters</span>
+          </div>
+          <div class="snapshot-item">
+            <span class="snapshot-label">Builder manual</span>
+            <span class="snapshot-value">≈10.5k words</span>
+          </div>
+        </div>
+
+        <section id="verdict">
+          <div class="section-kicker">01 · Executive verdict</div>
+          <h2>The concern is real, bounded, and fixable without growing the API.</h2>
+          <div class="verdict-panel">
+            <div>
+              <p>
+                Vibrantine already has the hard part: a clear thesis, a consistent boundary,
+                rigorous runtime guarantees, good failure envelopes, machine-checked public
+                surfaces, and real composition examples. A third party can install it, build a
+                Commission, test it without credentials, and operate a tree with meaningful
+                controls.
+              </p>
+              <p style="margin-top: 13px;">
+                The problem is that the repository asks the newcomer to infer why those pieces
+                matter. The first happy-path example proves typed output but not compression or
+                composition. The fastest no-key proof is buried in the authoring manual. The
+                interactive demo is packaged but absent from the README’s primary path. The
+                advanced vocabulary is well documented, yet the documentation exposes it as an
+                inventory more often than as a sequence of needs.
+              </p>
+            </div>
+            <div class="verdict-side">
+              <strong>Risk before wider sharing</strong>
+              <p>
+                A capable developer may conclude “typed wrapper around Chat Completions” before
+                reaching the evidence that differentiates Vibrantine. Others may understand the
+                architecture but postpone trying it because installation, credentials, model
+                configuration, runtime policy, and authoring discipline appear to arrive as one
+                decision bundle.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="scope">
+          <div class="section-kicker">02 · Scope and method</div>
+          <h2>A heuristic cold-start review of the whole repository-facing application.</h2>
+          <p class="lede">
+            This review follows the path an outside Python developer would take from a GitHub
+            landing page to a reusable, tested Commission. It evaluates presentation and
+            ergonomics against the project’s own rulings; it does not propose weakening the
+            contract or moving application concerns into the library.
+          </p>
+
+          <table class="scorecard">
+            <thead>
+              <tr>
+                <th>Area reviewed</th>
+                <th>Current signal</th>
+                <th>Assessment</th>
+                <th>Why it matters</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Thesis and scope</td>
+                <td><span class="signal strong">Strong</span></td>
+                <td>Specific, internally consistent, and candid about refusals and tradeoffs.</td>
+                <td>A newcomer can understand what Vibrantine is and is not.</td>
+              </tr>
+              <tr>
+                <td>Installation and release alignment</td>
+                <td><span class="signal weak">Weak</span></td>
+                <td>Main-branch documentation describes unreleased MCP capabilities while the prescribed install pins <code>v0.6.0</code>.</td>
+                <td>Copying the official install command can yield a package that cannot follow the same page.</td>
+              </tr>
+              <tr>
+                <td>First success</td>
+                <td><span class="signal mixed">Mixed</span></td>
+                <td>The factory path is compact, but needs a cloud key by default; the no-key proof is deeper in the docs.</td>
+                <td>Setup friction arrives before confidence.</td>
+              </tr>
+              <tr>
+                <td>First “aha”</td>
+                <td><span class="signal weak">Weak</span></td>
+                <td>The README example demonstrates typed output, not a child Commission becoming a tool.</td>
+                <td>The distinctive value looks interchangeable with structured provider output.</td>
+              </tr>
+              <tr>
+                <td>Authoring progression</td>
+                <td><span class="signal mixed">Mixed</span></td>
+                <td>A strong tutorial, factory, subclass path, and reference live in one very long document.</td>
+                <td>Reference completeness competes with momentum.</td>
+              </tr>
+              <tr>
+                <td>Runtime trust</td>
+                <td><span class="signal strong">Strong</span></td>
+                <td>Budgets, fuses, concurrency, authority, observability, and persistence are coherent and tested.</td>
+                <td>The product’s trust claim has real machinery behind it.</td>
+              </tr>
+              <tr>
+                <td>Error recovery</td>
+                <td><span class="signal strong">Strong</span></td>
+                <td>Messages are actionable, and the post-audit fix now classifies a missing API key as <code>validation</code>.</td>
+                <td>The most common first-run mistake points to caller configuration rather than a framework fault.</td>
+              </tr>
+              <tr>
+                <td>External proof</td>
+                <td><span class="signal weak">Weak</span></td>
+                <td>Install mechanics are smoke-tested; the requested outside-developer cold-start observation has not happened.</td>
+                <td>The central concern cannot be closed from inside the project.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <details>
+            <summary>Method and limitations</summary>
+            <p>
+              Evidence came from the root README, all public guides, the ruling record, the
+              public API and its lock tests, entry-point and constructor signatures, the factory,
+              examples, demo runner, tools, packaging metadata, wheel contents, changelog,
+              release checklist, and current validation suite. Local Markdown targets in the
+              public docs were checked and all resolved.
+            </p>
+            <p>
+              The review did not spend money on live provider calls and did not observe a real
+              outside developer. That is deliberate: repository evidence can identify likely
+              friction, but only the proposed cold-start study can validate comprehension,
+              timing, and abandonment behavior. The workspace also contained pending
+              documentation changes; findings describe the exact snapshot named above.
+            </p>
+          </details>
+        </section>
+
+        <section id="inventory">
+          <div class="section-kicker">03 · Surface inventory</div>
+          <h2>The raw surface is broad; the required surface can still be tiny.</h2>
+          <p class="lede">
+            These counts are not defects by themselves. They show why progressive disclosure is
+            load-bearing: Vibrantine can truthfully offer a two-name happy path while retaining a
+            much richer operational and authoring boundary behind it.
+          </p>
+
+          <div class="metric-grid">
+            <div class="metric">
+              <span class="metric-label">First useful import</span>
+              <span class="metric-value">2</span>
+              <span class="metric-note"><code>create_commission</code> and <code>run_commission_sync</code> are enough for a basic typed call.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Top-level stable names</span>
+              <span class="metric-value">35</span>
+              <span class="metric-note">The flat reference block makes all supported concerns visually adjacent.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Run signature</span>
+              <span class="metric-value">16</span>
+              <span class="metric-note">Two positional parameters plus fourteen keyword decisions, all defaulted.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Constructor knobs</span>
+              <span class="metric-value">8</span>
+              <span class="metric-note">Model, loop, toolbox, size, persistence, and overflow policy share one constructor.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Ownership model</span>
+              <span class="metric-value">5</span>
+              <span class="metric-note">Identity, capacity, permission, task, and result are a good map—but a map for re-entry, not first run.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Runtime authority terms</span>
+              <span class="metric-value">3</span>
+              <span class="metric-note"><code>toolbox</code>, <code>capabilities</code>, and <code>tool_ceiling</code> have distinct owners and scopes.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Authoring manual</span>
+              <span class="metric-value">10.5k</span>
+              <span class="metric-note">Approximate words across tutorial, composition, advanced authoring, and full reference.</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Validation result</span>
+              <span class="metric-value">540</span>
+              <span class="metric-note">Tests passed locally; 8 skipped. Ruff and basedpyright were clean.</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="journey">
+          <div class="section-kicker">04 · Adoption journey</div>
+          <h2>Confidence rises, dips before the payoff, then recovers in the advanced material.</h2>
+
+          <div class="adoption-path" aria-label="Adoption path pressure visualization">
+            <div class="path-node good">
+              <div class="stage-num">01</div>
+              <div class="path-dot"></div>
+              <h4>Discover</h4>
+              <p>Strong thesis</p>
+            </div>
+            <div class="path-node risk">
+              <div class="stage-num">02</div>
+              <div class="path-dot"></div>
+              <h4>Install</h4>
+              <p>Version mismatch</p>
+            </div>
+            <div class="path-node friction">
+              <div class="stage-num">03</div>
+              <div class="path-dot"></div>
+              <h4>First run</h4>
+              <p>Key before trust</p>
+            </div>
+            <div class="path-node risk">
+              <div class="stage-num">04</div>
+              <div class="path-dot"></div>
+              <h4>Understand</h4>
+              <p>“Aha” arrives late</p>
+            </div>
+            <div class="path-node friction">
+              <div class="stage-num">05</div>
+              <div class="path-dot"></div>
+              <h4>Author</h4>
+              <p>Long single manual</p>
+            </div>
+            <div class="path-node good">
+              <div class="stage-num">06</div>
+              <div class="path-dot"></div>
+              <h4>Compose</h4>
+              <p>Model becomes clear</p>
+            </div>
+            <div class="path-node good">
+              <div class="stage-num">07</div>
+              <div class="path-dot"></div>
+              <h4>Operate</h4>
+              <p>Strong controls</p>
+            </div>
+            <div class="path-node friction">
+              <div class="stage-num">08</div>
+              <div class="path-dot"></div>
+              <h4>Adopt</h4>
+              <p>Outside proof missing</p>
+            </div>
+          </div>
+
+          <div class="stage-list">
+            <article class="stage">
+              <div class="stage-num">01</div>
+              <div>
+                <h3>Discovery: the conceptual front door works.</h3>
+                <p class="stage-observation">
+                  The README names a concrete problem—raw LLM calls do not behave like reliable
+                  components—and explains the work-order metaphor, typed envelope, parent-mediated
+                  composition, and application boundary. The “What Vibrantine Is Not” section
+                  prevents framework-category confusion.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Polish opportunity:</strong> shorten the distance between the thesis and a
+                runnable proof. Keep the argument, but let readers act before asking them to absorb
+                the complete “Why.”
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">02</div>
+              <div>
+                <h3>Installation: accurate posture, inconsistent artifact.</h3>
+                <p class="stage-observation">
+                  The project is candid that it is pre-1.0 and not on PyPI. However, the README on
+                  main tells users to pin <code>v0.6.0</code> while the same page documents an MCP
+                  client example added after that tag. The authoring tutorial instead installs an
+                  unpinned Git dependency from main. Only <code>uv</code> is shown.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Fix first:</strong> make every command and linked feature target one named
+                artifact. Offer a recommended <code>uv</code> command and a standard
+                <code>pip</code> Git alternative.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">03</div>
+              <div>
+                <h3>First success: several good doors, no single obvious door.</h3>
+                <p class="stage-observation">
+                  The README has a compact factory example. Authoring Step 0 has an excellent
+                  no-key deterministic proof. The package ships a friendly interactive demo and a
+                  four-rung ladder. These are all useful, but only the factory example is visible
+                  on the front page, and it requires the default cloud setup.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Sequence:</strong> install → no-key receipt → live one-Commission call →
+                one nested child. Link the packaged demo and ladder at each corresponding step.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">04</div>
+              <div>
+                <h3>Understanding: typed output is shown before compression.</h3>
+                <p class="stage-observation">
+                  The first LLM example is a research brief over supplied notes. It demonstrates
+                  Pydantic input/output and an envelope, but a skeptical developer can reproduce
+                  the visible result with structured provider output. The differentiator—that the
+                  same Commission becomes one typed tool inside another model’s toolbox—appears
+                  later.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Move the “aha” earlier:</strong> show the same object first called directly,
+                then inserted unchanged into a parent’s <code>toolbox</code>. One small diff can
+                make the thesis observable.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">05</div>
+              <div>
+                <h3>Authoring: completeness outruns progressive disclosure.</h3>
+                <p class="stage-observation">
+                  The factory is a strong short path, and subclassing is a legitimate exit ramp.
+                  But one document contains proof of life, the shortcut, a full subclass tutorial,
+                  guard rails, tests, evals, multimodal input, composition, package structure,
+                  a large worked coordinator, and the complete reference.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Separate intent, not truth:</strong> a ten-minute getting-started route, an
+                “outgrowing the factory” guide, and the existing reference can point to one another
+                without adding a framework concept.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">06</div>
+              <div>
+                <h3>Composition: this is where the architecture becomes compelling.</h3>
+                <p class="stage-observation">
+                  The learning ladder is excellent: each rung introduces exactly one idea, and
+                  rung 3 demonstrates the scale-invariant boundary directly. The conceptual guide
+                  also shows the exact tool descriptor a coordinating model sees. This material is
+                  the clearest proof of the thesis.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Promote, do not rewrite:</strong> reuse rung 1 → rung 3 as the canonical
+                public narrative. Keep deeper coordinator patterns where they are.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">07</div>
+              <div>
+                <h3>Operation and debugging: strong, but vocabulary-dense.</h3>
+                <p class="stage-observation">
+                  The runtime provides real value: one governed run, call and time fuses, a spend
+                  fuse, concurrency, model catalog, authority narrowing, callbacks, dispatch
+                  records, and persistence. The docs are unusually honest about soft monetary
+                  bounds and the meanings of <code>None</code>.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Recipe-first reference:</strong> lead with four operational recipes
+                (“cap spend,” “allow read only,” “watch a run,” “record a run”), then explain the
+                ownership matrix and full signatures.
+              </div>
+            </article>
+
+            <article class="stage">
+              <div class="stage-num">08</div>
+              <div>
+                <h3>Adoption decision: internal rigor is high; outside evidence is low.</h3>
+                <p class="stage-observation">
+                  The repository records a fresh dependency smoke test and names Base Coder as a
+                  consumer, but the checklist’s consumer-verification items remain unchecked. No
+                  observed cold-start study closes the specific progressive-disclosure concern.
+                </p>
+              </div>
+              <div class="stage-opportunity">
+                <strong>Do the test:</strong> observe three to five outside developers completing
+                fixed tasks. Treat their vocabulary, detours, and abandonment points as evidence
+                for docs changes—and as the trigger for any API proposal.
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="findings">
+          <div class="section-kicker">05 · Priority findings</div>
+          <h2>Ten weaknesses explain most of the adoption pressure.</h2>
+          <p class="lede">
+            “High” means likely to block or materially mislead a new adopter. “Medium” means the
+            developer can recover, but pays avoidable cognitive or diagnostic cost. “Validation”
+            means the hypothesis needs an outside user before code changes are justified.
+          </p>
+
+          <div class="finding-list">
+            <article class="finding">
+              <div class="finding-tag high">
+                <span class="finding-id">F-01</span>
+                <span class="priority">High</span>
+              </div>
+              <div>
+                <h3>The documented product and the prescribed install are different snapshots.</h3>
+                <p>
+                  Main is 23 commits beyond <code>v0.6.0</code>. The README’s MCP section describes
+                  code that the <code>v0.6.0</code> tag does not contain, while installation
+                  deliberately pins that tag. The current source and local wheel still identify
+                  themselves as 0.6.0 despite unreleased behavior.
+                </p>
+                <p class="evidence">
+                  Evidence: <code>v0.6.0</code> contains no <code>vibrantine.mcp</code>,
+                  <code>deepwiki.py</code>, or MCP examples; the changelog correctly lists the
+                  feature under Unreleased.
+                </p>
+                <div class="recommendation">
+                  Keep release docs and install commands artifact-coherent. Until the next tag,
+                  either label main-only sections explicitly and show a main install, or keep the
+                  public README limited to the latest tagged surface. Add a release check that
+                  executes README commands against the documented tag.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag high">
+                <span class="finding-id">F-02</span>
+                <span class="priority">High</span>
+              </div>
+              <div>
+                <h3>The first example proves structure, not Vibrantine’s distinctive compression.</h3>
+                <p>
+                  A typed brief generated from notes is useful, but visually resembles a direct
+                  structured-output provider call. The most differentiated behavior—handing that
+                  whole capability to another model as one typed tool—appears later in the
+                  learning ladder and conceptual guide.
+                </p>
+                <div class="recommendation">
+                  Make the canonical example a two-beat reveal: call a small Commission directly,
+                  then put that exact object in a parent’s toolbox. Show that only its name,
+                  description, schema, and envelope cross the boundary.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag high">
+                <span class="finding-id">F-03</span>
+                <span class="priority">High</span>
+              </div>
+              <div>
+                <h3>There is no short, canonical getting-started path.</h3>
+                <p>
+                  The necessary pieces exist across the README, authoring Step 0, the factory
+                  shortcut, learning ladder, demo runner, and conceptual guide. A newcomer must
+                  assemble the intended sequence. The 10.5k-word authoring manual is excellent as
+                  a durable reference but too broad to serve simultaneously as the only tutorial.
+                </p>
+                <div class="recommendation">
+                  Create one route with explicit stopping points: “I only need one typed call,” “I
+                  need a tool,” “I need composition,” and “I need custom control flow.” Each stop
+                  should name what the reader can ignore next.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag medium">
+                <span class="finding-id">F-04</span>
+                <span class="priority">Medium</span>
+              </div>
+              <div>
+                <h3>The default onboarding story overstates the OpenRouter requirement.</h3>
+                <p>
+                  The README says an <code>OPENROUTER_API_KEY</code> is required for LLM-backed
+                  runs. That is true only for the default model path: keyless Ollama and other
+                  explicitly keyless OpenAI-compatible profiles are supported. The packaged demo
+                  already has an <code>--ollama</code> path, but it is not surfaced on the front
+                  page.
+                </p>
+                <div class="recommendation">
+                  Say “the default cloud path requires OpenRouter” and show local Ollama beside it.
+                  Keep one no-key deterministic proof before either provider choice.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag resolved">
+                <span class="finding-id">F-05</span>
+                <span class="priority">Resolved</span>
+              </div>
+              <div>
+                <h3>The most likely first-run configuration mistake was labeled <code>internal</code>.</h3>
+                <p>
+                  At audit time, a missing provider key failed before network or spend and named
+                  the missing variable clearly, but the boundary labeled it
+                  <code>ErrorState(kind="internal")</code>. The caller’s decision is to fix
+                  configuration, not report a framework defect or retry the same call.
+                </p>
+                <p class="evidence">
+                  Resolution: provider client vending now raises the private run-configuration
+                  error, and both built-in LLM call paths translate it to non-retryable
+                  <code>validation</code>. Regression tests cover the default loop and Synthesize.
+                </p>
+                <div class="recommendation">
+                  Completed without adding an error vocabulary member, export, parameter, or
+                  public type.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag medium">
+                <span class="finding-id">F-06</span>
+                <span class="priority">Medium</span>
+              </div>
+              <div>
+                <h3>Defaulted complexity is still visually exposed complexity.</h3>
+                <p>
+                  A beginner only needs two public names, yet the reference presents 35 top-level
+                  exports in one block. The run signature places fourteen defaulted controls side
+                  by side. The runtime guide introduces grants, ceilings, fuses, rooms, catalogs,
+                  capabilities, toolboxes, persistence precedence, and several meanings of
+                  <code>None</code>.
+                </p>
+                <div class="recommendation">
+                  Keep the API. Reframe the docs as adoption tiers: basic call, composition,
+                  operating policy, custom authoring, integrations. Put the exact flat inventory
+                  in an appendix/reference, and lead each tier with a copyable recipe.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag resolved">
+                <span class="finding-id">F-07</span>
+                <span class="priority">Resolved</span>
+              </div>
+              <div>
+                <h3>Documented schema discipline was not enforced on the factory path.</h3>
+                <p>
+                  Project guidance requires a description on every Pydantic field. At audit time,
+                  <code>create_commission</code> accepted an input field without one and silently
+                  wrote “(no description provided)” into the system prompt; output and nested
+                  schemas could likewise reach the provider under-described.
+                </p>
+                <div class="recommendation">
+                  Resolved: the factory now rejects missing, blank, and nested field descriptions
+                  at construction. The other portability rules remain separate decisions; no
+                  bypass switch or public surface was added.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag medium">
+                <span class="finding-id">F-08</span>
+                <span class="priority">Medium</span>
+              </div>
+              <div>
+                <h3>The demo and learning ladder are stronger than their discoverability.</h3>
+                <p>
+                  The package ships an interactive CLI with friendly missing-key guidance,
+                  selectable OpenRouter/Ollama models, budgets, progress, persisted records, and
+                  trace display. The ladder introduces exactly one idea per rung. Neither receives
+                  a direct “Try it” position in the README.
+                </p>
+                <div class="recommendation">
+                  Promote existing assets instead of building another sample. The README should
+                  offer two actions: “inspect the envelope with no key” and “run the interactive
+                  demo with OpenRouter or Ollama.”
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag medium">
+                <span class="finding-id">F-09</span>
+                <span class="priority">Medium</span>
+              </div>
+              <div>
+                <h3>Verification claims blur offline checks, live checks, and historical checks.</h3>
+                <p>
+                  The repository has strong tests and machine-checks important documentation
+                  claims. CI intentionally has no provider secret, so live integrations skip. The
+                  README says every authoring code block is verified against a live model and
+                  machine-checked in CI; those are two different assurances with different
+                  freshness.
+                </p>
+                <div class="recommendation">
+                  Label claims precisely: “offline contract checks run in every CI,” “live-model
+                  examples were last verified on [date/model],” and “integration smoke is
+                  optional/scheduled.” Freshness is part of trust.
+                </div>
+              </div>
+            </article>
+
+            <article class="finding">
+              <div class="finding-tag validation">
+                <span class="finding-id">F-10</span>
+                <span class="priority">Validate</span>
+              </div>
+              <div>
+                <h3>The project has consumer evidence, but not adoption-journey evidence.</h3>
+                <p>
+                  A fresh Git install proves packaging. A known consumer proves the API can be used
+                  elsewhere. Neither shows which concepts a new developer misunderstands, how long
+                  the first useful result takes, or whether the composition model lands before
+                  fatigue.
+                </p>
+                <div class="recommendation">
+                  Run the outside-developer protocol below before restructuring the API. Record
+                  observed friction and use it as the required named consumer for any surface
+                  change.
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="opportunities">
+          <div class="section-kicker">06 · Improvement plan</div>
+          <h2>Polish the path in three passes: coherence, comprehension, evidence.</h2>
+          <p class="lede">
+            The sequence deliberately starts with documentation and diagnostics. Those changes
+            are low-risk, preserve the frozen contract, and create the evidence needed to decide
+            whether any deeper API work is warranted.
+          </p>
+
+          <div class="plan-grid">
+            <article class="plan-card now">
+              <span class="priority">Pass 1 · Now</span>
+              <h3>Make the front door coherent</h3>
+              <div class="effort">Target: 1–2 focused days</div>
+              <ol>
+                <li>Align README features with the installed tag, or label main-only features and commands explicitly.</li>
+                <li>Move installation before the first runnable code and add a standard pip Git alternative.</li>
+                <li>Correct “OpenRouter required” to “required for the default cloud path”; expose Ollama.</li>
+                <li>Add a “Try it” block for the no-key envelope proof and packaged demo.</li>
+                <li>Link the learning ladder from the README, not only from authoring.</li>
+                <li><strong>Completed:</strong> missing credentials now return <code>validation</code> while preserving the actionable detail.</li>
+              </ol>
+            </article>
+
+            <article class="plan-card next">
+              <span class="priority">Pass 2 · Next</span>
+              <h3>Move the payoff earlier</h3>
+              <div class="effort">Target: 3–5 focused days</div>
+              <ol>
+                <li>Make rung 1 → rung 3 the canonical narrative: one unit, one tool, one nested unit.</li>
+                <li>Give the getting-started path a ten-minute stopping point before subclassing.</li>
+                <li>Split “outgrowing the factory” from the quick path while retaining one source of truth for reference tables.</li>
+                <li>Recast runtime controls as four recipes, with the full ownership model behind them.</li>
+                <li><strong>Completed:</strong> <code>create_commission</code> now rejects absent, blank, and nested field descriptions.</li>
+                <li>Add an automated README/tag smoke test and public-doc local-link check.</li>
+              </ol>
+            </article>
+
+            <article class="plan-card later">
+              <span class="priority">Pass 3 · Validate</span>
+              <h3>Let adopters earn deeper changes</h3>
+              <div class="effort">Target: after the outside study</div>
+              <ol>
+                <li>Observe 3–5 independent Python developers using only the public repository.</li>
+                <li>Measure time to install, first receipt, first nested Commission, and first contract test.</li>
+                <li>Record every term the participant has to look up or misuses.</li>
+                <li>Compare a short-path branch with the current docs, not recollection against recollection.</li>
+                <li>Only propose new convenience APIs when repeated evidence identifies the same irreducible decision.</li>
+                <li>Repeat the study before a PyPI launch or stable surface promise.</li>
+              </ol>
+            </article>
+          </div>
+
+          <details>
+            <summary>Suggested ten-minute getting-started topology</summary>
+            <ol>
+              <li><strong>Install the exact artifact.</strong> One recommended command, one alternative, one statement of maturity.</li>
+              <li><strong>See the envelope offline.</strong> Run <code>ReadTool</code> or an equally small deterministic call; print status, typed output, cost, provenance, and run ID.</li>
+              <li><strong>Choose a provider path.</strong> OpenRouter by default or local Ollama; explain that provider setup belongs to the caller.</li>
+              <li><strong>Create one Commission.</strong> Use the factory and two tiny Pydantic models; handle all envelope statuses.</li>
+              <li><strong>Observe compression.</strong> Put the exact object in a parent toolbox and show the abbreviated descriptor seen by the parent model.</li>
+              <li><strong>Stop deliberately.</strong> “You now know the complete basic model. Continue only if you need custom control flow, runtime policy, tests, or packaging.”</li>
+            </ol>
+          </details>
+        </section>
+
+        <section id="validation">
+          <div class="section-kicker">07 · Outside-developer validation</div>
+          <h2>The concern closes only when someone cold starts without the maintainer’s mental model.</h2>
+          <div class="test-protocol">
+            <div>
+              <h3>Moderated protocol</h3>
+              <p>
+                Recruit three to five Python developers who have built at least one LLM-backed
+                script but have never seen Vibrantine. Give them the public repository and four
+                outcome-based tasks. Do not explain vocabulary unless they are completely blocked;
+                ask them to think aloud.
+              </p>
+              <ol>
+                <li>Install the library and obtain any successful <code>CommissionResult</code> without spending money.</li>
+                <li>Build one LLM-backed Commission with typed input and typed output.</li>
+                <li>Make that Commission available to another Commission as a tool.</li>
+                <li>Write one offline test that proves the child returns its declared type.</li>
+              </ol>
+              <p>
+                Capture screen and audio with consent. Record time, navigation path, copied
+                commands, errors, backtracking, vocabulary questions, and the participant’s
+                explanation of Vibrantine after each task.
+              </p>
+            </div>
+            <div class="success-box">
+              <h4>Proposed success bar</h4>
+              <ul>
+                <li>Median install-to-first receipt: ≤ 5 minutes.</li>
+                <li>Median first typed Commission: ≤ 12 minutes.</li>
+                <li>At least 4 of 5 explain “a Commission becomes one typed tool to a parent” unaided.</li>
+                <li>At least 4 of 5 choose <code>dispatch</code>, not <code>._run</code>, for a child.</li>
+                <li>No participant believes persistence is cross-run memory.</li>
+                <li>No repeated blocker requires an undocumented workaround.</li>
+              </ul>
+            </div>
+          </div>
+
+          <details>
+            <summary>What to ask after the tasks</summary>
+            <ul class="evidence-list">
+              <li>What problem does Vibrantine solve that Pydantic structured output alone does not?</li>
+              <li>What information crosses from a child Commission to its parent?</li>
+              <li>Which settings belong to the Commission author, builder, caller, and application?</li>
+              <li>What would make you use this in a real project next week?</li>
+              <li>Which concept felt necessary only because the docs mentioned it?</li>
+              <li>Which error looked like your mistake but was presented as the library’s mistake?</li>
+              <li>At what point did the architecture become more compelling than a direct provider call?</li>
+              <li>What did you expect the library to do that it deliberately refuses?</li>
+            </ul>
+          </details>
+        </section>
+
+        <section id="guardrails">
+          <div class="section-kicker">08 · Architectural guardrails</div>
+          <h2>Improve adoption without dissolving the boundary that creates the value.</h2>
+          <div class="guardrails">
+            <article class="guardrail keep">
+              <h3>Keep</h3>
+              <ul>
+                <li>The factory as the smallest supported authoring path.</li>
+                <li>Typed Pydantic input and output from the first real example.</li>
+                <li>One result envelope with failure, cost, and provenance.</li>
+                <li>Parent-mediated composition and child isolation.</li>
+                <li>The one run entry point and one interior dispatch path.</li>
+                <li>Application-owned scheduling, state, user surfaces, and MCP connection policy.</li>
+                <li>Exact public-surface locks and the vocabulary-append discipline.</li>
+                <li>Honest pre-1.0 and non-PyPI posture until release work is complete.</li>
+              </ul>
+            </article>
+            <article class="guardrail avoid">
+              <h3>Avoid</h3>
+              <ul>
+                <li>A new configuration object merely to hide the existing run keywords.</li>
+                <li>Convenience exports or aliases that widen the frozen surface.</li>
+                <li>Automatic Commission discovery, registries, or call-by-name resolution.</li>
+                <li>A “simple mode” with weaker receipts or exception behavior.</li>
+                <li>Moving persistence, conversation, scheduling, or provider policy into <code>CallContext</code>.</li>
+                <li>Another example system when the current demo and ladder only need promotion.</li>
+                <li>Reducing documentation by deleting the reference rather than separating entry paths.</li>
+                <li>API changes justified only by this internal review; require repeated outside evidence.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="evidence">
+          <div class="section-kicker">09 · Evidence register</div>
+          <h2>The audit is grounded in current repository artifacts.</h2>
+          <p class="lede">
+            Links are relative to this report so it remains useful as the working tree changes.
+            Line numbers are intentionally omitted because the reviewed files are active.
+          </p>
+          <ul class="evidence-list">
+            <li><a href="../../README.md">Root README</a> — thesis, first example, install, MCP section, maturity.</li>
+            <li><a href="../commission-model.md">Commission model</a> — five surfaces, result envelope, composition, categories.</li>
+            <li><a href="../authoring.md">Authoring guide</a> — proof of life, factory, subclass path, guard rails, reference.</li>
+            <li><a href="../running.md">Running guide</a> — fuses, model catalog, authority, observability, persistence.</li>
+            <li><a href="../commission-testing.md">Testing guide</a> — scripted models, contract tests, eval discipline.</li>
+            <li><a href="../design.md">Design argument</a> — thesis, refusals, and explicit tradeoffs.</li>
+            <li><a href="../design-decisions.md">Ruling record</a> — public-surface minimization, errors, models, persistence, MCP adapters.</li>
+            <li><a href="../pre-release-checklist.md">Pre-release checklist</a> — fresh install smoke and external consumer proof.</li>
+            <li><a href="../../src/vibrantine/__init__.py">Top-level boundary</a> — 35 stable names in the current snapshot.</li>
+            <li><a href="../../src/vibrantine/orchestrator.py">Run entry points</a> — 16-parameter signature and runtime construction.</li>
+            <li><a href="../../src/vibrantine/contract.py">Commission contract</a> — eight constructor knobs and authoring hooks.</li>
+            <li><a href="../../src/vibrantine/factory.py">Factory</a> — smallest authoring path and missing-description fallback.</li>
+            <li><a href="../../src/vibrantine/models.py">Model profiles</a> — OpenRouter default, OpenAI-compatible targets, Ollama.</li>
+            <li><a href="../../src/vibrantine/examples/learning_ladder/rung_1.py">Learning ladder rung 1</a> — one Commission.</li>
+            <li><a href="../../src/vibrantine/examples/learning_ladder/rung_3.py">Learning ladder rung 3</a> — Commission-as-tool composition.</li>
+            <li><a href="../../src/vibrantine/examples/demo/runner.py">Demo runner</a> — provider choice, budgets, progress, trace presentation.</li>
+            <li><a href="../../tests/test_public_api.py">Public API locks</a> — exact exports, constructor, run, and context surfaces.</li>
+            <li><a href="../../tests/test_external_authoring.py">External authoring checks</a> — installed-package and authoring claims.</li>
+            <li><a href="../../tests/test_contract.py">Contract tests</a> — missing-key behavior and keyless model path.</li>
+            <li><a href="../../CHANGELOG.md">Changelog</a> — tagged 0.6.0 surface versus Unreleased changes.</li>
+          </ul>
+
+          <details>
+            <summary>Validation evidence captured during this review</summary>
+            <ul>
+              <li><code>uv run pytest -q</code>: 540 passed, 8 skipped.</li>
+              <li><code>uv run ruff check .</code>: all checks passed.</li>
+              <li><code>uv run basedpyright</code>: 0 errors, warnings, or notes.</li>
+              <li>All local Markdown link targets in the public documentation resolved.</li>
+              <li>The current top-level export count is 35.</li>
+              <li><code>run_commission</code> has 16 parameters; <code>Commission.__init__</code> has eight keyword decisions.</li>
+              <li>The current workspace is 23 commits beyond <code>v0.6.0</code> and contains pending documentation changes.</li>
+              <li>The <code>v0.6.0</code> tree contains no MCP adapter or MCP examples documented on current main.</li>
+              <li>The audit reproduced construction with an undescribed field; the post-audit regression now rejects missing, blank, and nested descriptions.</li>
+            </ul>
+          </details>
+        </section>
+
+        <section class="close">
+          <blockquote>
+            The shortest path forward is not to make Vibrantine smaller. It is to let the user
+            experience the small boundary before showing them everything that makes it trustworthy.
+          </blockquote>
+          <p>
+            The architecture already supports that story. Two names create the first unit; one
+            toolbox assignment reveals composition; one envelope proves the contract. The rest of
+            the machinery can arrive exactly when the adopter asks the next question.
+          </p>
+        </section>
+
+        <footer>
+          Prepared from the local Vibrantine workspace on 25 July 2026. This is a working review,
+          not a public product claim.
+        </footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
