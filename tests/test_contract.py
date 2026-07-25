@@ -310,15 +310,15 @@ async def test_missing_key_fails_fast_with_the_env_var_named(
 ) -> None:
     # A keyed endpoint whose key is absent must fail before any network call,
     # naming the env var, instead of surfacing as a raw provider 401 mid-run.
-    # The raise happens in the run's client vending at the first provider
-    # call; it crosses _run, so dispatch's backstop delivers it as a failure
-    # value through the front door.
+    # Missing caller configuration is validation, not an internal framework
+    # fault, and still arrives as a value through the front door.
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     result = await run_commission(_BasicProbe(), _PolicyProbeInput())
 
     assert result.status == "failure"
     assert result.error is not None
-    assert result.error.kind == "internal"
+    assert result.error.kind == "validation"
+    assert result.error.retryable is False
     assert "OPENROUTER_API_KEY" in result.error.detail
     assert result.cost.estimated_usd == 0.0  # failed before spending
 

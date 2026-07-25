@@ -22,6 +22,17 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ### Changed
 
+- **Caller configuration now fails as validation**: a missing provider API
+  key is reported as a non-retryable `validation` result with the environment
+  variable named, rather than being mislabeled as an internal framework
+  failure. The default LLM loop and Synthesize's custom provider path share
+  the classification.
+
+- **Factory contracts require described fields**: `create_commission` now
+  rejects input or output models with missing or blank field descriptions,
+  including fields on nested Pydantic models. The failure happens at
+  construction, before an under-described schema reaches a provider.
+
 - **Breaking — persistence is private runtime policy**: `CallContext` no
   longer exposes `backend` or `record`. Applications still configure both
   on `run_commission`; the private per-run runtime carries them through the

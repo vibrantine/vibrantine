@@ -19,7 +19,13 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
-from vibrantine._gatekeeper import Gatekeeper, RunCancel, RunHaltedError, UnmeterableCallError
+from vibrantine._gatekeeper import (
+    Gatekeeper,
+    RunCancel,
+    RunConfigError,
+    RunHaltedError,
+    UnmeterableCallError,
+)
 from vibrantine.contract import (
     CallContext,
     Claim,
@@ -421,6 +427,19 @@ class SynthesizeCommission(Commission[SynthesizeInput, SynthesizeOutput]):
                         provenance=provenance,
                         cost=cost_so_far,
                     ),
+                ),
+            )
+        except RunConfigError as exc:
+            return (
+                "",
+                0,
+                0,
+                self._fail(
+                    "validation",
+                    str(exc),
+                    retryable=False,
+                    provenance=provenance,
+                    cost=cost_so_far,
                 ),
             )
         except UnmeterableCallError as exc:

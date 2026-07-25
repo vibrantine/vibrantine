@@ -85,8 +85,9 @@ class RunHaltedError(Exception):
 class RunConfigError(ValueError):
     """A run configuration the Gatekeeper cannot honor, named.
 
-    Internal: raised by `build_catalog`, converted by `run_commission` into a
-    validation failure result (errors are values at that boundary too).
+    Internal: raised while building the catalog or vending its provider
+    clients, converted into a validation failure result at the nearest
+    framework boundary (errors are values there too).
     """
 
 
@@ -389,7 +390,7 @@ class Gatekeeper:
             # refuses a falsy one, so send a non-empty placeholder.
             api_key = "unused" if key_env is None else os.environ.get(key_env, "")
             if not api_key:
-                raise RuntimeError(
+                raise RunConfigError(
                     f"No API key: environment variable {key_env!r} is not "
                     f"set (model {entry.id!r} at {entry.base_url}). Set it, "
                     f"or register a keyless Model (api_key_env=None)."

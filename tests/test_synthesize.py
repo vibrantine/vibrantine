@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from vibrantine import run_commission
 from vibrantine.contract import ProgressEvent, Provenance
 from vibrantine.examples.synthesize import (
@@ -69,6 +71,24 @@ async def test_synthesize_success_returns_at_least_one_claim() -> None:
     assert result.output.summary_text == "Both sources confirm X."
     assert len(result.output.claims) >= 1
     assert result.output.claims[0].value == "X is true"
+
+
+async def test_synthesize_missing_key_is_a_validation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    result = await run_commission(
+        SynthesizeCommission(max_input_tokens=None),
+        SynthesizeInput(sources=[_src(0)]),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert result.error.retryable is False
+    assert "OPENROUTER_API_KEY" in result.error.detail
+    assert result.cost.estimated_usd == 0.0
 
 
 async def test_synthesize_applies_profile_params_on_both_passes() -> None:
