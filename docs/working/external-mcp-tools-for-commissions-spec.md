@@ -1,11 +1,12 @@
 # Feeding External MCP Tools Into Commissions
 
-Status: active in two slices. The reusable typed binding helper is implemented
-against the pinned SDK v1 line; the DeepWiki repository-documentation proof
-remains. Declarative mapping, onboarding, and broader integration machinery
-stay parked until a real consumer earns each one.
+Status: first consumer implemented. The reusable typed binding helper targets
+the pinned SDK v1 line, and the DeepWiki example proves a live public
+Streamable HTTP operation can enter one selected Commission toolbox.
+Declarative mapping, onboarding, schema fingerprints, and broader integration
+machinery stay parked until a real consumer earns each one.
 
-## Active First Slice
+## Implemented First Consumer
 
 The optional MCP client adapter lets an application bind selected tools from
 an external MCP server into ordinary Vibrantine Tool objects, then place those
@@ -71,7 +72,8 @@ typed JSON structured content and an explicit text fallback only.
 ## Goals
 
 - Connect to a local or remote MCP server through the official SDK.
-- Discover its tools without exposing them to any Commission automatically.
+- Bind a reviewed remote operation without exposing a discovered catalog to
+  any Commission automatically.
 - Bind a selected remote operation to a stable local Tool name and Pydantic
   input/output contract.
 - Keep awkward remote names and shapes behind deterministic mappings.
@@ -431,39 +433,47 @@ Vibrantine package.
 
 ## Implementation Sequence
 
-1. Re-rule adapters to cover both MCP directions and name the consumer.
-2. Define the private connection seam and test it with a fake SDK session.
-3. Implement the reusable explicitly typed binding helper.
-4. Add cancellation, timeout, provenance, error mapping, and payload bounds.
-5. Prove the helper against DeepWiki repository documentation.
-6. Add local-name/remote-name mapping beyond explicit encoder/decoder functions
-   only when a second consumer repeats the need.
-7. Add schema fingerprints, onboarding proposals, or generic fallbacks only
-   when their own consumers arrive.
+Completed:
+
+1. Re-ruled adapters to cover both MCP directions and named DeepWiki as the
+   first consumer.
+2. Defined the connection seam and tested it with a fake SDK session.
+3. Implemented the reusable explicitly typed binding helper.
+4. Added cancellation, timeout, provenance, error mapping, and payload bounds.
+5. Bound DeepWiki's `ask_question` behind a local typed contract, injected it
+   into one repository-guide Commission, and exercised the real public
+   Streamable HTTP endpoint in an opt-in integration test.
+
+Deferred until another consumer demonstrates the need:
+
+1. Add local-name/remote-name mapping beyond explicit encoder/decoder
+   functions.
+2. Add schema fingerprints, onboarding proposals, or generic fallbacks.
 
 ## Test Plan
 
-- Discovery alone creates no Tool proxy and changes no toolbox.
-- Binding `email_send` to remote `go` exposes only `email_send` to the LLM.
-- `ReadEmail` cannot see or call `email_send` when it was not placed there.
-- `SendEmail` can invoke remote `go` through the canonical proxy.
-- Capability and ceiling intersection still removes an otherwise wired proxy.
-- Input and output mappings round-trip the declared local Pydantic types.
-- Incompatible schemas fail at binding time.
-- Unexpected content kinds fail without data loss or arbitrary parsing.
-- MCP errors, timeouts, cancellation, and rate limits become existing error
-  values.
-- Error details are bounded before entering an LLM transcript.
-- Concurrent proxies sharing one connection behave according to the client's
-  documented concurrency contract.
-- A schema-list change marks bindings stale and does not mutate a live tree.
-- A manifest containing an executable expression is rejected as data.
-- No MCP object appears in `CallContext`, the Gatekeeper, or the frozen top-level
-  public surface.
+Implemented coverage proves:
 
-Integration tests cover one local stdio fake server and one Streamable HTTP fake
-server. Live third-party servers belong in opt-in integration tests and require
-their own credentials.
+- Binding creates an ordinary typed Tool without changing any toolbox
+  automatically.
+- Local and remote names and payload fields may differ behind explicit
+  encoder/decoder functions.
+- Input and output mappings round-trip the declared local Pydantic types.
+- Unexpected content kinds fail without being discarded silently.
+- MCP errors, timeouts, cancellation, and closed connections become existing
+  error values.
+- Request, result, and error details are bounded.
+- Concurrent proxies can share one initialized application-owned connection.
+- A parent Commission can invoke the bound Tool through its ordinary toolbox.
+- No MCP object appears in `CallContext`, the Gatekeeper, or the frozen
+  top-level public surface.
+- DeepWiki's live no-auth Streamable HTTP endpoint returns a typed answer
+  through the same binding used by the example.
+
+The first slice uses fake SDK sessions for exhaustive contract behavior and an
+opt-in live DeepWiki integration test for the real transport. Schema discovery,
+fingerprints, declarative manifests, and broader transport coverage remain with
+their deferred machinery rather than being simulated prematurely.
 
 ## Acceptance Criteria
 
@@ -480,17 +490,12 @@ their own credentials.
 - Unsupported integrations fail closed with a specific explanation.
 - The Gatekeeper remains unchanged and contains no integration state.
 
-## Questions If Resumed
+## Questions for Deferred Work
 
-1. Is the first supported output subset—structured JSON plus explicit text
-   fallback—large enough for the first real consumer?
-2. What repeated mapping need, if any, would justify a declarative interpreter
+1. What repeated mapping need, if any, would justify a declarative interpreter
    beyond the explicit typed encoder/decoder functions?
-3. Which provider-neutral domain contract, if any, is the first no-code proof:
-   email, calendar, or a smaller service?
-4. Does the application need a long-lived connection manager immediately, or
-   can the first proof own one connection in one application context?
-5. What exact schema change invalidates a binding: any descriptor hash change,
+2. What exact schema change invalidates a binding: any descriptor hash change,
    input/output schema change only, or a reviewed compatibility relation?
-6. Where should confirmation for `email_send` live in the first consumer: a
+3. Where should confirmation for a consequential operation such as
+   `email_send` live in its first consumer: a
    user-facing application gate, a deterministic policy gate, or both?

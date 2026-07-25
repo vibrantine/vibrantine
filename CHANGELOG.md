@@ -16,7 +16,9 @@ doors its boundary docstring names (such as `vibrantine.testing`).
   Pydantic Tool contract. Bound Tools use ordinary constructor injection,
   dispatch logging, capability narrowing, cancellation, timeout, bounded
   results, structured failures, and provenance without adding MCP state to
-  `CallContext`, the Gatekeeper, or the top-level package surface.
+  `CallContext`, the Gatekeeper, or the top-level package surface. A worked
+  DeepWiki binding and repository-guide Commission prove the application-owned
+  connection and toolbox-injection path against the live public service.
 
 ### Changed
 
