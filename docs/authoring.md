@@ -147,11 +147,15 @@ typed, budgetable, recordable Commission; it nests in another Commission's
 toolbox like anything hand-written.
 
 The factory is deterministic: nothing is fetched and nothing is spent at
-construction time, so what you get is exactly what you asked for. The rest
-of Part I builds a Commission by hand instead, because the subclass is the
-exit ramp you take the day you need a custom interior, and knowing what the
-factory manufactures is what makes it trustworthy. Nothing the factory
-taught you changes when you subclass.
+construction time, so what you get is exactly what you asked for. It also
+checks the contract models immediately: every input and output field,
+including fields on nested Pydantic models, needs a non-empty
+`Field(description=...)`. An under-described schema fails at construction
+rather than reaching a provider. The rest of Part I builds a Commission by
+hand instead, because the subclass is the exit ramp you take the day you
+need a custom interior, and knowing what the factory manufactures is what
+makes it trustworthy. Nothing the factory taught you changes when you
+subclass.
 
 To see this example grow one idea at a time (tools, then a nested child,
 then budgets and recorded runs), run the four rungs of
@@ -886,6 +890,55 @@ one coordinator beats many nested LLM levels, because siblings don't
 compound each other's errors or stack each other's latency
 (`design.md § Shallow trees`).
 
+## Package layout as a tree grows
+
+A small Commission may remain one module. When it earns an owned prompt,
+private children, enough boundary types to obscure the class, or simply
+becomes hard to scan, promote it to a package. The available shape is:
+
+```text
+repository_guide/
+  __init__.py
+  commission.py
+  types.py
+  prompts/
+    system.md
+  tools/
+    __init__.py
+    render_query.py
+  subcommissions/
+    __init__.py
+    plan.py
+    document_reader/
+      ...
+  tests/
+    test_commission.py
+  BRIEF.md
+```
+
+Only earned slots exist. `__init__.py` re-exports the package's one public
+Commission and its public input/output types; behavior stays in
+`commission.py`, and boundary models stay with the code that owns them.
+Stable prompt text lives under `prompts/` and loads through package resources.
+The package's tests and BRIEF travel with its behavior.
+
+The two private capability slots follow the LLM-anywhere rule:
+
+- `tools/` contains deterministic capabilities with no LLM anywhere in their
+  subtree.
+- `subcommissions/` contains LLM-bearing children. A small child is one
+  module; a folder-sized child repeats this same shape recursively.
+
+Both `__init__.py` files inside those private slots exist for importability,
+not as registries or second public surfaces. Ordinary helpers stay beside
+their single consumer; do not add `services/`, `engine/`, or a directory that
+merely mirrors the runtime call graph.
+
+Reuse, not depth, triggers promotion. A private child with a second real
+consumer becomes a public sibling package; a private deterministic tool with
+a second consumer moves to the shared tools layer. Deep single-consumer trees
+are legitimate, and filesystem depth still does not imply runtime depth.
+
 ## Where the accumulating state goes
 
 There is no framework memory or artifact slot to write into, deliberately:
@@ -1432,7 +1485,8 @@ points like any other.
 
 - Required arguments are the crafted parts: identity (`name`,
   `description`) and the typed contract (`input`, `output`, both Pydantic
-  models).
+  models). Construction rejects a missing or blank field description,
+  including on nested models, before the schema reaches a provider.
 - The default system prompt is the description plus the input schema's
   field descriptions and the `conclude` instruction; pass `system_prompt=`
   to replace it. The opening user message is the input serialized as JSON.

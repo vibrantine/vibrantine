@@ -362,8 +362,7 @@ the tree's, and honest at the one seam all work passes through.
   is `None`, a node's explicit `persistence_mode` supplies that node's
   default; when neither has an opinion, a wired backend means
   `"always"` and no backend means `"off"`. Implemented for the next
-  release; see
-  [`working/runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md).
+  release and locked by the exact `CallContext` surface test.
 - **Why.** "What did fan #7 actually return" must be answerable after
   the fact, or a hundred-unit tree is only debuggable while still in
   memory. Records are for inspection; the state decision already rules
@@ -504,6 +503,12 @@ ruling record.
   with a Commission ("this worker may never exceed $0.01", the
   capacity half of budgeting), taking the minimum with the caller's
   grant. Trigger: the same tiered workload.
+- **A general per-branch model-menu convention.** The provisional
+  `RecursiveResearchModelMenu` proves that catalog names can fill
+  different seats in one recursive example, but a homogeneous tree
+  cannot settle the vocabulary for a heterogeneous one. Trigger: the
+  first genuine multi-seat Commission tree whose roles cannot be
+  expressed clearly with the existing per-Commission `model=` choice.
 - **Multimodal output, and further input modalities.** Image and audio
   *input* are built: typed parts (`TextPart` / `ImagePart` /
   `AudioPart`), verified live against the default model (2026-07).

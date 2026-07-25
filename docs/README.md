@@ -53,20 +53,12 @@ working document authorizes boundary work only when the ruling record links to
 it; this folder shrinks as material promotes into live docs or retires. Current
 notes:
 
-- [`standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md):
-  the decision record for the standard folder-sized Commission layout, its
-  sketches, and its open threads.
 - [`commission-as-local-mcp-spec.md`](working/commission-as-local-mcp-spec.md):
   ratified implementation plan for exposing an explicit set of Commissions as
   tools on a repository-local MCP server.
-- [`external-mcp-tools-for-commissions-spec.md`](working/external-mcp-tools-for-commissions-spec.md):
-  implemented first-consumer record for application-owned MCP connections,
-  explicitly bound Tool proxies, and the live DeepWiki proof; broader
-  onboarding and mapping machinery remains parked there.
-- [`runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md):
-  implemented correction keeping application persistence inside the private
-  per-run Vibrantine runtime rather than exposing it to Commission interiors
-  through `CallContext`.
+- [`third-party-adoption-surface-concern.md`](working/third-party-adoption-surface-concern.md):
+  parked cold-start review for testing progressive disclosure with an outside
+  developer before wider sharing.
 
 The concept drafts that used to live under `working/concepts/` promoted
 into `authoring.md` (the five-surface ownership map, the boundary-type

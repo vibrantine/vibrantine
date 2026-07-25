@@ -143,7 +143,7 @@ Release decision:
 Owned elsewhere; this checklist only points:
 
 - Folder layout, slots, `BRIEF.md`, colocated tests:
-  [`working/standard-commission-folder-structure.md`](working/standard-commission-folder-structure.md).
+  [`authoring.md § Package layout as a tree grows`](authoring.md#package-layout-as-a-tree-grows).
 - Constructor injection, composition, and the nested-Commission pattern:
   [`authoring.md`](authoring.md), Part II.
 - Test and evaluation coverage bars, including the cost-rollup recipe:
