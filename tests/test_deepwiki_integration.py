@@ -40,6 +40,4 @@ async def test_deepwiki_answers_through_the_bound_tool() -> None:
     assert result.status == "success", result.error
     assert result.output is not None
     assert "ClientSession" in result.output.answer
-    assert result.provenance.source == (
-        "mcp:https://mcp.deepwiki.com/mcp#ask_question"
-    )
+    assert result.provenance.source == ("mcp:https://mcp.deepwiki.com/mcp#ask_question")

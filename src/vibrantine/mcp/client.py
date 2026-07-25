@@ -81,9 +81,7 @@ class MCPConnection:
         for block in response.content:
             if not isinstance(block, TextContent):
                 block_name = type(block).__name__
-                raise _UnsupportedResultContent(
-                    f"unsupported MCP result content: {block_name}"
-                )
+                raise _UnsupportedResultContent(f"unsupported MCP result content: {block_name}")
             text_content.append(block.text)
 
         return MCPResult(

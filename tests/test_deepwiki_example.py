@@ -67,9 +67,7 @@ async def test_deepwiki_tool_translates_the_local_contract() -> None:
 
     assert tool.name == "deepwiki_ask"
     assert result.status == "success", result.error
-    assert result.output == DeepWikiQuestionOutput(
-        answer="Vibrantine uses typed Commissions."
-    )
+    assert result.output == DeepWikiQuestionOutput(answer="Vibrantine uses typed Commissions.")
     assert session.calls == [
         (
             "ask_question",
@@ -103,11 +101,7 @@ async def test_deepwiki_guide_receives_the_bound_tool_through_its_toolbox() -> N
                     (
                         "call-2",
                         "conclude",
-                        {
-                            "answer": (
-                                "The contract is a typed work order and result envelope."
-                            )
-                        },
+                        {"answer": ("The contract is a typed work order and result envelope.")},
                     )
                 ]
             ),

@@ -218,15 +218,11 @@ async def test_bound_tool_runs_inside_an_llm_commission_toolbox() -> None:
 
     assert result.status == "success", result.error
     assert result.output == GuideOutput(answer="The client uses the remote evidence.")
-    assert session.calls == [
-        ("remote_query", {"query": "How is the client structured?"})
-    ]
+    assert session.calls == [("remote_query", {"query": "How is the client structured?"})]
 
 
 async def test_custom_encoder_and_text_decoder_handle_an_irregular_remote_contract() -> None:
-    session = _FakeSession(
-        CallToolResult(content=[TextContent(type="text", text="plain answer")])
-    )
+    session = _FakeSession(CallToolResult(content=[TextContent(type="text", text="plain answer")]))
 
     def encode(input: QueryInput) -> dict[str, str]:
         return {"questionText": input.query}
@@ -523,9 +519,7 @@ async def test_http_context_initializes_once_and_hides_url_secrets(
     monkeypatch.setattr(mcp_client, "streamable_http_client", fake_transport)
     monkeypatch.setattr(mcp_client, "ClientSession", FakeClientSession)
 
-    async with open_mcp_http(
-        "https://user:password@mcp.test/mcp?token=secret"
-    ) as connection:
+    async with open_mcp_http("https://user:password@mcp.test/mcp?token=secret") as connection:
         tool = bind_mcp_tool(
             connection=connection,
             remote_name="remote_query",
