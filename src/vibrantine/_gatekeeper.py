@@ -32,12 +32,14 @@ claim to prevent. See docs/design-decisions.md for the canonical statement.
 
 import asyncio
 import contextvars
+import copy
 import logging
 import math
 import os
 import time
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -85,8 +87,9 @@ class RunHaltedError(Exception):
 class RunConfigError(ValueError):
     """A run configuration the Gatekeeper cannot honor, named.
 
-    Internal: raised by `build_catalog`, converted by `run_commission` into a
-    validation failure result (errors are values at that boundary too).
+    Internal: raised while building the catalog or vending its provider
+    clients, converted into a validation failure result at the nearest
+    framework boundary (errors are values there too).
     """
 
 
@@ -114,7 +117,8 @@ def build_catalog(
     of them.
     """
     catalog: dict[str, Model] = {}
-    for model in models:
+    for supplied_model in models:
+        model = _snapshot_model(supplied_model)
         for field_name, price in (
             ("input_usd_per_million", model.input_usd_per_million),
             ("output_usd_per_million", model.output_usd_per_million),
@@ -140,7 +144,8 @@ def build_catalog(
             )
         catalog[model.name] = model
     if not catalog:
-        catalog[DEFAULT_MODEL.name] = DEFAULT_MODEL
+        default_snapshot = _snapshot_model(DEFAULT_MODEL)
+        catalog[default_snapshot.name] = default_snapshot
     if default_model is not None:
         if default_model not in catalog:
             raise RunConfigError(
@@ -156,6 +161,17 @@ def build_catalog(
             f"{DEFAULT_MODEL.name!r}; name one with default_model=."
         )
     return catalog, DEFAULT_MODEL.name
+
+
+def _snapshot_model(model: Model) -> Model:
+    """Detach a run profile from caller-owned nested provider settings."""
+    try:
+        params = copy.deepcopy(model.params)
+    except Exception as exc:
+        raise RunConfigError(
+            f"model {model.name!r} params could not be snapshotted: {type(exc).__name__}: {exc}"
+        ) from exc
+    return replace(model, params=params)
 
 
 class RunCancel:
@@ -389,7 +405,7 @@ class Gatekeeper:
             # refuses a falsy one, so send a non-empty placeholder.
             api_key = "unused" if key_env is None else os.environ.get(key_env, "")
             if not api_key:
-                raise RuntimeError(
+                raise RunConfigError(
                     f"No API key: environment variable {key_env!r} is not "
                     f"set (model {entry.id!r} at {entry.base_url}). Set it, "
                     f"or register a keyless Model (api_key_env=None)."

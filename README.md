@@ -32,6 +32,7 @@ same.
 - **Language:** Python 3.12+, async-first with a sync wrapper.
 - **Dependencies:** three (`pydantic` v2, `httpx`, `openai` as the
   client for any OpenAI-compatible endpoint; OpenRouter by default).
+  External MCP bindings use the optional `mcp` extra.
 - **Status:** early-stage, pre-1.0. Releases are git tags; latest is
   `v0.6.0`. Not on PyPI yet, so `pip install vibrantine` will not
   install this project.
@@ -126,6 +127,20 @@ contract every Commission honors, hand-written or factory-made.
 Everything on the boundary is documented in
 [docs/authoring.md](docs/authoring.md); the reasoning behind it is in
 [docs/design.md](docs/design.md).
+
+## External MCP Tools
+
+With the optional `mcp` extra, an application can own a remote Streamable
+HTTP connection and bind selected MCP operations as ordinary typed Tools.
+Connection does not imply exposure: only Tool objects explicitly placed in a
+Commission's toolbox are visible to its model.
+
+The worked
+[`DeepWiki` example](src/vibrantine/examples/deepwiki.py) binds only
+`ask_question`, translates DeepWiki's remote field names behind a local
+Pydantic contract, and injects that stateful Tool into one repository-guide
+Commission. The MCP connection remains in the application's `async with`
+scope; no connection or catalog enters `CallContext` or the Gatekeeper.
 
 ## What Vibrantine Is Not
 

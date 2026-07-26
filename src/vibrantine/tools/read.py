@@ -2,8 +2,9 @@
 
 Foundation of the std-lib file-I/O layer. The `truncated` and
 `total_lines` fields in the output let an LLM-driven caller decide
-whether to paginate further. 2000-line default matches Claude Code;
-local-model Commissions may want a smaller default.
+whether to continue from the returned line-and-character position.
+2000-line default matches Claude Code; local-model Commissions may want
+a smaller default.
 """
 
 from pathlib import Path
@@ -16,12 +17,12 @@ from vibrantine.tools._helpers import (
     ZERO_COST,
     ReadFailure,
     failure,
+    iter_text_segments,
     provenance,
-    read_text_utf8,
 )
 
 _MAX_LINE_CHARS = 30_000
-_TRUNCATION_MARKER = "…[truncated]"
+_STREAM_SEGMENT_CHARS = 8_192
 
 
 class ReadInput(BaseModel):
@@ -31,6 +32,11 @@ class ReadInput(BaseModel):
     offset: int = Field(
         default=0,
         description="Line offset (0-based) to start reading from.",
+        ge=0,
+    )
+    char_offset: int = Field(
+        default=0,
+        description="Character offset within `offset`'s line to start from.",
         ge=0,
     )
     limit: int = Field(
@@ -49,6 +55,14 @@ class ReadOutput(BaseModel):
         description="True if more content remains beyond the returned slice.",
     )
     total_lines: int = Field(description="Total number of lines in the file.")
+    next_offset: int | None = Field(
+        default=None,
+        description="Next zero-based line offset when `truncated` is true.",
+    )
+    next_char_offset: int | None = Field(
+        default=None,
+        description="Character offset within `next_offset` where continuation starts.",
+    )
 
 
 class ReadTool(Commission[ReadInput, ReadOutput]):
@@ -60,13 +74,16 @@ class ReadTool(Commission[ReadInput, ReadOutput]):
         "\n"
         "Usage:\n"
         "- `path` must be absolute, not relative.\n"
-        "- Default returns up to 2000 lines from the start. Use `offset` and\n"
-        "  `limit` to paginate; check `truncated` to know if more remains.\n"
-        "- Lines longer than 30,000 chars are truncated with the marker\n"
-        f"  `{_TRUNCATION_MARKER}`.\n"
+        "- Default returns up to 2000 lines from the start. Use `offset`,\n"
+        "  `char_offset`, and `limit` to continue from an exact position.\n"
+        "- A returned line segment is capped at 30,000 characters. If the\n"
+        "  cap or line limit is reached, `truncated` is true and\n"
+        "  `next_offset`/`next_char_offset` identify the next character;\n"
+        "  pass those values back unchanged to retrieve the remainder.\n"
         "\n"
         "Returns `content` (faithful to the file's bytes including line\n"
-        "endings), `line_count`, `truncated`, and `total_lines`."
+        "endings), `line_count`, `truncated`, `total_lines`, and the optional\n"
+        "next continuation position."
     )
     input_type: ClassVar[type] = ReadInput
     output_type: ClassVar[type] = ReadOutput
@@ -108,34 +125,94 @@ class ReadTool(Commission[ReadInput, ReadOutput]):
                 provenance=prov,
             )
 
+        content_parts: list[str] = []
+        total_lines = 0
+        line_count = 0
+        returned_in_line = 0
+        output_stopped = False
+        next_offset: int | None = None
+        next_char_offset: int | None = None
+        target_char_seen = input.char_offset == 0
+
         try:
-            text = read_text_utf8(input.path)
+            for line, char_start, segment, line_complete in iter_text_segments(
+                input.path,
+                segment_chars=_STREAM_SEGMENT_CHARS,
+            ):
+                total_lines = max(total_lines, line + 1)
+                if output_stopped or line < input.offset:
+                    continue
+                if line >= input.offset + input.limit:
+                    output_stopped = True
+                    next_offset = line
+                    next_char_offset = 0
+                    continue
+
+                start = 0
+                if line == input.offset:
+                    if char_start + len(segment) <= input.char_offset:
+                        if line_complete and char_start + len(segment) < input.char_offset:
+                            return failure(
+                                "validation",
+                                f"char_offset {input.char_offset} exceeds line "
+                                f"{input.offset}'s length.",
+                                retryable=False,
+                                provenance=prov,
+                            )
+                        continue
+                    start = max(0, input.char_offset - char_start)
+                    target_char_seen = True
+
+                available = segment[start:]
+                remaining = _MAX_LINE_CHARS - returned_in_line
+                kept = available[:remaining]
+                content_parts.append(kept)
+                returned_in_line += len(kept)
+
+                if len(available) > remaining or (
+                    returned_in_line == _MAX_LINE_CHARS and not line_complete
+                ):
+                    output_stopped = True
+                    next_offset = line
+                    next_char_offset = char_start + start + len(kept)
+                    line_count += 1
+                    continue
+
+                if line_complete:
+                    line_count += 1
+                    returned_in_line = 0
+                    if line_count == input.limit:
+                        output_stopped = True
+                        next_offset = line + 1
+                        next_char_offset = 0
         except ReadFailure as exc:
             return failure(exc.kind, exc.detail, retryable=False, provenance=prov)
 
-        all_lines = text.splitlines(keepends=True)
-        total_lines = len(all_lines)
-        sliced = all_lines[input.offset : input.offset + input.limit]
-        content = "".join(_truncate_long(line) for line in sliced)
-        truncated = (input.offset + len(sliced)) < total_lines
+        if total_lines > input.offset and not target_char_seen:
+            return failure(
+                "validation",
+                f"char_offset {input.char_offset} exceeds line {input.offset}'s length.",
+                retryable=False,
+                provenance=prov,
+            )
+
+        truncated = next_offset is not None and (
+            next_offset < total_lines or (next_offset == total_lines and next_char_offset != 0)
+        )
+        if not truncated:
+            next_offset = None
+            next_char_offset = None
 
         return CommissionResult[ReadOutput](
             status="success",
             output=ReadOutput(
-                content=content,
-                line_count=len(sliced),
+                content="".join(content_parts),
+                line_count=line_count,
                 truncated=truncated,
                 total_lines=total_lines,
+                next_offset=next_offset,
+                next_char_offset=next_char_offset,
             ),
             provenance=prov,
             cost=ZERO_COST,
         )
-
-
-def _truncate_long(line: str) -> str:
-    """Truncate a single line to _MAX_LINE_CHARS with a visible marker."""
-    if len(line) <= _MAX_LINE_CHARS:
-        return line
-    if line.endswith("\n"):
-        return line[: _MAX_LINE_CHARS - 1] + _TRUNCATION_MARKER + "\n"
-    return line[:_MAX_LINE_CHARS] + _TRUNCATION_MARKER

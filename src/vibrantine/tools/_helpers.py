@@ -7,6 +7,7 @@ prefix on the filename) so the public surface stays the tool classes
 themselves.
 """
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, cast
@@ -33,6 +34,46 @@ class ReadFailure(Exception):
         super().__init__(detail)
         self.kind: ErrorKind = kind
         self.detail = detail
+
+
+def iter_text_segments(
+    path: Path,
+    *,
+    segment_chars: int,
+) -> Iterator[tuple[int, int, str, bool]]:
+    """Yield bounded UTF-8 line segments without translating line endings.
+
+    Each tuple is `(zero_based_line, char_offset, text, line_complete)`.
+    `readline(size)` may return part of a long logical line, which keeps the
+    retained source payload bounded while callers scan or count the file.
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="strict", newline="") as stream:
+            line = 0
+            char_offset = 0
+            segment = stream.readline(segment_chars)
+            while segment:
+                following = stream.readline(segment_chars)
+                line_complete = (
+                    segment.endswith("\n")
+                    or (segment.endswith("\r") and not following.startswith("\n"))
+                    or not following
+                )
+                yield line, char_offset, segment, line_complete
+                if line_complete:
+                    line += 1
+                    char_offset = 0
+                else:
+                    char_offset += len(segment)
+                segment = following
+    except FileNotFoundError:
+        raise ReadFailure("validation", f"File not found: {path!s}.") from None
+    except PermissionError as exc:
+        raise ReadFailure("internal", f"Permission denied reading {path!s}: {exc}.") from exc
+    except UnicodeDecodeError as exc:
+        raise ReadFailure("internal", f"Could not decode {path!s} as UTF-8: {exc}.") from exc
+    except OSError as exc:
+        raise ReadFailure("internal", f"Filesystem error reading {path!s}: {exc}.") from exc
 
 
 def read_text_utf8(path: Path) -> str:

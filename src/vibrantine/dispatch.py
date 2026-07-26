@@ -59,6 +59,8 @@ from vibrantine.contract import (
     PersistenceMode,
     ProgressEvent,
     Provenance,
+    _deliver_progress,  # pyright: ignore[reportPrivateUsage]
+    _validate_result_population,  # pyright: ignore[reportPrivateUsage]
     estimate_tokens,
 )
 
@@ -181,6 +183,10 @@ async def dispatch[InputT, OutputT](
             # Dispatch is the hook's one sanctioned caller; the protected
             # access is the design, not a shortcut.
             result = await commission._run(input, ctx_for_run)  # pyright: ignore[reportPrivateUsage]
+            # model_construct and model_copy can bypass Pydantic validation.
+            # Third-party _run implementations still cross the ruled receipt
+            # boundary here, before accounting, rollup, or persistence.
+            _validate_result_population(result)  # pyright: ignore[reportPrivateUsage]
             author_reported = True
         except RunHaltedError as exc:
             # A custom _run let the provider door's refusal bubble instead of
@@ -350,14 +356,14 @@ async def dispatch[InputT, OutputT](
                 type(exc).__name__,
                 exc,
             )
-            if ctx.on_progress is not None:
-                ctx.on_progress(
-                    ProgressEvent(
-                        commission_name=commission.name,
-                        phase="persist_failed",
-                        detail=f"{type(exc).__name__}: {exc}",
-                    )
-                )
+            _deliver_progress(  # pyright: ignore[reportPrivateUsage]
+                ctx.on_progress,
+                ProgressEvent(
+                    commission_name=commission.name,
+                    phase="persist_failed",
+                    detail=f"{type(exc).__name__}: {exc}",
+                ),
+            )
             if full_result is not None:
                 # The chopped envelope's reference now dangles; returning it
                 # would silently lose data. Fall back to the full output as
@@ -701,14 +707,14 @@ def _apply_overflow_policy[InputT, OutputT](
             }
         ), None
     if policy == "flag":
-        if ctx.on_progress is not None:
-            ctx.on_progress(
-                ProgressEvent(
-                    commission_name=commission.name,
-                    phase="output_overflow",
-                    detail=f"~{estimated} tokens / cap {cap}",
-                )
-            )
+        _deliver_progress(  # pyright: ignore[reportPrivateUsage]
+            ctx.on_progress,
+            ProgressEvent(
+                commission_name=commission.name,
+                phase="output_overflow",
+                detail=f"~{estimated} tokens / cap {cap}",
+            ),
+        )
         return result, None
     if policy == "truncate_with_reference":
         return _truncate_with_reference(

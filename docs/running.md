@@ -118,7 +118,12 @@ the honest, complete list.
    a backend; wiring one is the "I care about logs" signal and defaults
    to recording everything. A non-`None` application `record=` governs
    every node. When it is `None`, a node's explicit `persistence_mode`
-   supplies that node's default, followed by the wired default.
+   supplies that node's default, followed by the wired default. A backend
+   is trusted infrastructure: records are full-fidelity diagnostic exports,
+   not redacted logs, and can contain credentials in inputs or LLM traces.
+   The application owns storage permissions, encryption, retention, and any
+   sanitizing backend policy; recording modes only choose which records
+   survive.
 
 Everything not on this list is either enforced by the machine or
 written down where the machine checks it

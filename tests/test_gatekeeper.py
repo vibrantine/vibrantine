@@ -17,6 +17,7 @@ from typing import Any, ClassVar, cast
 import pytest
 from pydantic import BaseModel, Field
 
+from vibrantine._gatekeeper import build_catalog
 from vibrantine.contract import (
     NEVER_CANCELLED,
     CallContext,
@@ -27,7 +28,7 @@ from vibrantine.contract import (
     Provenance,
 )
 from vibrantine.dispatch import dispatch
-from vibrantine.models import Model
+from vibrantine.models import DEFAULT_MODEL, Model
 from vibrantine.orchestrator import run_commission
 from vibrantine.testing import (
     FIXTURE_MODEL,
@@ -248,6 +249,33 @@ async def test_profile_params_ride_every_provider_call() -> None:
     assert sent["temperature"] == 0.2
     assert sent["top_p"] == 0.9
     assert sent["model"] == FIXTURE_MODEL.id
+
+
+def test_catalog_takes_a_deep_snapshot_of_profile_params() -> None:
+    caller_params: dict[str, Any] = {
+        "temperature": 0.2,
+        "provider": {"routing": ["fast"]},
+    }
+    supplied = Model(id="snapshot/model", params=caller_params)
+
+    catalog, default = build_catalog([supplied], None)
+    caller_params["temperature"] = 1.0
+    cast(dict[str, Any], caller_params["provider"])["routing"] = ["mutated"]
+    caller_params["model"] = "framework-key-added-later"
+
+    assert default == "snapshot/model"
+    assert catalog[default].params == {
+        "temperature": 0.2,
+        "provider": {"routing": ["fast"]},
+    }
+
+
+def test_empty_catalog_snapshots_the_system_default_profile() -> None:
+    catalog, default = build_catalog([], None)
+
+    assert catalog[default] == DEFAULT_MODEL
+    assert catalog[default] is not DEFAULT_MODEL
+    assert catalog[default].params is not DEFAULT_MODEL.params
 
 
 async def test_two_profiles_of_one_wire_id_are_distinct_entries() -> None:

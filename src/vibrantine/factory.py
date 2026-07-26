@@ -14,7 +14,7 @@ a Commission outgrows the factory the exit is subclassing `Commission`,
 where nothing learned here changes.
 """
 
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import BaseModel
 
@@ -40,8 +40,8 @@ def _default_system_prompt(description: str, input_type: type[BaseModel]) -> str
         "The user message carries the input as JSON with these fields:",
     ]
     for field_name, field in input_type.model_fields.items():
-        detail = field.description or "(no description provided)"
-        lines.append(f"- {field_name}: {detail}")
+        assert field.description is not None
+        lines.append(f"- {field_name}: {field.description}")
     lines.extend(
         [
             "",
@@ -50,6 +50,57 @@ def _default_system_prompt(description: str, input_type: type[BaseModel]) -> str
         ]
     )
     return "\n".join(lines)
+
+
+def _nested_model_types(annotation: Any) -> tuple[type[BaseModel], ...]:
+    """Find Pydantic models nested inside a field annotation."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return (annotation,)
+    nested: list[type[BaseModel]] = []
+    for argument in get_args(annotation):
+        nested.extend(_nested_model_types(argument))
+    return tuple(nested)
+
+
+def _missing_field_descriptions(
+    model_type: type[BaseModel],
+    *,
+    surface: str,
+) -> list[str]:
+    """Name under-described fields before they become provider schemas."""
+    missing: list[str] = []
+    visited: set[type[BaseModel]] = set()
+
+    def visit(current: type[BaseModel], path: str) -> None:
+        if current in visited:
+            return
+        visited.add(current)
+        for field_name, field in current.model_fields.items():
+            field_path = f"{path}.{field_name}"
+            if field.description is None or not field.description.strip():
+                missing.append(field_path)
+            for nested in _nested_model_types(field.annotation):
+                visit(nested, field_path)
+
+    visit(model_type, surface)
+    return missing
+
+
+def _validate_contract_models(
+    input_type: type[BaseModel],
+    output_type: type[BaseModel],
+) -> None:
+    """Reject schemas whose fields cannot explain themselves to an LLM."""
+    missing = [
+        *_missing_field_descriptions(input_type, surface="input"),
+        *_missing_field_descriptions(output_type, surface="output"),
+    ]
+    if missing:
+        joined = ", ".join(missing)
+        raise ValueError(
+            "create_commission requires a non-empty Field(description=...) "
+            f"on every input and output field; missing: {joined}."
+        )
 
 
 def create_commission[InputT: BaseModel, OutputT: BaseModel](
@@ -82,6 +133,7 @@ def create_commission[InputT: BaseModel, OutputT: BaseModel](
     Returns an ordinary `Commission[InputT, OutputT]`; run it through
     `run_commission` / `run_commission_sync` / `dispatch` like any other.
     """
+    _validate_contract_models(input, output)
     commission_name = name
     commission_description = description
     prompt = (

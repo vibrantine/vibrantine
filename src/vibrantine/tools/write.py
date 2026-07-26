@@ -94,21 +94,33 @@ class WriteTool(Commission[WriteInput, WriteOutput]):
                 provenance=prov,
             )
 
-        if input.create_only and input.path.exists():
-            return failure(
-                "validation",
-                f"create_only is true but target already exists: {input.path!s}.",
-                retryable=False,
-                provenance=prov,
-            )
-
         # Encode explicitly + write_bytes: write_text returns *character* count
         # (not bytes) and translates \n → \r\n on Windows in text mode.
         encoded = input.content.encode("utf-8")
         try:
             input.path.parent.mkdir(parents=True, exist_ok=True)
-            input.path.write_bytes(encoded)
-        except (FileExistsError, NotADirectoryError) as exc:
+            if input.create_only:
+                # Exclusive create is the guarantee: a concurrent creator
+                # wins atomically and this call cannot replace its content.
+                with input.path.open("xb") as stream:
+                    stream.write(encoded)
+            else:
+                input.path.write_bytes(encoded)
+        except FileExistsError as exc:
+            if input.create_only and input.path.exists():
+                return failure(
+                    "validation",
+                    f"create_only is true but target already exists: {input.path!s}.",
+                    retryable=False,
+                    provenance=prov,
+                )
+            return failure(
+                "validation",
+                f"A parent of {input.path!s} is not a directory: {exc}.",
+                retryable=False,
+                provenance=prov,
+            )
+        except NotADirectoryError as exc:
             # A parent component of `path` is an existing file: a caller
             # path mistake, not a filesystem malfunction.
             return failure(

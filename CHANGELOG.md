@@ -8,7 +8,30 @@ doors its boundary docstring names (such as `vibrantine.testing`).
 
 ## [Unreleased]
 
+### Added
+
+- **Explicit external MCP Tool bindings**: the optional
+  `vibrantine.mcp.client` adapter opens an application-owned Streamable HTTP
+  connection and binds one selected remote MCP operation behind a stable local
+  Pydantic Tool contract. Bound Tools use ordinary constructor injection,
+  dispatch logging, capability narrowing, cancellation, timeout, bounded
+  results, structured failures, and provenance without adding MCP state to
+  `CallContext`, the Gatekeeper, or the top-level package surface. A worked
+  DeepWiki binding and repository-guide Commission prove the application-owned
+  connection and toolbox-injection path against the live public service.
+
 ### Changed
+
+- **Caller configuration now fails as validation**: a missing provider API
+  key is reported as a non-retryable `validation` result with the environment
+  variable named, rather than being mislabeled as an internal framework
+  failure. The default LLM loop and Synthesize's custom provider path share
+  the classification.
+
+- **Factory contracts require described fields**: `create_commission` now
+  rejects input or output models with missing or blank field descriptions,
+  including fields on nested Pydantic models. The failure happens at
+  construction, before an under-described schema reaches a provider.
 
 - **Breaking — persistence is private runtime policy**: `CallContext` no
   longer exposes `backend` or `record`. Applications still configure both

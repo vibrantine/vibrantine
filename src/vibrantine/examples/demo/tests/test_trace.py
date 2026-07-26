@@ -35,9 +35,17 @@ def make_record(
     # The result dict is a real CommissionResult dump, exactly what dispatch
     # persists, so these tests break loudly if the envelope's serialized
     # shape ever drifts from what the renderers assume.
+    resolved_error = error
+    if status != "success" and resolved_error is None:
+        resolved_error = ErrorState(
+            kind="internal",
+            detail=f"{name} produced a {status} fixture.",
+            retryable=False,
+        )
     result = CommissionResult[Any](
         status=status,
-        error=error,
+        output=None if status == "failure" else {"fixture": run_id},
+        error=resolved_error,
         provenance=Provenance(
             source=name,
             fetched_at=created_at or datetime.now(UTC),

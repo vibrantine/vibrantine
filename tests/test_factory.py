@@ -11,6 +11,7 @@ and nothing is spent until the Commission actually runs.
 import json
 from typing import Any
 
+import pytest
 from pydantic import BaseModel, Field
 
 from vibrantine import (
@@ -96,6 +97,58 @@ def test_default_system_prompt_carries_description_and_field_docs() -> None:
     assert "Writes a recipe for a named dish." in prompt
     assert "dish: The dish to write a recipe for." in prompt
     assert "conclude" in prompt
+
+
+def test_factory_rejects_missing_input_and_output_field_descriptions() -> None:
+    class UnderdescribedInput(BaseModel):
+        prompt: str
+
+    class UnderdescribedOutput(BaseModel):
+        answer: str
+
+    with pytest.raises(ValueError) as exc_info:
+        create_commission(
+            name="underdescribed",
+            description="Cannot be built with an under-described contract.",
+            input=UnderdescribedInput,
+            output=UnderdescribedOutput,
+        )
+
+    detail = str(exc_info.value)
+    assert "Field(description=...)" in detail
+    assert "input.prompt" in detail
+    assert "output.answer" in detail
+
+
+def test_factory_rejects_missing_descriptions_in_nested_models() -> None:
+    class UnderdescribedSource(BaseModel):
+        content: str
+
+    class NestedInput(BaseModel):
+        sources: list[UnderdescribedSource] = Field(
+            description="Sources the Commission should inspect."
+        )
+
+    with pytest.raises(ValueError, match=r"input\.sources\.content"):
+        create_commission(
+            name="nested_underdescribed",
+            description="Cannot be built with an under-described nested contract.",
+            input=NestedInput,
+            output=RecipeOutput,
+        )
+
+
+def test_factory_rejects_blank_field_descriptions() -> None:
+    class BlankInput(BaseModel):
+        prompt: str = Field(description="   ")
+
+    with pytest.raises(ValueError, match=r"input\.prompt"):
+        create_commission(
+            name="blank_description",
+            description="Cannot be built with a blank field description.",
+            input=BlankInput,
+            output=RecipeOutput,
+        )
 
 
 def test_system_prompt_override_replaces_the_default() -> None:

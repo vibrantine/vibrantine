@@ -1,6 +1,10 @@
 """Tests for the Write tool."""
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import IO, Any, cast
+
+import pytest
 
 from vibrantine import run_commission
 from vibrantine.testing import AlwaysCancelled
@@ -63,6 +67,31 @@ async def test_write_create_only_succeeds_when_target_missing(tmp_path: Path) ->
 
     assert result.status == "success"
     assert path.read_text(encoding="utf-8") == "brand new"
+
+
+async def test_write_create_only_loses_atomic_race_without_overwriting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "raced.txt"
+    real_open = cast(Callable[[Path, str], IO[Any]], Path.open)
+
+    def racing_open(self: Path, mode: str = "r") -> IO[Any]:
+        if self == path and mode == "xb":
+            with real_open(self, "wb") as competitor:
+                competitor.write(b"competitor")
+        return real_open(self, mode)
+
+    monkeypatch.setattr(Path, "open", racing_open)
+    result = await run_commission(
+        WriteTool(),
+        WriteInput(path=path, content="ours", create_only=True),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert path.read_bytes() == b"competitor"
 
 
 async def test_write_creates_parent_directories(tmp_path: Path) -> None:

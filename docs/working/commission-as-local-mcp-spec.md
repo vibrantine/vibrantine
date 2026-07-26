@@ -34,15 +34,17 @@ Commission -> MCP tool -> external agent
 ```
 
 Feeding external MCP operations into Commission toolboxes is a separate client
-adapter with a separate lifecycle and specification. That inward adapter is
-parked until the outward adapter is implemented, migrated to stable MCP v2, and
-exercised by its named hosts.
+adapter with a separate lifecycle. Its first typed binding and DeepWiki
+consumer are implemented independently under `vibrantine.mcp.client`; neither
+adapter turns the other into core contract machinery. Both remain subject to
+the same in-place stable-SDK-v2 replacement.
 
 ## Ruling
 
 The deferred-adapter trigger has been met: a repository-local Codex and Claude
 Code server is the first named external consumer. The ruling record therefore
-permits this outward adapter while leaving the inward adapter deferred.
+permits this outward adapter. The inward adapter was separately re-ruled when
+its own DeepWiki consumer arrived.
 
 The optional submodule `vibrantine.mcp.server`:
 
@@ -153,13 +155,13 @@ First repository-local MCP server
 └── compose_vibrantine_sonnet
 ```
 
-The deliberately unmistakable first tool is specified in
-[`compose-sonnet-commission-spec.md`](compose-sonnet-commission-spec.md). It is
-a smoke test for discovery, argument construction, invocation, and result
-return—not a claim that one-tool servers are the intended final topology. The
-first launcher uses `vibrantine_commissions` as its host-configuration server
-name so the resulting tool identity is also unmistakable when a host qualifies
-it with the server name.
+The deliberately unmistakable first tool is implemented by
+[`ComposeSonnetCommission`](../../src/vibrantine/examples/compose_sonnet.py).
+It is a smoke test for discovery, argument construction, invocation, and
+result return—not a claim that one-tool servers are the intended final
+topology. The first launcher uses `vibrantine_commissions` as its
+host-configuration server name so the resulting tool identity is also
+unmistakable when a host qualifies it with the server name.
 
 A later application may expose a broader menu such as research, verification,
 email, and document Commissions. Flat does not mean structureless: each listed
@@ -646,9 +648,9 @@ test plan, including real Codex and Claude Code compatibility checks. If either
 named host cannot use the stable v2 server, that is a stop-and-rerule point,
 not permission to let temporary v1 support become permanent by drift.
 
-The parked inward adapter may later live under `vibrantine.mcp.client` and
-share the optional SDK dependency. Sharing a package area does not combine the
-two adapters, their lifecycles, or their public APIs.
+The inward adapter lives under `vibrantine.mcp.client` and shares the optional
+SDK dependency. Sharing a package area does not combine the two adapters,
+their lifecycles, or their public APIs.
 
 ## Implementation Sequence
 
@@ -804,5 +806,6 @@ adding a host-specific compatibility path.
 No open review question blocks completion of the temporary v1 implementation.
 Named-host compatibility still blocks release as recorded above. Broader
 menus, routing-Commission comparisons, progress forwarding, Streamable HTTP,
-and the inward client adapter each require their own named pressure after this
-local stdio path is proven; none belongs in the first slice by anticipation.
+and other outward-adapter growth each require their own named pressure after
+this local stdio path is proven; none belongs in the first slice by
+anticipation.

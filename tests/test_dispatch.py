@@ -31,7 +31,7 @@ from vibrantine.contract import (
     ProgressEvent,
     Provenance,
 )
-from vibrantine.dispatch import dispatch
+from vibrantine.dispatch import deposit_llm_trace, dispatch
 from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
@@ -153,6 +153,40 @@ class _Raiser(Commission[_Input, _Output]):
         raise self._exc
 
 
+class _Emitter(_Stub):
+    """Emits one ordinary Commission progress event before succeeding."""
+
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+        self._emit(ctx, "started")  # pyright: ignore[reportPrivateUsage]
+        return await super()._run(input, ctx)
+
+
+class _SecretTraceStub(_Stub):
+    """Deposits a representative secret-bearing raw tool-call trace."""
+
+    async def _run(self, input: _Input, ctx: CallContext) -> CommissionResult[_Output]:
+        deposit_llm_trace(
+            [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "fetch",
+                                "arguments": input.q,
+                            }
+                        }
+                    ],
+                }
+            ]
+        )
+        return await super()._run(input, ctx)
+
+
+def _raise_progress(event: ProgressEvent) -> None:
+    raise RuntimeError(f"observer broke during {event.phase}")
+
+
 class _Parent(Commission[_Input, _Output]):
     """Calls dispatch on a child; for chain-tracking tests."""
 
@@ -234,6 +268,43 @@ async def test_dispatch_gathered_children_share_correct_parent(
     assert a.seen_ctx is not None and b.seen_ctx is not None
     assert a.seen_ctx.parent_run_id == parent_result.run_id
     assert b.seen_ctx.parent_run_id == parent_result.run_id
+
+
+# --- result boundary tests -------------------------------------------------
+
+
+async def test_dispatch_rejects_a_bypass_built_malformed_result(
+    open_test_run: OpenTestRun,
+    tmp_path: Path,
+) -> None:
+    malformed = CommissionResult[_Output].model_construct(
+        status="success",
+        output=None,
+        error=None,
+        provenance=Provenance(
+            source="malformed",
+            fetched_at=datetime.now(UTC),
+            confidence="grounded",
+        ),
+        cost=CostMetrics(estimated_usd=0.0),
+    )
+    backend = FilesystemBackend(tmp_path / "records")
+    stub = _Stub(result=malformed, persistence_mode="always")
+
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
+
+    assert result.status == "failure"
+    assert result.output is None
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "success results require output and forbid error" in result.error.detail
+    assert result.run_id is not None
+    record = await backend.load(result.run_id)
+    assert record is not None
+    assert record.result["status"] == "failure"
+    assert record.result["output"] is None
+    assert record.result["error"]["kind"] == "internal"
 
 
 # --- persistence tests -----------------------------------------------------
@@ -399,6 +470,25 @@ async def test_dispatch_persisted_record_has_chain_and_payloads(
     assert loaded.result["status"] == "success"
 
 
+async def test_persistence_is_full_fidelity_for_secret_bearing_input_and_trace(
+    tmp_path: Path,
+    open_test_run: OpenTestRun,
+) -> None:
+    backend = FilesystemBackend(tmp_path)
+    secret = '{"headers":{"Authorization":"Bearer diagnostic-secret"}}'
+    stub = _SecretTraceStub(persistence_mode="always")
+
+    async with open_test_run(backend=backend) as ctx:
+        result = await dispatch(stub, _Input(q=secret), ctx)
+
+    assert result.run_id is not None
+    loaded = await backend.load(result.run_id)
+    assert loaded is not None
+    assert loaded.input["q"] == secret
+    assert loaded.llm_trace is not None
+    assert loaded.llm_trace[0]["tool_calls"][0]["function"]["arguments"] == secret
+
+
 async def test_dispatch_failing_backend_does_not_destroy_the_result(
     open_test_run: OpenTestRun,
 ) -> None:
@@ -412,6 +502,31 @@ async def test_dispatch_failing_backend_does_not_destroy_the_result(
     assert result.status == "success"
     assert result.output is not None
     assert any(e.phase == "persist_failed" and "disk full" in (e.detail or "") for e in events)
+
+
+async def test_raising_progress_callback_cannot_change_commission_result(
+    open_test_run: OpenTestRun,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING)
+    async with open_test_run(on_progress=_raise_progress) as ctx:
+        result = await dispatch(_Emitter(), _Input(q="?"), ctx)
+
+    assert result.status == "success"
+    assert "on_progress callback raised RuntimeError (ignored)" in caplog.text
+
+
+async def test_raising_progress_callback_cannot_escape_persistence_failure(
+    open_test_run: OpenTestRun,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING)
+    stub = _Stub(persistence_mode="always")
+    async with open_test_run(backend=_FailingBackend(), on_progress=_raise_progress) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
+
+    assert result.status == "success"
+    assert "observer broke during persist_failed" in caplog.text
 
 
 # --- overflow tests --------------------------------------------------------
@@ -484,6 +599,25 @@ async def test_dispatch_overflow_flag_emits_progress_event_unchanged(
     assert result.status == "success"
     assert result.output is not None and result.output.a == big
     assert any(e.phase == "output_overflow" for e in events)
+
+
+async def test_raising_progress_callback_cannot_escape_overflow_flag(
+    open_test_run: OpenTestRun,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING)
+    big = "x" * 4000
+    stub = _Stub(
+        result=_success_result(answer=big),
+        max_output_tokens=10,
+        overflow_policy="flag",
+    )
+    async with open_test_run(on_progress=_raise_progress) as ctx:
+        result = await dispatch(stub, _Input(q="?"), ctx)
+
+    assert result.status == "success"
+    assert result.output is not None and result.output.a == big
+    assert "observer broke during output_overflow" in caplog.text
 
 
 async def test_dispatch_truncate_chops_and_persists_full_output(

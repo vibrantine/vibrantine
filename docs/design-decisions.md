@@ -173,13 +173,18 @@ leaves a receipt, and nothing accumulates in the dark.
 
 - **Decision.** Every result carries a cost and a provenance, and a
   child's cost rolls into its parent's result on both interior paths,
-  at every depth.
+  at every depth. Every dollar value in a receipt is finite and
+  non-negative; token counts are either absent because no count exists
+  or non-negative integers. Invalid accounting values are rejected when
+  the receipt is built, before they can enter a rollup, budget
+  comparison, or persisted record. (Numeric validity clarified
+  2026-07-26.)
 - **Why.** Delegation you cannot account for is not reliable, just
   unexamined. Structural rollup makes any subtree's cost knowable and
   tiering auditable; provenance says how much to trust a result
   without rerunning it.
 - **Rules out.** Ambient or global cost tracking; results without
-  receipts.
+  receipts; negative, NaN, or infinite accounting values.
 
 ### The caller's controls
 
@@ -312,7 +317,13 @@ the tree's, and honest at the one seam all work passes through.
   system default is itself a profile (ruled 2026-07-12). The catalog
   builds and holds the clients; a Commission never constructs one, and
   an unknown name fails fast. Model *choice* stays distributed: each
-  node carries which entry it uses, never a copy of the catalog.
+  node carries which entry it uses, never a copy of the catalog. Before
+  the Gatekeeper is constructed, catalog build validates the complete
+  menu and takes a private snapshot of every profile, including provider
+  parameters. Mutation of caller-owned model objects or dictionaries
+  after that point cannot alter the run. Provider clients remain lazy;
+  configuration is settled before runtime setup, connections are not.
+  (Snapshot rule clarified 2026-07-26.)
 - **Why.** People run one to three models per use case; the catalog is
   where each is defined right, once, then linked to. Because the
   catalog vends the clients, the framework owns provider access by
@@ -323,7 +334,8 @@ the tree's, and honest at the one seam all work passes through.
   testing seam moved to the catalog.
 - **Rules out.** Per-Commission clients on the governed path; silent
   fallback for unknown model ids; per-branch model menus, until a real
-  consumer needs them.
+  consumer needs them; retaining caller-owned mutable configuration in
+  the live run catalog.
 
 #### Oversized output is a policy the caller picks
 
@@ -349,6 +361,64 @@ the tree's, and honest at the one seam all work passes through.
   (non-determinism in the failure path); unrecorded overflow by
   default.
 
+#### Read owns filesystem continuation
+
+- **Decision.** `ReadTool` remains the one continuation primitive for
+  file content. Its ordinary pagination stays line-oriented: a
+  zero-based line offset and a line limit. A continuation position may
+  additionally name a character within a line. When Read reaches its
+  bound partway through a line, it stops there, reports truncation, and
+  returns the exact line-and-character position from which the caller
+  can continue; no part of the line becomes unreachable. `GrepTool`
+  streams until its match cap, returns only a bounded preview of each
+  matching line with explicit truncation metadata, and points the
+  caller back to Read's path and position for the complete content. It
+  does not grow a second cursor system. (Ruled 2026-07-26.)
+- **Why.** A bound protects the caller only when omitted data remains
+  reachable. One file-content cursor is easier for an LLM to use and
+  for authors to keep correct than separate pagination semantics for
+  every discovery tool. Read owns content; Grep owns discovery.
+- **Rules out.** Silently shortening a line; treating a larger cap as
+  the only recovery path; a Grep-specific pagination protocol; building
+  every match before applying `max_matches`.
+
+#### Result bounds also bound retained payload memory
+
+- **Decision.** When a Tool declares a result cap, the source payload
+  and candidate results it retains in memory must also stay bounded by
+  that cap plus fixed processing overhead. The Tool may still scan,
+  count, drain, or compare the complete source when exact totals,
+  deterministic ordering, subprocess completion, or connection reuse
+  requires it; the guarantee is bounded materialization, not bounded
+  total work. Implementations stream, discard, spool, or keep a bounded
+  selection as appropriate, without adding a caller-facing memory knob.
+  (Ruled 2026-07-26.)
+- **Why.** A small requested result is not a meaningful safety bound if
+  producing it first loads an arbitrarily large file, response,
+  subprocess stream, or candidate set into memory. Execution details
+  belong inside the Tool; callers should only need to choose the result
+  size they can consume.
+- **Rules out.** Reading or decoding a complete unbounded payload before
+  slicing it; collecting every candidate before applying a result cap;
+  claiming that a result limit also bounds CPU, network, disk, or scan
+  time when the operation still needs to inspect the source.
+
+#### No-overwrite operations fail closed
+
+- **Decision.** A filesystem tool's no-overwrite option is a guarantee,
+  not a preliminary existence check. `WriteTool(create_only=True)` and
+  `MoveTool(overwrite=False)` use an atomic platform operation that
+  cannot replace an existing destination. If the operating system,
+  filesystem, source type, or cross-filesystem move cannot provide that
+  guarantee, the tool returns a structured failure without changing the
+  destination. It never silently falls back to a race-prone
+  check-then-act sequence. (Ruled 2026-07-26.)
+- **Why.** "Do not overwrite" protects caller data. A safety flag whose
+  meaning disappears under concurrency makes the typed boundary less
+  trustworthy precisely when the caller relies on it.
+- **Rules out.** Best-effort no-overwrite semantics; `exists()` followed
+  by an ordinary write or move; platform-dependent silent replacement.
+
 #### Persistence records runs, never state
 
 - **Decision.** Any invocation can persist a full record of its run
@@ -362,18 +432,35 @@ the tree's, and honest at the one seam all work passes through.
   is `None`, a node's explicit `persistence_mode` supplies that node's
   default; when neither has an opinion, a wired backend means
   `"always"` and no backend means `"off"`. Implemented for the next
-  release; see
-  [`working/runtime-commission-boundary-spec.md`](working/runtime-commission-boundary-spec.md).
+  release and locked by the exact `CallContext` surface test.
+  Persistence is a full-fidelity diagnostic export: the framework
+  hands the backend the complete record without redaction, and that
+  record may contain any data supplied to or produced by the run,
+  including credentials in inputs, outputs, errors, URLs, or LLM
+  traces. A backend is trusted application infrastructure. The
+  application owns its access control, encryption, physical storage,
+  retention, and any sanitization policy. The shipped filesystem and
+  SQLite backends preserve records exactly; an application that needs
+  sanitized storage supplies a backend that performs that policy and
+  accepts the corresponding loss of forensic fidelity. Persistence
+  modes choose which records survive and for how long, never which
+  fields are safe. (Trust boundary ruled 2026-07-26.)
 - **Why.** "What did fan #7 actually return" must be answerable after
   the fact, or a hundred-unit tree is only debuggable while still in
   memory. Records are for inspection; the state decision already rules
   out records quietly becoming memory. Persistence is runtime plumbing,
   not a dependency of the work unit: exposing a storage service to a
   Commission breaks the silo even when every Commission is trusted.
+  Generic redaction cannot know every application's secret vocabulary,
+  and an incomplete built-in scrubber would create a more dangerous
+  promise than an explicit trusted sink.
 - **Rules out.** A framework memory system growing out of the record
   store; backends wired at Commission construction; persistence
   backends exposed through `CallContext`; a node overriding an explicit
-  application recording policy.
+  application recording policy; treating `dev` or `on_failure` as
+  sanitized storage; claiming records are safe for arbitrary
+  secret-bearing inputs; a framework redaction surface without a named
+  consumer and an explicit re-rule.
 
 #### None keeps a meaning per knob; the sentinel absorbs "unset"
 
@@ -445,7 +532,37 @@ the tree's, and honest at the one seam all work passes through.
   Gatekeeper, or the top-level public surface; automatic Commission
   discovery or a generic call-by-name registry; implicit host context;
   shared state between MCP calls; adapter-owned routing, run policy, or
-  tool-menu policy; building the inward MCP client at the same time.
+  tool-menu policy. The original restriction on building the inward
+  adapter at the same time was retired when its own consumer arrived;
+  the two adapters remain separate surfaces and lifecycles.
+
+#### External MCP operations enter as explicitly bound Tools
+
+- **Decision.** The optional `vibrantine.mcp.client` adapter may open an
+  application-owned MCP connection and bind one selected remote operation
+  behind one stable local Tool contract. The application supplies the
+  remote operation name, local LLM-facing identity, Pydantic input/output
+  types, and any explicit argument or result translation, then injects the
+  returned Tool into only the Commissions that need it. The adapter owns
+  SDK translation, timeout and cancellation handling, bounded result
+  normalization, error conversion, and provenance. Initial development
+  targets the already-pinned SDK v1 line; stable SDK v2 replaces that
+  implementation in place later, without a dual-version path.
+- **Why.** Repository documentation supplied through a public MCP server is
+  the first named consumer. Treating a remote operation as an ordinary Tool
+  preserves the existing composition rule: toolbox membership places the
+  dependency, capabilities narrow its use, and `dispatch` records the call.
+  Connection mechanics are reusable library integration code, while server
+  choice, credentials, operation approval, mappings, and placement remain
+  application policy. No application service needs to become ambient
+  runtime state.
+- **Rules out.** MCP connections or catalogs in `CallContext` or the
+  Gatekeeper; adding MCP keywords to `run_commission`; automatic exposure of
+  a server's discovered tool list; a generic model-visible
+  `call_mcp_tool(name, arguments)` escape hatch; trusting remote names,
+  descriptions, schemas, annotations, or errors as local policy; MCP client
+  exports from the top-level `vibrantine` surface.
+  (Ruled 2026-07-25.)
 
 ## Not built yet
 
@@ -474,11 +591,12 @@ ruling record.
   with a Commission ("this worker may never exceed $0.01", the
   capacity half of budgeting), taking the minimum with the caller's
   grant. Trigger: the same tiered workload.
-- **Inward MCP adapter.** Wrapping selected operations from external MCP
-  servers as explicitly placed Vibrantine Tools remains parked. Trigger:
-  the outward adapter has shipped on stable MCP v2 and a real Commission
-  needs one external MCP operation; the parked working specification is
-  then reviewed against what the outward implementation taught us.
+- **A general per-branch model-menu convention.** The provisional
+  `RecursiveResearchModelMenu` proves that catalog names can fill
+  different seats in one recursive example, but a homogeneous tree
+  cannot settle the vocabulary for a heterogeneous one. Trigger: the
+  first genuine multi-seat Commission tree whose roles cannot be
+  expressed clearly with the existing per-Commission `model=` choice.
 - **Multimodal output, and further input modalities.** Image and audio
   *input* are built: typed parts (`TextPart` / `ImagePart` /
   `AudioPart`), verified live against the default model (2026-07).

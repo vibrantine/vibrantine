@@ -37,7 +37,12 @@ from openai.types.chat import (
 )
 from pydantic import BaseModel, ValidationError
 
-from vibrantine._gatekeeper import RunCancel, RunHaltedError, UnmeterableCallError
+from vibrantine._gatekeeper import (
+    RunCancel,
+    RunConfigError,
+    RunHaltedError,
+    UnmeterableCallError,
+)
 from vibrantine.contract import (
     AudioPart,
     CallContext,
@@ -302,6 +307,15 @@ async def run_llm_loop[OutputT: BaseModel](
                 return LoopOutcome(
                     output=None,
                     error=stop_signal_error(exc),
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
+                    children_cost=children_cost,
+                )
+            except RunConfigError as exc:
+                return _loop_error(
+                    "validation",
+                    str(exc),
+                    retryable=False,
                     in_tokens=in_tokens,
                     out_tokens=out_tokens,
                     children_cost=children_cost,
