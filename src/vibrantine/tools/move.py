@@ -116,14 +116,6 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
                 provenance=prov,
             )
 
-        if os.path.lexists(input.target) and not input.overwrite:
-            return failure(
-                "validation",
-                f"target already exists and overwrite is false: {input.target!s}.",
-                retryable=False,
-                provenance=prov,
-            )
-
         if not input.target.parent.exists():
             return failure(
                 "validation",
@@ -133,10 +125,19 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
             )
 
         try:
-            # Attest where the file actually landed: when target is an
-            # existing directory, shutil.move relocates the file INTO it
-            # and returns that inner path, not the requested target.
-            moved_to = Path(shutil.move(str(input.source), str(input.target)))
+            if input.overwrite:
+                # Attest where the file actually landed: when target is an
+                # existing directory, shutil.move relocates the file INTO it.
+                moved_to = Path(shutil.move(str(input.source), str(input.target)))
+            else:
+                moved_to = _move_without_overwrite(input.source, input.target)
+        except FileExistsError:
+            return failure(
+                "validation",
+                f"target already exists and overwrite is false: {input.target!s}.",
+                retryable=False,
+                provenance=prov,
+            )
         except PermissionError as exc:
             return failure(
                 "internal",
@@ -158,3 +159,31 @@ class MoveTool(Commission[MoveInput, MoveOutput]):
             provenance=prov,
             cost=ZERO_COST,
         )
+
+
+def _move_without_overwrite(source: Path, target: Path) -> Path:
+    """Claim an absent target atomically, refusing unsupported moves."""
+    try:
+        # A hard link creates the destination atomically and fails if any
+        # entry already owns that name. It also fails closed across
+        # filesystems or on filesystems that cannot provide the guarantee.
+        os.link(source, target)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        raise OSError(
+            f"no-overwrite move is unsupported for this source/target filesystem pair: {exc}"
+        ) from exc
+
+    try:
+        source.unlink()
+    except OSError as exc:
+        try:
+            target.unlink()
+        except OSError as rollback_exc:
+            raise OSError(
+                f"source removal failed after the destination was claimed ({exc}); "
+                f"rollback also failed ({rollback_exc})"
+            ) from rollback_exc
+        raise OSError(f"source removal failed; destination claim was rolled back: {exc}") from exc
+    return target

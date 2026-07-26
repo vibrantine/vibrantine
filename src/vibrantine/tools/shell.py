@@ -27,11 +27,13 @@ tool does not paper over the difference.
 """
 
 import asyncio
+import codecs
 import locale
 import sys
+import tempfile
 import time
 from pathlib import Path
-from typing import ClassVar, Final
+from typing import BinaryIO, ClassVar, Final, cast
 
 from pydantic import BaseModel, Field
 
@@ -50,7 +52,10 @@ _FALLBACK_ENCODING: Final[str] = (
 )
 
 
-def _decode(data: bytes, fallback: str = _FALLBACK_ENCODING) -> str:
+def _decode(  # pyright: ignore[reportUnusedFunction]
+    data: bytes,
+    fallback: str = _FALLBACK_ENCODING,
+) -> str:
     """Decode command output: strict UTF-8 first, legacy codepage second.
 
     UTF-8 is self-validating, so a strict decode succeeding means the bytes
@@ -212,26 +217,46 @@ class ShellTool(Commission[ShellInput, ShellOutput]):
                 provenance=prov,
             )
 
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=input.timeout_seconds,
+        with tempfile.TemporaryFile() as stdout_spool, tempfile.TemporaryFile() as stderr_spool:
+            stdout_task = asyncio.create_task(
+                _drain(cast(asyncio.StreamReader, proc.stdout), stdout_spool)
             )
-        except TimeoutError:
-            proc.kill()
-            await proc.wait()
-            elapsed = time.monotonic() - start
-            return failure(
-                "timeout",
-                f"Command exceeded {input.timeout_seconds}s timeout (killed at {elapsed:.2f}s).",
-                retryable=True,
-                provenance=prov,
+            stderr_task = asyncio.create_task(
+                _drain(cast(asyncio.StreamReader, proc.stderr), stderr_spool)
             )
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=input.timeout_seconds)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+                await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+                elapsed = time.monotonic() - start
+                return failure(
+                    "timeout",
+                    f"Command exceeded {input.timeout_seconds}s timeout "
+                    f"(killed at {elapsed:.2f}s).",
+                    retryable=True,
+                    provenance=prov,
+                )
+            try:
+                await asyncio.gather(stdout_task, stderr_task)
+                stdout, stdout_truncated, stdout_total = _decode_spooled(
+                    stdout_spool,
+                    input.max_output_chars,
+                )
+                stderr, stderr_truncated, stderr_total = _decode_spooled(
+                    stderr_spool,
+                    input.max_output_chars,
+                )
+            except OSError as exc:
+                return failure(
+                    "internal",
+                    f"Failed while capturing shell output: {exc}.",
+                    retryable=False,
+                    provenance=prov,
+                )
 
         runtime = time.monotonic() - start
-
-        stdout, stdout_truncated, stdout_total = _cap(_decode(stdout_bytes), input.max_output_chars)
-        stderr, stderr_truncated, stderr_total = _cap(_decode(stderr_bytes), input.max_output_chars)
 
         return CommissionResult[ShellOutput](
             status="success",
@@ -250,14 +275,48 @@ class ShellTool(Commission[ShellInput, ShellOutput]):
         )
 
 
-def _cap(text: str, max_chars: int) -> tuple[str, bool, int]:
-    """Cap `text` to `max_chars`. Returns (kept, truncated, total_chars).
+async def _drain(stream: asyncio.StreamReader, spool: BinaryIO) -> None:
+    """Drain one subprocess pipe to disk with fixed-size memory use."""
+    while chunk := await stream.read(64 * 1024):
+        spool.write(chunk)
 
-    Keeps the head: a completed command can't be re-paginated, so the start of
-    the output (plus the separately-captured exit_code) is the predictable slice
-    to retain. The caller narrows the command or raises the cap for more.
-    """
-    total = len(text)
-    if total <= max_chars:
-        return text, False, total
-    return text[:max_chars], True, total
+
+def _decode_spooled(
+    spool: BinaryIO,
+    max_chars: int,
+    fallback: str = _FALLBACK_ENCODING,
+) -> tuple[str, bool, int]:
+    """Decode a completed spool, retrying the legacy codepage if needed."""
+    try:
+        return _decode_spooled_as(spool, max_chars, "utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return _decode_spooled_as(spool, max_chars, fallback, errors="replace")
+
+
+def _decode_spooled_as(
+    spool: BinaryIO,
+    max_chars: int,
+    encoding: str,
+    *,
+    errors: str,
+) -> tuple[str, bool, int]:
+    spool.seek(0)
+    decoder_type = codecs.getincrementaldecoder(encoding)
+    decoder = decoder_type(errors=errors)
+    kept: list[str] = []
+    kept_chars = 0
+    total = 0
+
+    while data := spool.read(64 * 1024):
+        text = decoder.decode(data)
+        total += len(text)
+        if kept_chars < max_chars:
+            part = text[: max_chars - kept_chars]
+            kept.append(part)
+            kept_chars += len(part)
+
+    tail = decoder.decode(b"", final=True)
+    total += len(tail)
+    if kept_chars < max_chars:
+        kept.append(tail[: max_chars - kept_chars])
+    return "".join(kept), total > max_chars, total

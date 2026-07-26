@@ -7,6 +7,7 @@ search. Cheap enough that an agent can run many Glob calls during
 exploration.
 """
 
+import heapq
 from pathlib import Path
 from typing import ClassVar
 
@@ -116,9 +117,18 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
             )
 
         try:
-            # Sorting needs the full match list anyway, so the cap bounds the
-            # returned payload (the context-budget concern), not the walk.
-            matched = sorted(p for p in base.glob(input.pattern) if p.is_file())
+            total = 0
+
+            def candidates():
+                nonlocal total
+                for path in base.glob(input.pattern):
+                    if path.is_file():
+                        total += 1
+                        yield path
+
+            # Exact total and deterministic order still require a full scan,
+            # but nsmallest retains only the bounded returned selection.
+            matched = heapq.nsmallest(input.max_matches, candidates())
         except (ValueError, NotImplementedError) as exc:
             # pathlib raises ValueError for an empty pattern and
             # NotImplementedError for an absolute one; both are caller
@@ -144,11 +154,10 @@ class GlobTool(Commission[GlobInput, GlobOutput]):
                 provenance=prov,
             )
 
-        total = len(matched)
         return CommissionResult[GlobOutput](
             status="success",
             output=GlobOutput(
-                matches=matched[: input.max_matches],
+                matches=matched,
                 truncated=total > input.max_matches,
                 total_matches=total,
             ),

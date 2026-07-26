@@ -1,0 +1,1464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Code Quality Review — Vibrantine — 2026-07-25</title>
+  <style>
+    :root {
+      --ink: #132033;
+      --muted: #59677b;
+      --paper: #f3f1eb;
+      --panel: #fffdf8;
+      --line: #d5d0c4;
+      --navy: #183752;
+      --blue: #286b86;
+      --blue-soft: #e5f1f4;
+      --green: #2e745b;
+      --green-soft: #e5f3ec;
+      --amber: #9b6518;
+      --amber-soft: #fbefcf;
+      --red: #a53e3e;
+      --red-soft: #f9e5e2;
+      --slate-soft: #eceff2;
+      --shadow: 0 18px 50px rgba(25, 38, 52, 0.08);
+      --display: Georgia, "Times New Roman", serif;
+      --body: "Segoe UI", Inter, Arial, sans-serif;
+      --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(24, 55, 82, 0.025) 1px, transparent 1px),
+        linear-gradient(rgba(24, 55, 82, 0.025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font-family: var(--body);
+      font-size: 16px;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover { color: var(--navy); }
+    a:focus-visible, summary:focus-visible {
+      outline: 3px solid #e6b85f;
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+
+    code {
+      padding: 0.08rem 0.32rem;
+      border: 1px solid #dbe0e4;
+      border-radius: 5px;
+      background: #f5f7f8;
+      color: #183752;
+      font-family: var(--mono);
+      font-size: 0.88em;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 1rem 0;
+      padding: 16px 18px;
+      border: 1px solid #cad4db;
+      border-radius: 12px;
+      background: #142433;
+      color: #eef6fa;
+      font: 0.84rem/1.55 var(--mono);
+    }
+
+    pre code {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .page {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      gap: 34px;
+      align-items: start;
+    }
+
+    .rail {
+      position: sticky;
+      top: 24px;
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      padding: 22px 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 253, 248, 0.94);
+      box-shadow: 0 12px 35px rgba(25, 38, 52, 0.07);
+      backdrop-filter: blur(12px);
+    }
+
+    .rail-kicker {
+      margin: 0 0 8px;
+      color: var(--red);
+      font: 700 0.7rem/1.2 var(--mono);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .rail-title {
+      margin: 0 0 18px;
+      font: 700 1.35rem/1.18 var(--display);
+    }
+
+    .rail-meta {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .rail nav {
+      display: grid;
+      gap: 5px;
+    }
+
+    .rail nav a {
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.87rem;
+    }
+
+    .rail nav a:hover {
+      background: var(--blue-soft);
+      color: var(--navy);
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 7px;
+      border-radius: 99px;
+      background: var(--muted);
+    }
+    .dot.high { background: var(--red); }
+    .dot.medium { background: var(--amber); }
+    .dot.low { background: var(--blue); }
+
+    main { min-width: 0; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(30px, 5vw, 66px);
+      border: 1px solid #afbcc6;
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 90% 10%, rgba(40, 107, 134, 0.17), transparent 34%),
+        linear-gradient(135deg, #fffdf8 0%, #eef4f4 100%);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "QUALITY REVIEW";
+      position: absolute;
+      right: -24px;
+      bottom: 8px;
+      color: rgba(24, 55, 82, 0.045);
+      font: 800 clamp(2.5rem, 8vw, 7rem)/1 var(--body);
+      letter-spacing: -0.05em;
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--red);
+      font: 750 0.76rem/1 var(--mono);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, h4 {
+      color: var(--navy);
+      font-family: var(--display);
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-size: clamp(2.5rem, 6vw, 5.4rem);
+      line-height: 0.98;
+      letter-spacing: -0.045em;
+    }
+
+    .hero-lede {
+      max-width: 880px;
+      margin: 24px 0 0;
+      color: #34475a;
+      font-size: 1.13rem;
+    }
+
+    .verdict {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 26px;
+      padding: 10px 14px;
+      border: 1px solid #d7a3a0;
+      border-radius: 999px;
+      background: var(--red-soft);
+      color: #833030;
+      font-weight: 750;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px 18px;
+      margin-top: 28px;
+      color: var(--muted);
+      font: 0.8rem/1.4 var(--mono);
+    }
+
+    section {
+      scroll-margin-top: 28px;
+      margin-top: 34px;
+      padding: clamp(24px, 4vw, 42px);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 12px 32px rgba(25, 38, 52, 0.055);
+    }
+
+    section > h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.65rem, 3vw, 2.45rem);
+      line-height: 1.1;
+      letter-spacing: -0.025em;
+    }
+
+    .section-lede {
+      max-width: 920px;
+      margin: 0 0 24px;
+      color: var(--muted);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 26px;
+    }
+
+    .metric {
+      min-height: 130px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .metric .number {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--navy);
+      font: 800 2.2rem/1 var(--display);
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .metric.alert {
+      border-color: #dba5a0;
+      background: var(--red-soft);
+    }
+
+    .metric.warn {
+      border-color: #e5c985;
+      background: var(--amber-soft);
+    }
+
+    .callout {
+      margin: 22px 0 0;
+      padding: 17px 19px;
+      border-left: 5px solid var(--blue);
+      border-radius: 10px;
+      background: var(--blue-soft);
+    }
+
+    .callout strong { color: var(--navy); }
+    .callout.positive {
+      border-left-color: var(--green);
+      background: var(--green-soft);
+    }
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      padding: 13px 15px;
+      border-bottom: 1px solid #e4e1d9;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef2f3;
+      color: var(--navy);
+      font-size: 0.77rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .status {
+      display: inline-block;
+      white-space: nowrap;
+      padding: 3px 8px;
+      border-radius: 99px;
+      font: 700 0.72rem/1.4 var(--mono);
+    }
+    .status.strong { background: var(--green-soft); color: var(--green); }
+    .status.mixed { background: var(--amber-soft); color: var(--amber); }
+    .status.gap { background: var(--red-soft); color: var(--red); }
+    .status.info { background: var(--blue-soft); color: var(--blue); }
+
+    .findings-index {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+
+    .finding-link {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink);
+      text-decoration: none;
+      background: #fff;
+    }
+
+    .finding-link:hover {
+      border-color: #9bb6c3;
+      background: #f4f9fa;
+    }
+
+    .priority {
+      min-width: 38px;
+      padding: 5px 6px;
+      border-radius: 6px;
+      color: #fff;
+      text-align: center;
+      font: 800 0.72rem/1 var(--mono);
+    }
+    .priority.p1 { background: var(--red); }
+    .priority.p2 { background: var(--amber); }
+    .priority.p3 { background: var(--blue); }
+
+    .finding {
+      scroll-margin-top: 28px;
+      margin-top: 22px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #fff;
+    }
+
+    .finding.p1 { border-left: 7px solid var(--red); }
+    .finding.p2 { border-left: 7px solid var(--amber); }
+    .finding.p3 { border-left: 7px solid var(--blue); }
+
+    .finding-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .finding h3 {
+      flex: 1 1 520px;
+      margin: 0;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    .finding p { margin: 10px 0; }
+    .finding ul { margin: 10px 0 0; padding-left: 1.25rem; }
+    .finding li + li { margin-top: 7px; }
+
+    .evidence {
+      margin-top: 15px;
+      padding: 14px 16px;
+      border-radius: 9px;
+      background: var(--slate-soft);
+      color: #344354;
+      font-size: 0.88rem;
+    }
+
+    .recommendation {
+      margin-top: 15px;
+      padding: 14px 16px;
+      border-radius: 9px;
+      background: var(--green-soft);
+      color: #245a48;
+      font-size: 0.9rem;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .mini-card {
+      padding: 19px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+    }
+
+    .mini-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.12rem;
+    }
+
+    .mini-card p, .mini-card ul { margin-bottom: 0; }
+
+    .roadmap {
+      display: grid;
+      gap: 14px;
+      counter-reset: phase;
+    }
+
+    .phase {
+      position: relative;
+      padding: 20px 20px 20px 72px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+    }
+
+    .phase::before {
+      counter-increment: phase;
+      content: counter(phase);
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--navy);
+      color: white;
+      font: 800 0.9rem var(--mono);
+    }
+
+    .phase h3 { margin: 0 0 6px; font-size: 1.1rem; }
+    .phase p { margin: 0; color: var(--muted); }
+
+    details {
+      margin-top: 15px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fff;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 14px 16px;
+      color: var(--navy);
+      font-weight: 700;
+    }
+
+    details > div { padding: 0 16px 16px; }
+
+    footer {
+      padding: 32px 6px 8px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 1050px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { position: static; max-height: none; }
+      .rail nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .page { padding: 12px; }
+      .rail nav, .metrics, .findings-index, .two-col { grid-template-columns: 1fr; }
+      section, .hero { border-radius: 14px; padding: 22px; }
+      h1 { font-size: 2.45rem; }
+      .phase { padding-left: 20px; padding-top: 70px; }
+    }
+
+    @media print {
+      body { background: white; font-size: 10.5pt; }
+      .page { width: 100%; padding: 0; }
+      .layout { display: block; }
+      .rail { display: none; }
+      section, .hero, .finding {
+        break-inside: avoid;
+        box-shadow: none;
+      }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="layout">
+      <aside class="rail" aria-label="Report navigation">
+        <p class="rail-kicker">Vibrantine</p>
+        <p class="rail-title">Code Quality Review</p>
+        <p class="rail-meta">Repository state at <code>d5a9823</code><br>Reviewed 25 July 2026</p>
+        <nav>
+          <a href="#verdict">Executive verdict</a>
+          <a href="#measures">Quality measures</a>
+          <a href="#method">Method &amp; evidence</a>
+          <a href="#scorecard">Scorecard</a>
+          <a href="#findings">Findings</a>
+          <a href="#confirmed">Confirmed strengths</a>
+          <a href="#roadmap">Remediation order</a>
+          <a href="#limitations">Limitations</a>
+        </nav>
+        <div class="legend">
+          <span><i class="dot high"></i>P1 — high / release-blocking</span>
+          <span><i class="dot medium"></i>P2 — medium / plan next</span>
+          <span><i class="dot low"></i>P3 — low / opportunistic</span>
+        </div>
+      </aside>
+
+      <main>
+        <header class="hero" id="verdict">
+          <p class="eyebrow">Independent repository audit</p>
+          <h1>Strong engineering, with trust-boundary gaps.</h1>
+          <p class="hero-lede">
+            Vibrantine has unusually good automated coverage, disciplined architecture,
+            and documentation for a pre-1.0 library. The implementation largely matches
+            its parent-mediated composition, governed provider access, persistence, and
+            minimal-surface principles. It is not yet ready to claim that the contract is
+            fully enforced at every boundary: four high-severity defects allow malformed
+            receipts, invalid money, unbounded tool output, or observational callbacks to
+            undermine guarantees that the design calls structural.
+          </p>
+          <div class="verdict"><span aria-hidden="true">●</span> Conditional — close P1 findings before the next trust-boundary release</div>
+          <div class="hero-meta">
+            <span>Scope: source, tests, docs, CI, package artifact</span>
+            <span>Baseline: clean worktree</span>
+            <span>Runtime: Windows · Python 3.12.12</span>
+            <span>Version: 0.6.0 + 27 commits</span>
+          </div>
+        </header>
+
+        <section aria-labelledby="summary-title">
+          <h2 id="summary-title">Executive summary</h2>
+          <p class="section-lede">
+            Green gates are meaningful here, not decorative. The remaining risk is
+            concentrated in adversarial and invalid states that the current suite does
+            not generate.
+          </p>
+          <div class="metrics">
+            <div class="metric alert">
+              <span class="number">4</span>
+              <span class="label">P1 findings affecting contract integrity, accounting, boundedness, or errors-as-values.</span>
+            </div>
+            <div class="metric warn">
+              <span class="number">5</span>
+              <span class="label">P2 findings affecting resilience, privacy, authoring safety, and file-operation semantics.</span>
+            </div>
+            <div class="metric">
+              <span class="number">540</span>
+              <span class="label">Tests passed. Eight platform/live integration or evaluation cases skipped.</span>
+            </div>
+            <div class="metric">
+              <span class="number">95–100%</span>
+              <span class="label">Measured branch coverage across the six central runtime modules.</span>
+            </div>
+          </div>
+          <div class="callout positive">
+            <strong>What this means:</strong> the project does not need a broad rewrite.
+            The architecture is coherent. The best next move is a narrow hardening arc:
+            enforce the receipt, enforce numeric honesty, centralize safe observation,
+            and make growing tool results genuinely bounded and resumable.
+          </div>
+        </section>
+
+        <section id="measures" aria-labelledby="measures-title">
+          <h2 id="measures-title">1. Quality measures considered and curated</h2>
+          <p class="section-lede">
+            Measures were selected for whether they test Vibrantine’s stated thesis:
+            a typed, contracted, isolated unit that can be trusted without reading its
+            interior. Generic metrics were retained only when they illuminate that claim.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th>Decision</th>
+                  <th>Why it belongs—or does not</th>
+                  <th>Evidence used</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Functional correctness</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>Confirms normal and failure paths work as promised.</td>
+                  <td>Full test suite, targeted probes, source/test traceability.</td>
+                </tr>
+                <tr>
+                  <td>Contract invariant integrity</td>
+                  <td><span class="status strong">Included — primary</span></td>
+                  <td>The result envelope, typed boundaries, errors-as-values, cost, and provenance are the product.</td>
+                  <td>Ruling-to-code review, invalid-state construction, dispatch and MCP inspection.</td>
+                </tr>
+                <tr>
+                  <td>Architectural conformance</td>
+                  <td><span class="status strong">Included — primary</span></td>
+                  <td>Tests the one-hook rule, parent-only communication, stateless runs, and application/library boundary.</td>
+                  <td><code>design.md</code>, ruling record, import and dispatch topology.</td>
+                </tr>
+                <tr>
+                  <td>Resource and output boundedness</td>
+                  <td><span class="status strong">Included — primary</span></td>
+                  <td>Unbounded data defeats the “minimal footprint” and reliable tool-call thesis.</td>
+                  <td>Read/Grep/Shell/Fetch/Glob/ListDir data-flow review.</td>
+                </tr>
+                <tr>
+                  <td>Failure containment and cancellation</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>Directly tests “no exception crosses the boundary” and run teardown behavior.</td>
+                  <td>Exception seams, callbacks, fuses, cancellation tests.</td>
+                </tr>
+                <tr>
+                  <td>Accounting and observability integrity</td>
+                  <td><span class="status strong">Included — primary</span></td>
+                  <td>Cost and provenance are declared structural, not telemetry garnish.</td>
+                  <td>Cost model, Gatekeeper, dispatch ledger, persistence.</td>
+                </tr>
+                <tr>
+                  <td>Schema discipline and type safety</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>Pydantic schemas are the cross-provider contract.</td>
+                  <td>Strict type checker plus runtime introspection of 81 model classes.</td>
+                </tr>
+                <tr>
+                  <td>Security and privacy</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>Tools can touch files, shells, networks, secrets, and persisted traces.</td>
+                  <td>Authority review, secret-pattern scan, persistence data paths.</td>
+                </tr>
+                <tr>
+                  <td>Portability and packaging</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>This is a publishable Python library with a <code>src/</code> layout and optional MCP extra.</td>
+                  <td>Build, wheel inspection, isolated install/import, CI matrix review.</td>
+                </tr>
+                <tr>
+                  <td>Documentation fidelity</td>
+                  <td><span class="status strong">Included</span></td>
+                  <td>The docs are the boundary specification and ruling record.</td>
+                  <td>Promise-to-code comparison, relative-link scan, release checklist review.</td>
+                </tr>
+                <tr>
+                  <td>Maintainability/readability</td>
+                  <td><span class="status info">Included qualitatively</span></td>
+                  <td>Names, local reasoning, and explicit control flow matter more here than a generic complexity score.</td>
+                  <td>Hotspot inspection, lint/types, module ownership and cohesion.</td>
+                </tr>
+                <tr>
+                  <td>Raw LOC, function count, “grade” totals</td>
+                  <td><span class="status info">Not scored</span></td>
+                  <td>Large core modules can be the correct result of minimizing public layers. Counts are context, not quality.</td>
+                  <td>Used only to prioritize inspection.</td>
+                </tr>
+                <tr>
+                  <td>Live LLM efficacy</td>
+                  <td><span class="status mixed">Deferred</span></td>
+                  <td>Requires provider credentials, spend, and nondeterministic evaluation. It is distinct from contract correctness.</td>
+                  <td>Three evals and provider integration tests were identified but not run live.</td>
+                </tr>
+                <tr>
+                  <td>Load/throughput benchmark</td>
+                  <td><span class="status mixed">Deferred</span></td>
+                  <td>No performance SLO is stated. Static resource behavior was still reviewed.</td>
+                  <td>No synthetic benchmark numbers claimed.</td>
+                </tr>
+                <tr>
+                  <td>Current vulnerability advisory scan</td>
+                  <td><span class="status mixed">Deferred</span></td>
+                  <td>No first-party audit tool is configured; advisory data is time-sensitive and separate from source correctness.</td>
+                  <td>Lock consistency and dependency shape were checked instead.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="method" aria-labelledby="method-title">
+          <h2 id="method-title">2. Method and evidence</h2>
+          <p class="section-lede">
+            The review began at the public promises and ruling record, then worked inward.
+            Automated gates established the baseline; adversarial inspection targeted the
+            states those gates did not cover.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Check</th><th>Result</th><th>Interpretation</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>uv run pytest</code></td>
+                  <td><span class="status strong">540 passed · 8 skipped</span></td>
+                  <td>All no-key unit/contract tests passed in 27.57s.</td>
+                </tr>
+                <tr>
+                  <td><code>uv run ruff check .</code></td>
+                  <td><span class="status strong">Passed</span></td>
+                  <td>No configured lint violations.</td>
+                </tr>
+                <tr>
+                  <td><code>uv run ruff format --check .</code></td>
+                  <td><span class="status strong">105 files formatted</span></td>
+                  <td>Formatting is deterministic and clean.</td>
+                </tr>
+                <tr>
+                  <td><code>uv run basedpyright</code></td>
+                  <td><span class="status strong">0 errors · 0 warnings</span></td>
+                  <td>Strict static typing is clean across source and tests.</td>
+                </tr>
+                <tr>
+                  <td>Branch coverage run</td>
+                  <td><span class="status strong">95% measured total</span></td>
+                  <td>Core: orchestrator 100%, persistence 99%, contract 98%, dispatch/LLM loop 96%, Gatekeeper 95%. Lower coverage is concentrated in interactive/live examples.</td>
+                </tr>
+                <tr>
+                  <td><code>uv lock --check</code></td>
+                  <td><span class="status strong">Passed</span></td>
+                  <td>Lock file resolves consistently; 46 packages in the dev + MCP graph.</td>
+                </tr>
+                <tr>
+                  <td><code>uv build</code></td>
+                  <td><span class="status strong">Wheel + sdist built</span></td>
+                  <td>Wheel was 156,667 bytes; sdist 362,548 bytes. Tests were excluded and the recursive-research prompt was included.</td>
+                </tr>
+                <tr>
+                  <td>Isolated wheel install</td>
+                  <td><span class="status strong">Passed</span></td>
+                  <td>Imported the installed package and prompt-bearing example outside the checkout; all 35 frozen exports resolved.</td>
+                </tr>
+                <tr>
+                  <td>Schema introspection</td>
+                  <td><span class="status mixed">81 classes · 3 omissions</span></td>
+                  <td>No model exceeded 20 fields; three discriminator fields lacked descriptions.</td>
+                </tr>
+                <tr>
+                  <td>Documentation link scan</td>
+                  <td><span class="status strong">Passed</span></td>
+                  <td>No broken relative file links in README, CHANGELOG, or current docs.</td>
+                </tr>
+                <tr>
+                  <td>Tracked secret-pattern scan</td>
+                  <td><span class="status strong">No matches</span></td>
+                  <td>No likely long key, bearer token, or assigned password in the reviewed tracked surfaces. This is not a full secret scanner.</td>
+                </tr>
+                <tr>
+                  <td>Default model facts</td>
+                  <td><span class="status strong">Current</span></td>
+                  <td><a href="https://openrouter.ai/google/gemini-3.5-flash/api">OpenRouter currently lists</a> the configured ID, 1M context, and $1.50/$9.00 per-million pricing used by <code>DEFAULT_MODEL</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <details>
+            <summary>Adversarial probes that exposed invalid states</summary>
+            <div>
+              <p>The report also constructed values the happy-path suite does not:</p>
+              <ul>
+                <li><code>CommissionResult(status="success", output=None, error=None)</code> validates.</li>
+                <li>A failure with output and no error validates; a partial with no error validates.</li>
+                <li><code>CostMetrics</code> accepts negative dollars/tokens, <code>NaN</code>, and infinity.</li>
+                <li>Commission construction accepts negative iteration/input/output caps and <code>target_input_fraction=2.0</code>.</li>
+              </ul>
+              <p>These probes did not modify repository files or call a paid provider.</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="scorecard" aria-labelledby="scorecard-title">
+          <h2 id="scorecard-title">3. Quality scorecard</h2>
+          <p class="section-lede">
+            Ratings are qualitative. They describe the current evidence, not a
+            mathematically precise grade.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Dimension</th><th>Rating</th><th>Assessment</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Normal-path functional correctness</td>
+                  <td><span class="status strong">Strong</span></td>
+                  <td>Broad, fast, deterministic test suite; examples and tools are exercised deeply.</td>
+                </tr>
+                <tr>
+                  <td>Result-contract enforcement</td>
+                  <td><span class="status gap">Gap</span></td>
+                  <td>Population and numeric invariants are documented but not enforced by the public models or dispatch.</td>
+                </tr>
+                <tr>
+                  <td>Architectural consistency</td>
+                  <td><span class="status strong">Strong</span></td>
+                  <td>One hook, governed provider door, tree identity, application-owned MCP connections, and private persistence policy all align with rulings.</td>
+                </tr>
+                <tr>
+                  <td>Error containment</td>
+                  <td><span class="status mixed">Mostly strong</span></td>
+                  <td>Commission exceptions are converted correctly, but progress callbacks have unguarded escape paths.</td>
+                </tr>
+                <tr>
+                  <td>Budget/cost honesty</td>
+                  <td><span class="status mixed">Mostly strong</span></td>
+                  <td>Gatekeeper and priced calls are careful; invalid author-reported costs can poison the accounting domain.</td>
+                </tr>
+                <tr>
+                  <td>Tool result boundedness</td>
+                  <td><span class="status gap">Needs work</span></td>
+                  <td>Most outputs signal truncation, but Grep and long-line Read break the recoverable-cursor rule; several caps apply after unbounded acquisition.</td>
+                </tr>
+                <tr>
+                  <td>Schema/type discipline</td>
+                  <td><span class="status strong">Strong with small drift</span></td>
+                  <td>Strict typing and compact schemas are excellent; three public discriminator fields miss descriptions and author configuration validation is incomplete.</td>
+                </tr>
+                <tr>
+                  <td>Security/privacy posture</td>
+                  <td><span class="status mixed">Mixed</span></td>
+                  <td>Authority language and adapter error hygiene are good; full-record persistence lacks a sensitive-data warning or convention.</td>
+                </tr>
+                <tr>
+                  <td>Packaging/portability</td>
+                  <td><span class="status strong">Strong</span></td>
+                  <td>Build and isolated install pass; CI spans Windows/Linux and Python 3.12/3.13.</td>
+                </tr>
+                <tr>
+                  <td>Documentation fidelity</td>
+                  <td><span class="status strong">Strong</span></td>
+                  <td>Docs are coherent and link-clean. The dated release checklist has drifted since its last pass.</td>
+                </tr>
+                <tr>
+                  <td>Maintainability</td>
+                  <td><span class="status strong">Strong</span></td>
+                  <td>Explicit code, strong names, local rationale, few dependencies, and high branch coverage outweigh the size of the central modules.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="findings" aria-labelledby="findings-title">
+          <h2 id="findings-title">4. Prioritized findings</h2>
+          <p class="section-lede">
+            P1 means the defect conflicts with a structural promise and should be
+            resolved before the next release that asks consumers to trust that promise.
+          </p>
+
+          <div class="findings-index">
+            <a class="finding-link" href="#f01"><span class="priority p1">P1</span><span>Result envelope population invariants are not enforced.</span></a>
+            <a class="finding-link" href="#f02"><span class="priority p1">P1</span><span>Invalid cost values can corrupt structural accounting.</span></a>
+            <a class="finding-link" href="#f03"><span class="priority p1">P1</span><span>Grep’s cap does not bound work or returned line size.</span></a>
+            <a class="finding-link" href="#f04"><span class="priority p1">P1</span><span>Progress callbacks can violate errors-as-values.</span></a>
+            <a class="finding-link" href="#f05"><span class="priority p2">P2</span><span>Read’s long-line truncation is not resumable.</span></a>
+            <a class="finding-link" href="#f06"><span class="priority p2">P2</span><span>Invalid Commission configurations fail late.</span></a>
+            <a class="finding-link" href="#f07"><span class="priority p2">P2</span><span>Several output caps apply after unbounded acquisition.</span></a>
+            <a class="finding-link" href="#f08"><span class="priority p2">P2</span><span>Full persistence can retain authentication material.</span></a>
+            <a class="finding-link" href="#f09"><span class="priority p2">P2</span><span>No-overwrite file guarantees are race-prone.</span></a>
+            <a class="finding-link" href="#f10"><span class="priority p3">P3</span><span>Three public schema fields lack descriptions.</span></a>
+            <a class="finding-link" href="#f11"><span class="priority p3">P3</span><span>CI omits artifact gates; release evidence is stale.</span></a>
+            <a class="finding-link" href="#f12"><span class="priority p3">P3</span><span>Frozen Model profiles contain mutable parameters.</span></a>
+          </div>
+
+          <article class="finding p1" id="f01">
+            <div class="finding-head">
+              <span class="priority p1">P1</span>
+              <h3>Result envelope population invariants are documented, but not enforced</h3>
+              <span class="status gap">Confirmed defect</span>
+            </div>
+            <p>
+              The ruling record says success and partial carry output, while failure and
+              partial carry error, and says “the runtime already provides” that guarantee.
+              <code>CommissionResult</code> declares all population fields optional without
+              a model validator. Dispatch stamps and returns an author-produced result
+              without checking the status/output/error relationship.
+            </p>
+            <p>
+              A success with neither output nor error, a failure with output and no error,
+              and a partial with no error all validate today. The MCP server’s specialized
+              revalidation also accepts them because it uses the same model.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/contract.py#L137">contract.py:137–151</a>;
+              <a href="../../src/vibrantine/dispatch.py#L183">dispatch.py:183–238</a>;
+              <a href="../design-decisions.md#one-result-envelope-one-class">ruling: One result envelope, one class</a>.
+              Targeted construction reproduced all three malformed envelopes.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> add an after-model validator that enforces
+              the three population states and forbids contradictory fields. Add dispatch
+              tests for third-party custom <code>_run</code> returns and MCP round trips.
+              This tightens behavior to the existing ruling; it does not add vocabulary
+              or public surface.
+            </div>
+          </article>
+
+          <article class="finding p1" id="f02">
+            <div class="finding-head">
+              <span class="priority p1">P1</span>
+              <h3>CostMetrics accepts negative, NaN, and infinite values</h3>
+              <span class="status gap">Confirmed defect</span>
+            </div>
+            <p>
+              Model catalog prices and run budgets are carefully restricted to finite,
+              non-negative numbers. The receipt itself is not. A custom Commission can
+              return negative dollars/tokens, <code>NaN</code>, or infinity in
+              <code>CostMetrics</code>.
+            </p>
+            <p>
+              <code>NaN</code> is especially dangerous: ordinary less-than/greater-than
+              comparisons are false, so the cost-honesty warning and budget comparisons
+              can be bypassed after a poisoned child cost enters a parent’s rollup. This
+              violates the structural accounting premise even if every real provider call
+              was metered correctly.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/contract.py#L87">contract.py:87–106</a>.
+              Targeted construction accepted <code>estimated_usd=-1</code>,
+              <code>float("nan")</code>, <code>float("inf")</code>, and negative token
+              counts. By contrast, <a href="../../src/vibrantine/orchestrator.py#L222">run
+              configuration</a> and model catalog construction reject invalid money.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> constrain dollars to finite
+              <code>ge=0</code> and token counts to <code>ge=0</code>. Couple this with
+              F-01 so a third-party result is rejected at construction/dispatch before it
+              can enter a rollup. Add NaN-focused tests because it behaves differently
+              from ordinary out-of-range numbers.
+            </div>
+          </article>
+
+          <article class="finding p1" id="f03">
+            <div class="finding-head">
+              <span class="priority p1">P1</span>
+              <h3>GrepTool’s max_matches does not bound one file’s work or one match’s size</h3>
+              <span class="status gap">Confirmed defect</span>
+            </div>
+            <p>
+              <code>GrepTool</code> advertises a bounded result. Internally,
+              <code>_grep_file</code> reads the whole file, splits every line, and builds
+              every matching <code>GrepMatch</code> before the outer loop applies
+              <code>max_matches</code>. A file with a million matching lines creates a
+              million objects even when the caller requests one.
+            </p>
+            <p>
+              A matching line is also returned in full with no character cap. One
+              minified or generated line can therefore make the returned payload
+              arbitrarily large while <code>truncated</code> remains false.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/tools/grep.py#L151">grep.py:151–181</a> applies
+              the cap after <a href="../../src/vibrantine/tools/grep.py#L222">grep.py:222–234</a>
+              materializes all matches and full lines. The LLM-facing description at
+              lines 81–99 says the output is bounded.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> stream matching lines from each file and
+              stop at the global cap. Add a per-line character bound with explicit
+              truncation metadata and a resumption mechanism (file + line + character
+              offset, or a cursor). Test a huge matching line and a file with far more
+              matches than the cap.
+            </div>
+          </article>
+
+          <article class="finding p1" id="f04">
+            <div class="finding-head">
+              <span class="priority p1">P1</span>
+              <h3>on_progress is called unsafely and can let exceptions cross the boundary</h3>
+              <span class="status gap">Confirmed defect</span>
+            </div>
+            <p>
+              <code>ProgressEvent</code> is explicitly “observability, not a control
+              surface.” The Gatekeeper protects <code>on_llm_call</code> and
+              <code>on_dispatch</code>: it passes copies, catches callback exceptions,
+              and logs them. <code>on_progress</code> is invoked directly.
+            </p>
+            <p>
+              A callback that raises during <code>Commission._emit</code> is converted
+              into an internal Commission failure. More seriously, the overflow
+              <code>flag</code> and persistence-failure emission sites run outside the
+              <code>_run</code> exception backstop, so the callback exception can escape
+              <code>run_commission</code> entirely. Observability can therefore change
+              both the result and the errors-as-values guarantee.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/contract.py#L779">contract.py:779–782</a>;
+              <a href="../../src/vibrantine/dispatch.py#L353">dispatch.py:353–360</a>;
+              <a href="../../src/vibrantine/dispatch.py#L704">dispatch.py:704–712</a>.
+              Compare the guarded callbacks in
+              <a href="../../src/vibrantine/_gatekeeper.py#L297">_gatekeeper.py:297–342</a>.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> centralize progress delivery behind one
+              private safe-emitter that catches/logs callback failures. Use it from
+              <code>_emit</code> and dispatch. Test raising callbacks at loop start,
+              overflow, and persistence-failure sites.
+            </div>
+          </article>
+
+          <article class="finding p2" id="f05">
+            <div class="finding-head">
+              <span class="priority p2">P2</span>
+              <h3>ReadTool truncates long lines without a way to retrieve the remainder</h3>
+              <span class="status mixed">Principle violation</span>
+            </div>
+            <p>
+              Read is documented as the canonical resumable tool. Pagination is
+              line-based, but each returned line is independently cut at 30,000
+              characters. For a one-line file, <code>truncated</code> can be false even
+              though most of the line was discarded, and changing the line offset cannot
+              reach the missing characters.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/tools/read.py#L116">read.py:116–123</a> computes
+              truncation only from remaining lines;
+              <a href="../../src/vibrantine/tools/read.py#L135">read.py:135–141</a> drops
+              the remainder of a long line. This conflicts with the project instruction
+              that large results are cursors over data and truncation must be recoverable.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> add character-level continuation for long
+              lines or represent returned lines as resumable segments. At minimum expose
+              separate line-truncation metadata; a visible marker alone signals loss but
+              does not make it recoverable.
+            </div>
+          </article>
+
+          <article class="finding p2" id="f06">
+            <div class="finding-head">
+              <span class="priority p2">P2</span>
+              <h3>Commission authoring accepts invalid configurations that fail late</h3>
+              <span class="status mixed">Systemic risk</span>
+            </div>
+            <p>
+              The class-definition checks are an excellent fail-fast mechanism, but they
+              cover only identity presence, generic/ClassVar agreement, and the extension
+              hook. Several invalid states remain easy for inexperienced authors:
+            </p>
+            <ul>
+              <li>duplicate toolbox names make one child unreachable and may send duplicate provider tool definitions;</li>
+              <li>a child named <code>conclude</code> collides with the framework exit tool and can never be dispatched;</li>
+              <li>empty/invalid provider tool names and empty descriptions are accepted;</li>
+              <li>negative caps/iterations and fractions above 1 are accepted;</li>
+              <li>non-Pydantic identity types can be expressed at runtime and fail only when schema generation is attempted.</li>
+            </ul>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/contract.py#L415">contract.py:415–520</a>;
+              <a href="../../src/vibrantine/llm_tools.py#L71">llm_tools.py:71–100</a> and
+              <a href="../../src/vibrantine/llm_tools.py#L186">186–190</a>. Targeted
+              construction accepted negative policy values and
+              <code>target_input_fraction=2.0</code>.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> extend existing definition/construction
+              validation rather than adding a new surface. Validate Pydantic contract
+              types and non-empty identity at class definition; validate numeric policies
+              and toolbox uniqueness/reserved names in <code>__init__</code>. Add exact,
+              beginner-readable error messages.
+            </div>
+          </article>
+
+          <article class="finding p2" id="f07">
+            <div class="finding-head">
+              <span class="priority p2">P2</span>
+              <h3>Several “bounded” tools cap the returned value only after unbounded acquisition</h3>
+              <span class="status mixed">Robustness gap</span>
+            </div>
+            <p>
+              Context size is bounded more consistently than process memory. Read loads
+              and splits the full file; Shell’s <code>communicate()</code> buffers all
+              stdout/stderr before clipping; Fetch materializes the full decoded body;
+              Glob and ListDir sort complete result sets before slicing. A large input can
+              exhaust memory or block the event loop even when the requested result cap is
+              tiny.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/tools/read.py#L112">read.py:112–119</a>;
+              <a href="../../src/vibrantine/tools/shell.py#L216">shell.py:216–234</a>;
+              <a href="../../src/vibrantine/tools/fetch.py#L146">fetch.py:146,194</a>;
+              <a href="../../src/vibrantine/tools/glob.py#L121">glob.py:121</a>;
+              <a href="../../src/vibrantine/tools/list_dir.py#L123">list_dir.py:123</a>.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> treat payload bounds and execution-resource
+              bounds as two separate properties. Stream/spool Shell and Fetch, stream
+              Read while counting lines, and document where exact totals require a full
+              scan. Add memory-oriented regression cases without inventing a public
+              concurrency knob.
+            </div>
+          </article>
+
+          <article class="finding p2" id="f08">
+            <div class="finding-head">
+              <span class="priority p2">P2</span>
+              <h3>Full-record persistence can retain authentication material without warning</h3>
+              <span class="status mixed">Privacy risk</span>
+            </div>
+            <p>
+              Persistence intentionally stores complete inputs and LLM traces. Fetch
+              explicitly invites <code>Authorization</code> headers. If a Fetch call is
+              made by an LLM and recording is enabled, the header may appear both in the
+              child’s serialized input and in the parent’s raw tool-call trace. Shipped
+              filesystem/SQLite backends do not provide redaction, and current operator
+              docs do not warn that records may contain secrets.
+            </p>
+            <p>
+              Generic automatic redaction is not simple—the application owns what is
+              sensitive—but the absence of a warning/convention is a dangerous default
+              for an observability feature.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/tools/fetch.py#L26">fetch.py:26–29,73</a>;
+              <a href="../../src/vibrantine/dispatch.py#L612">dispatch.py:612–645</a>
+              serializes full input/result and retains the raw LLM trace.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> document the data-retention threat model
+              now. Establish an authoring convention using secret-aware field types or
+              explicit exclusion for credentials, and test it through both input records
+              and LLM traces. Review local file permissions. Do not add a speculative
+              redaction registry without a named consumer and ruling.
+            </div>
+          </article>
+
+          <article class="finding p2" id="f09">
+            <div class="finding-head">
+              <span class="priority p2">P2</span>
+              <h3>No-overwrite safety flags use check-then-write operations</h3>
+              <span class="status mixed">Concurrency defect</span>
+            </div>
+            <p>
+              <code>WriteTool(create_only=True)</code> checks
+              <code>path.exists()</code> and later calls <code>write_bytes()</code>. A
+              concurrent creator between those operations is overwritten, contradicting
+              the promised refusal. <code>MoveTool(overwrite=False)</code> has the same
+              check-then-move race, with platform-dependent rename behavior.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/tools/write.py#L97">write.py:97–110</a>;
+              <a href="../../src/vibrantine/tools/move.py#L110">move.py:110–139</a>.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> implement create-only writes with an atomic
+              exclusive create (<code>xb</code> / equivalent). Define and test a
+              cross-platform atomic or explicitly best-effort no-overwrite strategy for
+              moves. Include a race test where practical.
+            </div>
+          </article>
+
+          <article class="finding p3" id="f10">
+            <div class="finding-head">
+              <span class="priority p3">P3</span>
+              <h3>TextPart, ImagePart, and AudioPart discriminator fields lack descriptions</h3>
+              <span class="status info">Confirmed drift</span>
+            </div>
+            <p>
+              Runtime introspection found exactly three fields without descriptions: the
+              <code>type</code> Literal on each public content-part model. All other fields
+              across 81 imported Pydantic model classes were described, and no model
+              exceeded the 20-field limit.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/contract.py#L295">contract.py:295–334</a>.
+              This conflicts with the explicit “every Field has a populated description”
+              discipline.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> declare each discriminator with
+              <code>Field(default=..., description=...)</code> and add a package-schema
+              introspection test so direct subclasses receive the same protection the
+              factory gives consumer models.
+            </div>
+          </article>
+
+          <article class="finding p3" id="f11">
+            <div class="finding-head">
+              <span class="priority p3">P3</span>
+              <h3>CI does not build the artifact or lock coverage; the manual checklist has drifted</h3>
+              <span class="status info">Governance gap</span>
+            </div>
+            <p>
+              CI runs the right core matrix—lint, format, strict types, and tests on two
+              operating systems and two Python versions—but does not use a locked sync,
+              build the wheel, inspect package contents, smoke-install it, or enforce
+              coverage. Those checks exist only in a manual release checklist last passed
+              before the current MCP work.
+            </p>
+            <p>
+              The checklist still records 393 passed / 7 skipped and a 36-name surface;
+              this review observed 540 / 8 and 35 frozen exports. Its date makes the old
+              facts honest historical evidence, but not current release evidence.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../.github/workflows/ci.yml#L40">ci.yml:40–52</a>;
+              <a href="../pre-release-checklist.md#validation-gates">pre-release checklist,
+              Validation Gates</a>.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> use <code>uv sync --locked --extra mcp</code>
+              in CI and add one package job that builds and isolated-smoke-installs the
+              wheel. Consider a source-only branch coverage floor after excluding live
+              examples. Refresh the checklist only at a real release pass.
+            </div>
+          </article>
+
+          <article class="finding p3" id="f12">
+            <div class="finding-head">
+              <span class="priority p3">P3</span>
+              <h3>Model is frozen, but its params mapping is mutable after validation</h3>
+              <span class="status info">Consistency risk</span>
+            </div>
+            <p>
+              <code>Model</code> is a frozen dataclass and is described as the one stable
+              definition of a model profile. Its <code>params</code> value is the caller’s
+              original mutable dictionary. It can change between calls—or after catalog
+              validation—and can even gain a framework-owned key that the initial catalog
+              check had refused.
+            </p>
+            <div class="evidence">
+              <strong>Evidence:</strong>
+              <a href="../../src/vibrantine/models.py#L45">models.py:45–76</a>;
+              <a href="../../src/vibrantine/llm_tools.py#L284">llm_tools.py:284–295</a>
+              spreads the live mapping into each provider call.
+            </div>
+            <div class="recommendation">
+              <strong>Recommendation:</strong> take an immutable defensive snapshot at
+              construction or catalog build (including nested values as far as supported),
+              then test that later caller mutation cannot alter a running profile.
+            </div>
+          </article>
+        </section>
+
+        <section id="confirmed" aria-labelledby="confirmed-title">
+          <h2 id="confirmed-title">5. Confirmed strengths and promises that hold</h2>
+          <p class="section-lede">
+            A useful review says what can be trusted now, not only what is wrong.
+          </p>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>Boundary and architecture</h3>
+              <ul>
+                <li>One sanctioned interior hook remains <code>_run</code>.</li>
+                <li><code>run_commission</code> and <code>dispatch</code> enforce entry/inside-run roles.</li>
+                <li>Nested runs and hand-built contexts are refused.</li>
+                <li>Run IDs and parent IDs are threaded through one dispatch seam.</li>
+                <li>MCP adapters do not grow <code>CallContext</code> or the top-level API.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Errors and control</h3>
+              <ul>
+                <li>Ordinary exceptions from custom <code>_run</code> methods become failure values.</li>
+                <li>Task cancellation deliberately propagates as <code>CancelledError</code>.</li>
+                <li>Call, time, and spend fuses share a run-wide breaker.</li>
+                <li>New dispatches and provider calls are refused after a halt.</li>
+                <li>Run-level and node-level budget vocabulary is kept distinct.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Cost, provenance, and records</h3>
+              <ul>
+                <li>Provider pricing has one formula and current default facts.</li>
+                <li>Paid calls without usage fail when accounting is armed.</li>
+                <li>Provider and dispatch logs are copied before live callbacks see them.</li>
+                <li>Persistence failures do not normally destroy work results.</li>
+                <li>Filesystem run IDs are path-contained; SQLite uses bound parameters.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Public and schema surfaces</h3>
+              <ul>
+                <li>Closed vocabularies and public signatures are exact-lock tested.</li>
+                <li>Generic parameters are checked against identity ClassVars.</li>
+                <li>The factory rejects missing/blank nested field descriptions.</li>
+                <li>Strict type checking is clean with no ignored production diagnostics.</li>
+                <li>Tool descriptions generally follow the LLM-facing selection pattern.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Tools and adapters</h3>
+              <ul>
+                <li>Tools consistently require explicit absolute filesystem paths.</li>
+                <li>Growing results usually expose totals and visible truncation.</li>
+                <li>Fetch classifies retryability by HTTP outcome.</li>
+                <li>MCP requests/results and adapter diagnostics are byte-bounded.</li>
+                <li>MCP transport/decoder exceptions do not expose internal exception text.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Delivery quality</h3>
+              <ul>
+                <li>The source-layout package imports only through installation.</li>
+                <li>The wheel excludes tests and includes required prompt assets.</li>
+                <li>An isolated install imports the full public surface.</li>
+                <li>CI covers Windows/Linux and the Python floor/latest tested line.</li>
+                <li>Current docs are internally link-clean and the worktree began clean.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="roadmap" aria-labelledby="roadmap-title">
+          <h2 id="roadmap-title">6. Recommended remediation order</h2>
+          <p class="section-lede">
+            Sequence changes by dependency: make the receipt trustworthy first, then
+            harden the operations that produce it, then automate regression proof.
+          </p>
+          <div class="roadmap">
+            <div class="phase">
+              <h3>Close the receipt boundary</h3>
+              <p>Fix F-01 and F-02 together. Enforce status/output/error and finite non-negative cost/token invariants. Add direct, dispatch, persistence, parent-render, and MCP tests.</p>
+            </div>
+            <div class="phase">
+              <h3>Make observation non-interfering</h3>
+              <p>Fix F-04 with one private callback-delivery helper and fault-injection tests for every progress emission site.</p>
+            </div>
+            <div class="phase">
+              <h3>Restore bounded, resumable tool semantics</h3>
+              <p>Fix F-03 and F-05, then address the acquisition risks in F-07. Start with Grep because its advertised bound is currently false.</p>
+            </div>
+            <div class="phase">
+              <h3>Harden authoring and destructive semantics</h3>
+              <p>Fix F-06 and F-09 without expanding the public surface: validate earlier and use atomic filesystem primitives.</p>
+            </div>
+            <div class="phase">
+              <h3>Set the privacy contract</h3>
+              <p>Resolve F-08 through an explicit ruling or documentation convention before adding machinery. Test whatever policy is chosen against both records and traces.</p>
+            </div>
+            <div class="phase">
+              <h3>Lock in the gains</h3>
+              <p>Close F-10–F-12, add package/build gates, refresh release evidence, and rerun live integrations/evals with an explicit spend authorization.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="limitations" aria-labelledby="limitations-title">
+          <h2 id="limitations-title">7. Limitations and confidence</h2>
+          <p class="section-lede">
+            This is a comprehensive repository review, not a claim that every runtime
+            environment or model behavior was exercised.
+          </p>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>Not exercised</h3>
+              <ul>
+                <li>Paid OpenRouter integration calls and three live-model efficacy evals.</li>
+                <li>The live DeepWiki MCP integration.</li>
+                <li>Remote GitHub Actions execution; only its configuration was inspected.</li>
+                <li>The external Base Coder consumer repository.</li>
+                <li>A current OSV/pip-audit vulnerability advisory scan.</li>
+                <li>High-volume performance, memory, and provider-rate benchmarks.</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Confidence</h3>
+              <ul>
+                <li><strong>High</strong> for F-01, F-02, F-03, F-04, F-05, F-09, and F-10: direct construction or code path proves the issue.</li>
+                <li><strong>High</strong> for package, lint, type, test, lock, link, and default-model confirmations.</li>
+                <li><strong>Medium-high</strong> for F-06–F-08, F-11, and F-12: behavior is clear, while the best policy/fix needs project judgment.</li>
+                <li><strong>Not assessed</strong> for live answer quality; passing contract tests do not substitute for evals.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout warning">
+            <strong>Release decision:</strong> continuing development on the current
+            pre-1.0 branch is reasonable. A tagged release that emphasizes a trustworthy
+            contract should wait for F-01 through F-04. The remaining P2/P3 work can be
+            sequenced, provided limitations are documented and the false boundedness
+            claim in Grep is not shipped unchanged.
+          </div>
+        </section>
+
+        <footer>
+          Prepared from repository state <code>d5a9823</code> on 25 July 2026.
+          No production code was changed by this review.
+        </footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,6 +7,9 @@ and trust level of the data it produces (`Provenance`, `Claim`), the cost
 it incurred (`CostMetrics`), and its failure modes (`ErrorState`).
 """
 
+import logging
+import math
+import re
 from abc import ABC
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -19,18 +22,21 @@ from typing import (
     Final,
     Literal,
     Protocol,
+    Self,
     cast,
     get_args,
     get_origin,
     runtime_checkable,
 )
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from vibrantine.models import Model, UnknownModelError
 
 if TYPE_CHECKING:
     from vibrantine._gatekeeper import Gatekeeper
+
+logger = logging.getLogger(__name__)
 
 
 class _Unset(Enum):
@@ -44,6 +50,15 @@ class _Unset(Enum):
 
 
 _UNSET: Final = _Unset.UNSET
+_TOOL_NAME_PATTERN: Final = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _validate_optional_positive_cap(name: str, value: int | None) -> None:
+    if value is None:
+        return
+    if type(value) is not int or value <= 0:
+        raise ValueError(f"{name} must be a positive integer or None.")
+
 
 # Shared enum vocabulary --------------------------------------------------
 
@@ -94,14 +109,20 @@ class CostMetrics(BaseModel):
     call); 0 means an LLM run counted nothing.
     """
 
-    estimated_usd: float = Field(description="Estimated cost of this call, in USD.")
+    estimated_usd: float = Field(
+        description="Estimated cost of this call, in USD.",
+        ge=0.0,
+        allow_inf_nan=False,
+    )
     in_tokens: int | None = Field(
         default=None,
         description="Input tokens across this call's own LLM turns. None if no LLM turn ran.",
+        ge=0,
     )
     out_tokens: int | None = Field(
         default=None,
         description="Output tokens across this call's own LLM turns. None if no LLM turn ran.",
+        ge=0,
     )
 
 
@@ -162,6 +183,25 @@ class CommissionResult[OutputT](BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _enforce_population(self) -> Self:
+        _validate_result_population(self)
+        return self
+
+
+def _validate_result_population(result: CommissionResult[Any]) -> None:
+    """Keep status, output, and error in the one ruled envelope shape."""
+    if result.status == "success":
+        if result.output is None or result.error is not None:
+            raise ValueError("success results require output and forbid error")
+        return
+    if result.status == "failure":
+        if result.output is not None or result.error is None:
+            raise ValueError("failure results require error and forbid output")
+        return
+    if result.output is None or result.error is None:
+        raise ValueError("partial results require both output and error")
+
 
 # Capabilities, cancellation, progress ------------------------------------
 
@@ -207,6 +247,23 @@ class ProgressEvent(BaseModel):
     commission_name: str = Field(description="Name of the Commission emitting this event.")
     phase: str = Field(description="Short label for the phase being entered.")
     detail: str | None = Field(default=None, description="Optional extra context.")
+
+
+def _deliver_progress(
+    callback: Callable[[ProgressEvent], None] | None,
+    event: ProgressEvent,
+) -> None:
+    """Deliver observation without letting observer failure affect work."""
+    if callback is None:
+        return
+    try:
+        callback(event.model_copy(deep=True))
+    except Exception as exc:
+        logger.warning(
+            "on_progress callback raised %s (ignored): %s",
+            type(exc).__name__,
+            exc,
+        )
 
 
 # Persistence -------------------------------------------------------------
@@ -295,7 +352,7 @@ class CallContext:
 class TextPart(BaseModel):
     """A text span in a Commission's opening user message."""
 
-    type: Literal["text"] = "text"
+    type: Literal["text"] = Field(default="text", description="Text-part discriminator.")
     text: str = Field(description="The text content.")
 
 
@@ -314,7 +371,7 @@ class ImagePart(BaseModel):
     already return existing parts.
     """
 
-    type: Literal["image"] = "image"
+    type: Literal["image"] = Field(default="image", description="Image-part discriminator.")
     image_url: str = Field(
         description="Image location: an http(s) URL or a data: URI.",
     )
@@ -328,7 +385,7 @@ class AudioPart(BaseModel):
     and stay open until enough consumers have confirmed the shape.
     """
 
-    type: Literal["audio"] = "audio"
+    type: Literal["audio"] = Field(default="audio", description="Audio-part discriminator.")
     data: str = Field(description="Base64-encoded audio bytes.")
     format: Literal["wav", "mp3"] = Field(
         description="Audio encoding; the formats the provider shape accepts.",
@@ -418,8 +475,10 @@ class Commission[InputT, OutputT](ABC):
         than at first run, part of making the contract safe to author
         against (including by non-devs and lesser-model agents):
 
-        1. The four identity ClassVars are set (the check follows the MRO, so
-           a subclass inheriting them from a parent passes).
+        1. The four identity ClassVars are set and valid (the check follows
+           the MRO, so a subclass inheriting them from a parent passes):
+           provider-safe non-empty name, non-empty description, and Pydantic
+           input/output model types.
         2. The generic parameters agree with the identity ClassVars. Both
            state the I/O contract: type checkers reason from
            `Commission[InputT, OutputT]`, the runtime reads the ClassVars.
@@ -445,6 +504,22 @@ class Commission[InputT, OutputT](ABC):
                 f"attribute(s): {', '.join(missing)}. A Commission declares "
                 f"name, description, input_type, and output_type."
             )
+        name = cls.name
+        if type(name) is not str or _TOOL_NAME_PATTERN.fullmatch(name) is None:
+            raise TypeError(
+                f"{cls.__name__}.name must be 1-64 characters using only "
+                "letters, numbers, underscores, or hyphens so providers can expose it as a tool."
+            )
+        description = cls.description
+        if type(description) is not str or not description.strip():
+            raise TypeError(f"{cls.__name__}.description must be a non-empty string.")
+        for attr in ("input_type", "output_type"):
+            declared = getattr(cls, attr)
+            if not isinstance(declared, type) or not issubclass(declared, BaseModel):
+                raise TypeError(
+                    f"{cls.__name__}.{attr} must be a Pydantic BaseModel subclass; "
+                    f"got {declared!r}."
+                )
         for base in getattr(cls, "__orig_bases__", ()):
             if get_origin(base) is not Commission:
                 continue
@@ -518,6 +593,44 @@ class Commission[InputT, OutputT](ABC):
             self.max_output_tokens = max_output_tokens
         if not isinstance(overflow_policy, _Unset):
             self.overflow_policy = overflow_policy
+        self._validate_configuration()
+
+    def _validate_configuration(self) -> None:
+        if type(self._max_iterations) is not int or self._max_iterations <= 0:
+            raise ValueError("max_iterations must be a positive integer.")
+        if (
+            type(self.target_input_fraction) not in (int, float)
+            or not math.isfinite(self.target_input_fraction)
+            or not 0 < self.target_input_fraction <= 1
+        ):
+            raise ValueError("target_input_fraction must be finite and greater than 0 through 1.")
+        if not isinstance(self._max_input_tokens_setting, _Unset):
+            _validate_optional_positive_cap(
+                "max_input_tokens",
+                self._max_input_tokens_setting,
+            )
+        _validate_optional_positive_cap("max_output_tokens", self.max_output_tokens)
+
+        names: set[str] = set()
+        provider_dispatches_toolbox = not any(
+            "_run" in klass.__dict__ for klass in type(self).__mro__ if klass is not Commission
+        )
+        for child in self.toolbox:
+            candidate = cast(Any, child)
+            if not isinstance(candidate, Commission):
+                raise TypeError(
+                    f"toolbox entries must be Commission instances; got {type(candidate).__name__}."
+                )
+            if not provider_dispatches_toolbox:
+                continue
+            if child.name == "conclude":
+                raise ValueError("toolbox name 'conclude' is reserved for the framework exit tool.")
+            if child.name in names:
+                raise ValueError(
+                    f"toolbox names {child.name!r} more than once; each child "
+                    "must have a unique provider tool name."
+                )
+            names.add(child.name)
 
     @property
     def max_input_tokens(self) -> int | None:
@@ -538,6 +651,7 @@ class Commission[InputT, OutputT](ABC):
 
     @max_input_tokens.setter
     def max_input_tokens(self, value: int | None) -> None:
+        _validate_optional_positive_cap("max_input_tokens", value)
         self._max_input_tokens_setting = value
 
     def build_user_message(
@@ -778,8 +892,10 @@ class Commission[InputT, OutputT](ABC):
 
     def _emit(self, ctx: CallContext, phase: str, detail: str | None = None) -> None:
         """Emit an observability event; no-op without a callback."""
-        if ctx.on_progress is not None:
-            ctx.on_progress(ProgressEvent(commission_name=self.name, phase=phase, detail=detail))
+        _deliver_progress(
+            ctx.on_progress,
+            ProgressEvent(commission_name=self.name, phase=phase, detail=detail),
+        )
 
     def fits(self, estimated_tokens: int) -> bool:
         """Whether an input of the given token count would pass the size gate.

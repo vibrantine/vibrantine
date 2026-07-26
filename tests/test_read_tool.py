@@ -120,20 +120,35 @@ async def test_read_offset_past_end_returns_empty_slice(tmp_path: Path) -> None:
     assert result.output.truncated is False
 
 
-async def test_read_oversized_line_is_truncated_with_marker(tmp_path: Path) -> None:
+async def test_read_oversized_line_returns_exact_continuation(tmp_path: Path) -> None:
     long_line = "x" * 35_000 + "\n"
     path = _make_file(tmp_path, "long.txt", "short\n" + long_line + "trailer\n")
 
-    result = await run_commission(ReadTool(), ReadInput(path=path))
+    first = await run_commission(ReadTool(), ReadInput(path=path))
 
-    assert result.status == "success"
-    assert result.output is not None
-    assert "short\n" in result.output.content
-    assert "trailer\n" in result.output.content
-    assert "…[truncated]" in result.output.content
-    # The truncated line is at most ~30k chars long + marker; full 35k must
-    # not survive.
-    assert "x" * 35_000 not in result.output.content
+    assert first.status == "success"
+    assert first.output is not None
+    assert first.output.content == "short\n" + ("x" * 30_000)
+    assert first.output.truncated is True
+    assert first.output.total_lines == 3
+    assert first.output.next_offset == 1
+    assert first.output.next_char_offset == 30_000
+
+    second = await run_commission(
+        ReadTool(),
+        ReadInput(
+            path=path,
+            offset=first.output.next_offset,
+            char_offset=first.output.next_char_offset,
+        ),
+    )
+
+    assert second.status == "success"
+    assert second.output is not None
+    assert second.output.content == ("x" * 5_000) + "\ntrailer\n"
+    assert second.output.truncated is False
+    assert second.output.next_offset is None
+    assert second.output.next_char_offset is None
 
 
 async def test_read_relative_path_returns_validation(tmp_path: Path) -> None:

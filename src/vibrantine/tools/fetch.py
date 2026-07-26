@@ -6,6 +6,7 @@ than a smaller success (unlike ShellTool, whose deliverable *is* the
 exchange report); the error kind carries the caller's retry signal.
 """
 
+import codecs
 from typing import ClassVar
 from urllib.parse import urlparse
 
@@ -136,14 +137,41 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
             )
 
         try:
-            async with httpx.AsyncClient(
-                transport=self._transport,
-                timeout=input.timeout_seconds,
-                # httpx does not follow redirects by default; without this a
-                # 301 would sail through as "success" with a useless body.
-                follow_redirects=True,
-            ) as client:
-                response = await client.get(input.url, headers=input.headers)
+            async with (
+                httpx.AsyncClient(
+                    transport=self._transport,
+                    timeout=input.timeout_seconds,
+                    # httpx does not follow redirects by default; without this a
+                    # 301 would sail through as "success" with a useless body.
+                    follow_redirects=True,
+                ) as client,
+                client.stream("GET", input.url, headers=input.headers) as response,
+            ):
+                # Anything non-2xx fails; redirects are followed above, so a
+                # 3xx here did not resolve to a final document.
+                if not response.is_success:
+                    status = response.status_code
+                    kind: ErrorKind
+                    if status == 429:
+                        kind, retryable = "rate_limit", True
+                    elif status >= 500:
+                        kind, retryable = "internal", True
+                    else:
+                        kind, retryable = "validation", False
+                    return failure(
+                        kind,
+                        f"HTTP {status} from {input.url}.",
+                        retryable=retryable,
+                        provenance=prov,
+                    )
+
+                content, total_chars = await _bounded_body_slice(
+                    response,
+                    offset=input.offset,
+                    max_chars=input.max_chars,
+                )
+                status_code = response.status_code
+                content_type = response.headers.get("content-type")
         except httpx.TimeoutException:
             return failure(
                 "timeout",
@@ -168,43 +196,55 @@ class FetchTool(Commission[FetchInput, FetchOutput]):
                 provenance=prov,
             )
 
-        # Anything non-2xx fails; the description promises "only 2xx
-        # responses populate output". Redirects are followed above, so a
-        # 3xx here means redirection didn't resolve to a final document.
-        # The kind is the caller's retry signal: 429 is the vocabulary's
-        # own rate_limit; 5xx is the server malfunctioning, so retrying may
-        # succeed; any other non-2xx means the URL as given yields no
-        # document (ReadTool's missing file is the filesystem analog).
-        if not response.is_success:
-            status = response.status_code
-            kind: ErrorKind
-            if status == 429:
-                kind, retryable = "rate_limit", True
-            elif status >= 500:
-                kind, retryable = "internal", True
-            else:
-                kind, retryable = "validation", False
-            return failure(
-                kind,
-                f"HTTP {status} from {input.url}.",
-                retryable=retryable,
-                provenance=prov,
-            )
-
-        body = response.text
-        total_chars = len(body)
-        sliced = body[input.offset : input.offset + input.max_chars]
-        truncated = (input.offset + len(sliced)) < total_chars
+        truncated = (input.offset + len(content)) < total_chars
 
         return CommissionResult[FetchOutput](
             status="success",
             output=FetchOutput(
-                content=sliced,
-                status_code=response.status_code,
-                content_type=response.headers.get("content-type"),
+                content=content,
+                status_code=status_code,
+                content_type=content_type,
                 truncated=truncated,
                 total_chars=total_chars,
             ),
             provenance=prov,
             cost=ZERO_COST,
         )
+
+
+async def _bounded_body_slice(
+    response: httpx.Response,
+    *,
+    offset: int,
+    max_chars: int,
+) -> tuple[str, int]:
+    """Drain and count a decoded response while retaining one bounded slice."""
+    decoder_type = codecs.getincrementaldecoder(response.encoding or "utf-8")
+    decoder = decoder_type(errors="replace")
+    kept: list[str] = []
+    total = 0
+
+    async for chunk in response.aiter_bytes(chunk_size=8_192):
+        text = decoder.decode(chunk)
+        _append_overlap(kept, text, total=total, offset=offset, max_chars=max_chars)
+        total += len(text)
+
+    tail = decoder.decode(b"", final=True)
+    _append_overlap(kept, tail, total=total, offset=offset, max_chars=max_chars)
+    total += len(tail)
+    return "".join(kept), total
+
+
+def _append_overlap(
+    kept: list[str],
+    text: str,
+    *,
+    total: int,
+    offset: int,
+    max_chars: int,
+) -> None:
+    """Append only the part of `text` intersecting the requested body slice."""
+    start = max(0, offset - total)
+    stop = min(len(text), offset + max_chars - total)
+    if start < stop:
+        kept.append(text[start:stop])

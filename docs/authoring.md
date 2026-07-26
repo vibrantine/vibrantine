@@ -1311,7 +1311,7 @@ the model fills them from the generated schema):
 
 | Tool | Input model | Required fields | Optional fields |
 |---|---|---|---|
-| `ReadTool` | `ReadInput` | `path` | `offset`, `limit` |
+| `ReadTool` | `ReadInput` | `path` | `offset`, `char_offset`, `limit` |
 | `WriteTool` | `WriteInput` | `path`, `content` | `create_only` |
 | `EditTool` | `EditInput` | `path`, `old_string`, `new_string` | `replace_all` |
 | `DeleteTool` | `DeleteInput` | `path` | (none) |
@@ -1583,6 +1583,16 @@ written as a selection prompt.
   any SQL tool and ask directly.
 - `PersistedRecord` carries input, full result, a ctx snapshot, and an
   optional LLM trace.
+- **Treat every backend as a trusted full-fidelity diagnostic sink.** Records
+  are not redacted: inputs, outputs, errors, URLs, and raw LLM traces may
+  contain credentials or other sensitive data. For example, a Fetch call's
+  `Authorization` header can appear both in the child input and in its
+  parent's tool-call trace. Pydantic secret display and `record="dev"` or
+  `"on_failure"` are not sanitization policies. The application owns backend
+  access control, encryption, filesystem/database permissions, retention,
+  and backups. If stored records must be sanitized, supply a backend whose
+  `store` implementation performs that application-specific transformation
+  and accept the corresponding loss of forensic fidelity.
 - Modes: `off` / `on_failure` / `dev` / `always`. Wire a backend via
   `run_commission(..., backend=...)`; children inherit it automatically.
 - A wired backend records everything by default: silence on `record=`

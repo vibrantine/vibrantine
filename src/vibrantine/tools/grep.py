@@ -20,7 +20,7 @@ import os
 import re
 from collections.abc import Iterator
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel, Field
 
@@ -29,9 +29,17 @@ from vibrantine.tools._helpers import (
     ZERO_COST,
     ReadFailure,
     failure,
+    iter_text_segments,
     provenance,
-    read_text_utf8,
 )
+
+_MAX_LINE_PREVIEW_CHARS = 2_000
+_STREAM_SEGMENT_CHARS = 8_192
+_MAX_REGEX_OVERLAP_CHARS = 30_000
+
+
+class _ParsedPattern(Protocol):
+    def getwidth(self) -> tuple[int, int]: ...
 
 
 class GrepMatch(BaseModel):
@@ -39,7 +47,14 @@ class GrepMatch(BaseModel):
 
     path: Path = Field(description="Absolute path of the file containing the match.")
     line_number: int = Field(description="1-based line number of the match.")
-    line: str = Field(description="The matching line's full text, without trailing newline.")
+    line: str = Field(description="Bounded preview of the matching line, without its newline.")
+    line_chars: int = Field(description="Full matching-line length, excluding its newline.")
+    line_truncated: bool = Field(
+        description=(
+            "True when `line` is only a preview. Use Read with this `path`, "
+            "`offset=line_number-1`, and `char_offset=0` for complete content."
+        ),
+    )
 
 
 class GrepInput(BaseModel):
@@ -91,12 +106,20 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
         "  are walked recursively. Unreadable files (binary content,\n"
         "  permission denied) are skipped silently during directory walks.\n"
         "- `max_matches` (default 100) bounds output size. Check the\n"
-        "  `truncated` flag: if true, narrow your pattern or raise the cap\n"
-        "  (mind the context budget).\n"
+        "  `truncated` flag: if true, narrow your pattern or path.\n"
+        "- Each matching `line` is a bounded preview. If its\n"
+        "  `line_truncated` is true, call Read with the match's `path`,\n"
+        "  `offset=line_number-1`, and `char_offset=0` to retrieve the full\n"
+        "  line through Read's continuation fields.\n"
+        "- Lines over 30,000 characters require a finite-width pattern\n"
+        "  without anchors, lookarounds, backreferences, or unbounded\n"
+        "  repeats. Other patterns fail validation on such a line rather\n"
+        "  than risking an incorrect streaming match; narrow the pattern or\n"
+        "  use Shell with a suitable search program.\n"
         "- Set `ignore_case=true` for case-insensitive matching.\n"
         "\n"
-        "Returns `matches` (list of `path`, `line_number`, `line`) and\n"
-        "`truncated`."
+        "Returns `matches` (path, line number, preview, full character count,\n"
+        "and preview-truncation flag) plus global `truncated`."
     )
     input_type: ClassVar[type] = GrepInput
     output_type: ClassVar[type] = GrepOutput
@@ -159,10 +182,12 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
                     retryable=False,
                     provenance=prov,
                 )
+            remaining = input.max_matches - len(matches)
             file_matches, file_err = _grep_file(
                 file,
                 compiled,
                 input.path.is_file(),
+                max_matches=remaining + 1,
             )
             if file_err is not None:
                 return failure(
@@ -171,11 +196,9 @@ class GrepTool(Commission[GrepInput, GrepOutput]):
                     retryable=False,
                     provenance=prov,
                 )
-            for m in file_matches:
-                if len(matches) >= input.max_matches:
-                    truncated = True
-                    break
-                matches.append(m)
+            matches.extend(file_matches[:remaining])
+            if len(file_matches) > remaining:
+                truncated = True
             if truncated:
                 break
 
@@ -210,6 +233,8 @@ def _grep_file(
     file: Path,
     pattern: re.Pattern[str],
     surface_read_errors: bool,
+    *,
+    max_matches: int = 100,
 ) -> tuple[list[GrepMatch], tuple[ErrorKind, str] | None]:
     """Search one file. Returns (matches, error-tuple).
 
@@ -218,8 +243,58 @@ def _grep_file(
     case) skips the unreadable file silently, so one bad entry never
     aborts the rest of the walk.
     """
+    matches: list[GrepMatch] = []
+    preview_parts: list[str] = []
+    line_chars = 0
+    search_tail = ""
+    line_matched = False
+    current_line = 0
+    overlap = _streaming_overlap(pattern)
+
     try:
-        text = read_text_utf8(file)
+        for line, _, segment, line_complete in iter_text_segments(
+            file,
+            segment_chars=_STREAM_SEGMENT_CHARS,
+        ):
+            current_line = line
+            content = _without_line_ending(segment) if line_complete else segment
+            line_chars += len(content)
+            if line_chars > _MAX_REGEX_OVERLAP_CHARS and overlap is None:
+                return [], (
+                    "validation",
+                    f"Pattern {pattern.pattern!r} cannot be evaluated soundly "
+                    f"with bounded memory on {file!s} line {line + 1}; lines "
+                    "over 30,000 characters require a finite-width pattern "
+                    "without anchors, lookarounds, backreferences, or "
+                    "unbounded repeats.",
+                )
+            preview_remaining = _MAX_LINE_PREVIEW_CHARS - sum(map(len, preview_parts))
+            if preview_remaining > 0:
+                preview_parts.append(content[:preview_remaining])
+
+            if not line_matched:
+                search_window = search_tail + content
+                line_matched = pattern.search(search_window) is not None
+                search_tail = search_window[-overlap:] if overlap else ""
+
+            if not line_complete:
+                continue
+            if line_matched:
+                matches.append(
+                    GrepMatch(
+                        path=file,
+                        line_number=line + 1,
+                        line="".join(preview_parts),
+                        line_chars=line_chars,
+                        line_truncated=line_chars > _MAX_LINE_PREVIEW_CHARS,
+                    )
+                )
+                if len(matches) >= max_matches:
+                    break
+            preview_parts = []
+            line_chars = 0
+            search_tail = ""
+            line_matched = False
     except ReadFailure as exc:
         # During a walk every unreadable entry (vanished mid-walk, permission
         # denied, binary content) is skipped so one bad file never aborts the
@@ -227,9 +302,42 @@ def _grep_file(
         if surface_read_errors:
             return [], (exc.kind, exc.detail)
         return [], None
-    matches = [
-        GrepMatch(path=file, line_number=i + 1, line=line)
-        for i, line in enumerate(text.splitlines())
-        if pattern.search(line)
-    ]
+    if line_chars > 0 and line_matched and len(matches) < max_matches:
+        matches.append(
+            GrepMatch(
+                path=file,
+                line_number=current_line + 1,
+                line="".join(preview_parts),
+                line_chars=line_chars,
+                line_truncated=line_chars > _MAX_LINE_PREVIEW_CHARS,
+            )
+        )
     return matches, None
+
+
+def _without_line_ending(segment: str) -> str:
+    if segment.endswith("\r\n"):
+        return segment[:-2]
+    if segment.endswith(("\r", "\n")):
+        return segment[:-1]
+    return segment
+
+
+def _streaming_overlap(pattern: re.Pattern[str]) -> int | None:
+    """Overlap for exact chunked matching, or None for unsafe long lines."""
+    text = pattern.pattern
+    unsafe_fragments = ("^", "$", "*", "+", "{", "(?", r"\A", r"\Z", r"\b", r"\B", r"\1")
+    if any(fragment in text for fragment in unsafe_fragments):
+        return None
+    parser: Any = re.__dict__["_parser"]
+    parsed = cast(
+        _ParsedPattern,
+        parser.parse(
+            text,
+            pattern.flags,
+        ),
+    )
+    _, max_width = parsed.getwidth()
+    if max_width > _MAX_REGEX_OVERLAP_CHARS:
+        return None
+    return max(0, max_width - 1)

@@ -1,6 +1,10 @@
 """Tests for the Move tool."""
 
+import errno
+import os
 from pathlib import Path
+
+import pytest
 
 from vibrantine import run_commission
 from vibrantine.testing import AlwaysCancelled
@@ -76,6 +80,48 @@ async def test_move_existing_target_with_overwrite_succeeds(tmp_path: Path) -> N
     assert result.status == "success"
     assert not src.exists()
     assert dst.read_text(encoding="utf-8") == "new"
+
+
+async def test_move_without_overwrite_loses_atomic_race_without_data_loss(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    src = _make(tmp_path / "src.txt", "source")
+    dst = tmp_path / "dst.txt"
+
+    def racing_link(source: os.PathLike[str], target: os.PathLike[str]) -> None:
+        Path(target).write_text("competitor", encoding="utf-8")
+        raise FileExistsError
+
+    monkeypatch.setattr(os, "link", racing_link)
+    result = await run_commission(MoveTool(), MoveInput(source=src, target=dst))
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert src.read_text(encoding="utf-8") == "source"
+    assert dst.read_text(encoding="utf-8") == "competitor"
+
+
+async def test_move_without_overwrite_fails_closed_when_atomic_claim_is_unsupported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    src = _make(tmp_path / "src.txt", "source")
+    dst = tmp_path / "dst.txt"
+
+    def cross_filesystem_link(source: os.PathLike[str], target: os.PathLike[str]) -> None:
+        raise OSError(errno.EXDEV, "cross-device link")
+
+    monkeypatch.setattr(os, "link", cross_filesystem_link)
+    result = await run_commission(MoveTool(), MoveInput(source=src, target=dst))
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "internal"
+    assert "unsupported" in result.error.detail
+    assert src.read_text(encoding="utf-8") == "source"
+    assert not dst.exists()
 
 
 async def test_move_onto_directory_attests_actual_destination(tmp_path: Path) -> None:

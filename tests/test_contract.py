@@ -12,10 +12,10 @@ policies in different environments.
 """
 
 from datetime import UTC, datetime
-from typing import Any, ClassVar, get_args
+from typing import Any, ClassVar, cast, get_args
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from vibrantine.contract import (
     CallContext,
@@ -26,6 +26,7 @@ from vibrantine.contract import (
     ConfidenceLevel,
     CostMetrics,
     ErrorKind,
+    ErrorState,
     OverflowPolicy,
     PersistenceMode,
     Provenance,
@@ -76,6 +77,83 @@ def test_overflow_policy_literals_match_documented_ssot() -> None:
         "partial",
         "flag",
     }
+
+
+# Receipt invariants -----------------------------------------------------
+
+
+class _ReceiptOutput(BaseModel):
+    answer: str = Field(default="ok", description="Receipt test answer.")
+
+
+def _receipt_fields() -> dict[str, object]:
+    return {
+        "provenance": Provenance(
+            source="receipt-test",
+            fetched_at=datetime.now(UTC),
+            confidence="grounded",
+        ),
+        "cost": CostMetrics(estimated_usd=0.0),
+    }
+
+
+@pytest.mark.parametrize(
+    ("status", "output", "error", "message"),
+    [
+        ("success", None, None, "success results require output and forbid error"),
+        (
+            "success",
+            _ReceiptOutput(),
+            ErrorState(kind="internal", detail="contradiction", retryable=False),
+            "success results require output and forbid error",
+        ),
+        (
+            "failure",
+            _ReceiptOutput(),
+            None,
+            "failure results require error and forbid output",
+        ),
+        ("failure", None, None, "failure results require error and forbid output"),
+        ("partial", _ReceiptOutput(), None, "partial results require both output and error"),
+        (
+            "partial",
+            None,
+            ErrorState(kind="internal", detail="missing output", retryable=False),
+            "partial results require both output and error",
+        ),
+    ],
+)
+def test_result_population_invariants_reject_malformed_receipts(
+    status: CommissionStatus,
+    output: _ReceiptOutput | None,
+    error: ErrorState | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        CommissionResult[_ReceiptOutput](
+            status=status,
+            output=output,
+            error=error,
+            **_receipt_fields(),  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("estimated_usd", -1.0),
+        ("estimated_usd", float("nan")),
+        ("estimated_usd", float("inf")),
+        ("estimated_usd", float("-inf")),
+        ("in_tokens", -1),
+        ("out_tokens", -1),
+    ],
+)
+def test_cost_metrics_reject_invalid_accounting_values(field: str, value: float | int) -> None:
+    values: dict[str, float | int] = {"estimated_usd": 0.0}
+    values[field] = value
+    with pytest.raises(ValidationError):
+        CostMetrics(**values)  # type: ignore[arg-type]
 
 
 # Policy override surface ------------------------------------------------
@@ -389,11 +467,125 @@ def test_missing_identity_classvars_are_reported() -> None:
             output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
 
 
+@pytest.mark.parametrize("name", ["", " ", "invalid tool name", "x" * 65])
+def test_invalid_provider_tool_name_fails_at_class_definition(name: str) -> None:
+    invalid_name = name
+    with pytest.raises(TypeError, match="1-64 characters"):
+
+        class _InvalidName(  # pyright: ignore[reportUnusedClass]
+            Commission[_PolicyProbeInput, _PolicyProbeOutput]
+        ):
+            name: ClassVar[str] = invalid_name
+            description: ClassVar[str] = "Probe with an invalid provider tool name."
+            input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
+            output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+            async def _run(
+                self,
+                input: _PolicyProbeInput,
+                ctx: CallContext,
+            ) -> CommissionResult[_PolicyProbeOutput]:
+                return _success_result_for_definition_tests()
+
+
+def test_empty_description_fails_at_class_definition() -> None:
+    with pytest.raises(TypeError, match="description must be a non-empty string"):
+
+        class _EmptyDescription(  # pyright: ignore[reportUnusedClass]
+            Commission[_PolicyProbeInput, _PolicyProbeOutput]
+        ):
+            name: ClassVar[str] = "empty_description"
+            description: ClassVar[str] = " "
+            input_type: ClassVar[type[BaseModel]] = _PolicyProbeInput
+            output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+            async def _run(
+                self,
+                input: _PolicyProbeInput,
+                ctx: CallContext,
+            ) -> CommissionResult[_PolicyProbeOutput]:
+                return _success_result_for_definition_tests()
+
+
+def test_non_pydantic_identity_type_fails_at_class_definition() -> None:
+    with pytest.raises(TypeError, match="input_type must be a Pydantic BaseModel subclass"):
+
+        class _NonPydantic(  # pyright: ignore[reportUnusedClass]
+            Commission[Any, _PolicyProbeOutput]
+        ):
+            name: ClassVar[str] = "non_pydantic"
+            description: ClassVar[str] = "Probe with a non-Pydantic input."
+            input_type: ClassVar[type[BaseModel]] = cast(Any, int)
+            output_type: ClassVar[type[BaseModel]] = _PolicyProbeOutput
+
+            async def _run(
+                self,
+                input: Any,
+                ctx: CallContext,
+            ) -> CommissionResult[_PolicyProbeOutput]:
+                return _success_result_for_definition_tests()
+
+
 def test_subclass_inherits_required_classvars() -> None:
     # _CappedProbe inherits all four from _PolicyProbe and is defined at
     # import without error; inheritance satisfies the definition-time check.
     assert _CappedProbe.name == "policy_probe"
     assert _CappedProbe.output_type is _PolicyProbeOutput
+
+
+def _success_result_for_definition_tests() -> CommissionResult[_PolicyProbeOutput]:
+    return CommissionResult[_PolicyProbeOutput](
+        status="success",
+        output=_PolicyProbeOutput(),
+        provenance=Provenance(
+            source="definition-test",
+            fetched_at=datetime.now(UTC),
+            confidence="grounded",
+        ),
+        cost=CostMetrics(estimated_usd=0.0),
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"max_iterations": 0}, "max_iterations must be a positive integer"),
+        ({"max_iterations": -1}, "max_iterations must be a positive integer"),
+        ({"max_input_tokens": 0}, "max_input_tokens must be a positive integer or None"),
+        ({"max_output_tokens": -1}, "max_output_tokens must be a positive integer or None"),
+        (
+            {"target_input_fraction": 0.0},
+            "target_input_fraction must be finite and greater than 0 through 1",
+        ),
+        (
+            {"target_input_fraction": 1.01},
+            "target_input_fraction must be finite and greater than 0 through 1",
+        ),
+        (
+            {"target_input_fraction": float("nan")},
+            "target_input_fraction must be finite and greater than 0 through 1",
+        ),
+    ],
+)
+def test_invalid_numeric_policy_fails_at_construction(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _PolicyProbe(**kwargs)  # type: ignore[arg-type]
+
+
+def test_duplicate_toolbox_names_fail_at_construction() -> None:
+    with pytest.raises(ValueError, match="toolbox names 'policy_probe' more than once"):
+        _BasicProbe(toolbox=(_PolicyProbe(), _PolicyProbe()))
+
+
+def test_reserved_conclude_toolbox_name_fails_at_construction() -> None:
+    class _ConcludeProbe(_PolicyProbe):
+        name: ClassVar[str] = "conclude"
+
+    with pytest.raises(ValueError, match="'conclude' is reserved"):
+        _BasicProbe(toolbox=(_ConcludeProbe(),))
 
 
 def test_overriding_neither_build_nor_run_fails_at_definition() -> None:

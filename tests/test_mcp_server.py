@@ -115,7 +115,12 @@ class _SecondProbeCommission(_ProbeCommission):
 
 
 class _InvalidNameCommission(_ProbeCommission):
-    name: ClassVar[str] = "invalid tool name"
+    name: ClassVar[str] = "invalid_name"
+
+
+# The authoring boundary rejects this spelling at class definition. Mutate
+# afterward to keep the MCP adapter's own defense-in-depth test reachable.
+_InvalidNameCommission.name = "invalid tool name"
 
 
 class _ConcurrentProbeCommission(_ProbeCommission):
@@ -453,6 +458,42 @@ async def test_large_compatibility_text_becomes_a_valid_json_notice() -> None:
         "notice": "Complete CommissionResult is available only in structuredContent.",
         "run_id": "run-123",
     }
+
+
+async def test_mcp_revalidation_rejects_bypass_built_malformed_envelope() -> None:
+    malformed = CommissionResult[_ProbeOutput].model_construct(
+        status="success",
+        output=None,
+        error=None,
+        provenance=Provenance(
+            source="test:mcp",
+            fetched_at=_FETCHED_AT,
+            confidence="verified",
+        ),
+        cost=CostMetrics(estimated_usd=0.0),
+    )
+
+    async def invoke(
+        commission: Commission[Any, Any],
+        input: BaseModel,
+        *,
+        cancel: CancelToken,
+    ) -> CommissionResult[Any]:
+        return malformed
+
+    server = create_commission_mcp_server(
+        commissions=(_ProbeCommission(),),
+        invoke=invoke,
+    )
+    response = await server.call_tool("probe_commission", {"subject": "boundary"})
+
+    assert isinstance(response, CallToolResult)
+    assert response.isError is True
+    assert response.structuredContent is not None
+    assert response.structuredContent["adapter_error"]["kind"] == "internal"
+    assert (
+        "invalid CommissionResult envelope" in response.structuredContent["adapter_error"]["detail"]
+    )
 
 
 async def test_oversized_result_envelope_returns_bounded_error_with_run_id() -> None:

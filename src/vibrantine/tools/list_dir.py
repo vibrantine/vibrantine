@@ -6,6 +6,8 @@ humans think about file systems and returns each entry's type so an
 agent can decide whether to recurse, sample, or read.
 """
 
+import heapq
+import os
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -120,7 +122,24 @@ class ListDirTool(Commission[ListDirInput, ListDirOutput]):
             )
 
         try:
-            children = sorted(input.path.iterdir(), key=lambda p: p.name)
+            total = 0
+
+            def children():
+                nonlocal total
+                # pathlib.iterdir delegates to os.listdir and materializes
+                # every name first; scandir keeps discovery itself streaming.
+                with os.scandir(input.path) as directory:
+                    for child in directory:
+                        total += 1
+                        yield Path(child.path)
+
+            # Count the complete directory but retain only the sorted slice
+            # the caller bounded with max_entries.
+            selected = heapq.nsmallest(
+                input.max_entries,
+                children(),
+                key=lambda path: path.name,
+            )
         except PermissionError as exc:
             return failure(
                 "internal",
@@ -136,8 +155,7 @@ class ListDirTool(Commission[ListDirInput, ListDirOutput]):
                 provenance=prov,
             )
 
-        total = len(children)
-        entries = [DirEntry(name=p.name, kind=_classify(p)) for p in children[: input.max_entries]]
+        entries = [DirEntry(name=p.name, kind=_classify(p)) for p in selected]
 
         return CommissionResult[ListDirOutput](
             status="success",

@@ -69,6 +69,82 @@ async def test_grep_max_matches_truncates_with_flag(tmp_path: Path) -> None:
     assert result.output.truncated is True
 
 
+async def test_grep_caps_each_line_and_points_to_read_continuation(tmp_path: Path) -> None:
+    path = _make(tmp_path, "generated.txt", ("hit " + ("x" * 100_000)) + "\n")
+
+    result = await run_commission(
+        GrepTool(),
+        GrepInput(pattern=r"hit", path=path, max_matches=1),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert len(result.output.matches) == 1
+    match = result.output.matches[0]
+    assert len(match.line) == 2_000
+    assert match.line.startswith("hit ")
+    assert match.line_chars == 100_004
+    assert match.line_truncated is True
+    assert match.path == path
+    assert match.line_number - 1 == 0  # ReadInput.offset
+
+
+async def test_grep_finite_pattern_matches_across_stream_segments(tmp_path: Path) -> None:
+    path = _make(tmp_path, "boundary.txt", ("x" * 8_191) + "abc\n")
+
+    result = await run_commission(
+        GrepTool(),
+        GrepInput(pattern="abc", path=path),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert len(result.output.matches) == 1
+
+
+async def test_grep_finite_pattern_can_disprove_match_on_huge_line(tmp_path: Path) -> None:
+    path = _make(tmp_path, "huge.txt", ("x" * 100_000) + "\n")
+
+    result = await run_commission(
+        GrepTool(),
+        GrepInput(pattern="missing", path=path),
+    )
+
+    assert result.status == "success"
+    assert result.output is not None
+    assert result.output.matches == []
+
+
+async def test_grep_refuses_unsafe_regex_on_huge_line_instead_of_guessing(
+    tmp_path: Path,
+) -> None:
+    path = _make(tmp_path, "huge.txt", ("x" * 100_000) + "\n")
+
+    result = await run_commission(
+        GrepTool(),
+        GrepInput(pattern=r"^x+z$", path=path),
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "validation"
+    assert "cannot be evaluated soundly" in result.error.detail
+
+
+async def test_grep_stops_after_one_extra_match_for_truncation(tmp_path: Path) -> None:
+    path = _make(tmp_path, "many.txt", "hit\n" * 10_000)
+
+    matches, error = _grep_file(
+        path,
+        re.compile("hit"),
+        surface_read_errors=True,
+        max_matches=2,
+    )
+
+    assert error is None
+    assert len(matches) == 2
+
+
 async def test_grep_ignore_case(tmp_path: Path) -> None:
     path = _make(tmp_path, "case.txt", "FOO\nfoo\nFoo\nbar\n")
 
