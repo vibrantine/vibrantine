@@ -17,10 +17,14 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from vibrantine.contract import (
+from vibrantine import (
+    DEFAULT_MODEL,
     CommissionResult,
+    Model,
     PersistedRecord,
     ProgressEvent,
+    ollama,
+    run_commission,
 )
 from vibrantine.examples.ask import AskOutput
 from vibrantine.examples.demo.agent import ChatInput, ChatTurn, demo_agent
@@ -41,8 +45,6 @@ from vibrantine.examples.demo.trace import (
 from vibrantine.examples.morning_briefing import MorningBriefingOutput
 from vibrantine.examples.recursive_research import ResearchOutput
 from vibrantine.examples.synthesize import SynthesizeOutput
-from vibrantine.models import DEFAULT_MODEL, Model, ollama
-from vibrantine.orchestrator import run_commission
 
 # Spending policy is the caller's, so it lives here, not on the examples.
 AGENT_BUDGET_USD = 0.20
@@ -330,8 +332,8 @@ def main(argv: list[str] | None = None) -> int:
             cap = f"budget ${budget:.2f}" if budget is not None else "no budget cap"
             print(f"Running {entry.title} ({cap}) with its canned input:")
             print(describe_input(demo_input))
-            # record="always" is the whole persistence switch: it rides the
-            # context to every node in the tree, including any spawned mid-run.
+            # record="always" is the run's persistence policy; the private
+            # per-run runtime applies it to every node in the tree.
             result = asyncio.run(
                 run_commission(
                     commission,

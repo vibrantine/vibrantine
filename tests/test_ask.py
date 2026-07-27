@@ -11,8 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from vibrantine import run_commission
-from vibrantine.contract import CapabilitySet, ProgressEvent
+from vibrantine import CapabilitySet, ProgressEvent, run_commission
 from vibrantine.examples.ask import AskCommission, AskInput
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 from vibrantine.tools.read import ReadTool

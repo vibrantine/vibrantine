@@ -6,7 +6,7 @@ counterpart to RecursiveResearch (LLM-decided, homogeneous, recursive). It
 works, but it is not a supported general-use briefing product.
 
 ```
-MorningBriefingCommission        (Python coordinator; date header is plain code)
+MorningBriefingCommission        (Python coordinator; date header is interior code)
 |-- WeatherCommission            (basic LLM loop: one fetch + thin judgment)
 |-- NewsDigestCommission x N     (Python coordinator: fetch x M + Synthesize)
 |-- SummarizeCommission          (executive summary over the sections)
@@ -26,9 +26,10 @@ What it demonstrates that nothing else in the examples does:
   coordinators (news digests), beside a leaf judgment loop (weather), beside
   a pure judgment call (the executive summary), beside a tool (fetch, one
   level down).
-- **The three-categories rule in one file.** The date header is plain
-  application code inside `_run`: no judgment, no fetch worth wrapping, so
-  no contract.
+- **Boundary placement in one file.** The date header is plain deterministic
+  Python inside `_run`: no judgment and no reusable operation worth giving
+  its own Tool boundary. Application code remains above the library; this is
+  simply part of the Commission's open interior.
 - **Two-level partial semantics as explicit authorial choices.** A failed
   source makes its section partial; a wholly failed section is skipped and
   named in `failed_sections`; a failed executive summary degrades the

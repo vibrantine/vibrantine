@@ -21,7 +21,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import (
+from vibrantine import (
     CallContext,
     Claim,
     Commission,
@@ -31,14 +31,14 @@ from vibrantine.contract import (
     ErrorKind,
     ErrorState,
     Provenance,
+    dispatch,
 )
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.tools.fetch import FetchInput, FetchOutput, FetchTool
+from vibrantine.tools import FetchInput, FetchOutput, FetchTool
 
 
 class NewsDigestInput(BaseModel):

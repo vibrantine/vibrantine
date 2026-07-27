@@ -6,8 +6,7 @@ from typing import Final
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import Commission
-from vibrantine.factory import create_commission
+from vibrantine import Commission, create_commission
 from vibrantine.mcp.client import MCPConnection, MCPResult, bind_mcp_tool
 
 DEEPWIKI_MCP_URL: Final = "https://mcp.deepwiki.com/mcp"

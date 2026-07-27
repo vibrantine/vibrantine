@@ -2,12 +2,11 @@
 
 import pytest
 
-from vibrantine.contract import CallContext
+from vibrantine import CallContext, run_commission
 from vibrantine.examples.morning_briefing.subcommissions.weather import (
     WeatherInput,
 )
 from vibrantine.examples.morning_briefing.tests.fakes import TURN_COST, make_weather
-from vibrantine.orchestrator import run_commission
 
 
 def test_construction_requires_a_source_url() -> None:

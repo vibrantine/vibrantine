@@ -24,15 +24,13 @@ import os
 import httpx
 import pytest
 
-from vibrantine.contract import CommissionResult
+from vibrantine import CommissionResult, Model, run_commission
 from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
     ResearchInput,
     ResearchOutput,
 )
-from vibrantine.models import Model
-from vibrantine.orchestrator import run_commission
-from vibrantine.tools.fetch import FetchTool
+from vibrantine.tools import FetchTool
 
 from .fixture_pages import (
     FIXTURE_PAGES,

@@ -14,7 +14,7 @@ from datetime import datetime
 from itertools import count
 from typing import Any, cast
 
-from vibrantine.contract import PersistedRecord
+from vibrantine import PersistedRecord
 
 
 class RecordingBackend:

@@ -12,7 +12,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission
+from vibrantine import CallContext, Commission
 
 _SYSTEM_PROMPT = (
     "You are the interactive front door of the Vibrantine demo. Vibrantine "

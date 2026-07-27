@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from vibrantine.contract import ProgressEvent
+from vibrantine import Model, ProgressEvent, run_commission
 from vibrantine.examples.morning_briefing import (
     MorningBriefingCommission,
     MorningBriefingInput,
@@ -23,14 +23,22 @@ from vibrantine.examples.morning_briefing.tests.fakes import (
     make_summarize,
     make_weather,
 )
-from vibrantine.models import Model
-from vibrantine.orchestrator import run_commission
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM
 
 # Every LLM seat in the tree names its own scripted entry, so the run default
 # is never consulted; the catalog still requires one when several entries are
 # registered, so the weather entry stands in.
 DEFAULT = "fixture/weather"
+
+
+class _MutableCancel:
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.cancelled
+
 
 WORLD_PAGES = {
     "https://news.test/world/a": (200, "world story a"),
@@ -284,6 +292,30 @@ async def test_cancellation_before_sections_returns_cancelled(tmp_path: Path) ->
     assert result.error is not None
     assert result.error.kind == "cancelled"
     assert all(len(fake.calls) == 0 for fake in fakes.values())
+
+
+async def test_cancellation_during_summary_prevents_the_file_write(tmp_path: Path) -> None:
+    briefing, _, models = _briefing()
+    out_path = tmp_path / "b.md"
+    cancel = _MutableCancel()
+
+    def cancel_when_summary_starts(event: ProgressEvent) -> None:
+        if event.commission_name == "summarize" and event.phase == "loop_start":
+            cancel.cancelled = True
+
+    result = await run_commission(
+        briefing,
+        MorningBriefingInput(output_path=out_path),
+        models=models,
+        default_model=DEFAULT,
+        cancel=cancel,
+        on_progress=cancel_when_summary_starts,
+    )
+
+    assert result.status == "failure"
+    assert result.error is not None
+    assert result.error.kind == "cancelled"
+    assert not out_path.exists()
 
 
 async def test_progress_events_bubble_from_every_level(tmp_path: Path) -> None:

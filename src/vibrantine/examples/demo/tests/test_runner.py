@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from vibrantine import DEFAULT_MODEL, Model, ollama
 from vibrantine.examples.ask import AskInput
 from vibrantine.examples.demo.catalog import build_ask, build_synthesize
 from vibrantine.examples.demo.runner import (
@@ -13,7 +14,6 @@ from vibrantine.examples.demo.runner import (
     key_missing_message,
     session_model,
 )
-from vibrantine.models import DEFAULT_MODEL, Model, ollama
 
 
 def _args(model: str | None = None, ollama_name: str | None = None) -> argparse.Namespace:

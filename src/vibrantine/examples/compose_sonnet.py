@@ -11,7 +11,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission
+from vibrantine import CallContext, Commission
 
 _SYSTEM_PROMPT = (
     "You compose original English sonnets about subjects supplied by the user. "

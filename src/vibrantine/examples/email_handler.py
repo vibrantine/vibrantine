@@ -2,21 +2,21 @@
 
 An incoming email is classified into one of three routes and the route is
 executed in the same loop: file as `non_urgent` (conclude directly), `draft` a
-reply (dispatch the DraftReply sub-Commission), or `notify` the user (dispatch
-the NotifyUser tool). A basic Commission: it rides the default `_run`, with
-its toolbox holding a *sub-Commission* and a *tool* rather than leaf tools only.
+templated reply (dispatch the DraftReply tool), or simulate notifying the user
+(dispatch the NotifyUser tool). A basic Commission: it rides the default
+`_run` over two deterministic stub tools.
 
 This exists to stress the LLM-loop-routing surface of the contract before the
-contract is frozen. The handlers are stubs: DraftReply returns canned text but
-reports a deliberately non-zero cost (so the loop's cost-rollup behavior is
-observable without spending), and NotifyUser records instead of notifying. It
-is not part of any supported surface; it is a consumer that exercises:
+contract is frozen. The handlers are deliberately honest stubs: DraftReply
+renders a fixed template at zero cost, and NotifyUser reports a simulation
+without claiming an external side effect. It is not part of any supported
+surface; it is a consumer that exercises:
 
-  1. a Commission used as an LLM tool (DraftReply), dispatched mid-loop;
+  1. deterministic Tools dispatched from an LLM-driven parent;
   2. heterogeneous route outputs flattened into one typed `OutputT`;
   3. a child's typed output round-tripping through the LLM into `conclude`;
   4. the absence of any structural bind between which handler was dispatched
-     (the real side effect) and the route the conclude output claims.
+     and the route the conclude output claims.
 """
 
 from datetime import UTC, datetime
@@ -24,7 +24,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import (
+from vibrantine import (
     CallContext,
     Commission,
     CommissionResult,
@@ -40,7 +40,8 @@ _SYSTEM_PROMPT = (
     "call `conclude` with route='draft' and `draft_text` copied from the "
     "draft_reply result.\n"
     "- `notify`: the user must see this. Call `notify_user` with a short "
-    "reason, then call `conclude` with route='notify' and notification_sent=true.\n"
+    "reason, then call `conclude` with route='notify' and "
+    "notification_simulated=true.\n"
     "Call at most one handler. Produce output only through `conclude`, and "
     "always include a one-sentence `rationale` for the route you chose."
 )
@@ -71,8 +72,8 @@ class EmailHandlerOutput(BaseModel):
     """The triage decision plus whatever the executed route produced.
 
     Heterogeneous by route: `draft_text` is populated only on the draft route,
-    `notification_sent` only on the notify route. The optional-field flattening
-    is the shape the one-typed-output contract forces on a router.
+    `notification_simulated` only on the notify route. The optional-field
+    flattening is the shape the one-typed-output contract forces on a router.
     """
 
     route: Route = Field(description="The route chosen for this email.")
@@ -81,13 +82,13 @@ class EmailHandlerOutput(BaseModel):
         default=None,
         description="The drafted reply; populated iff route == 'draft'.",
     )
-    notification_sent: bool = Field(
+    notification_simulated: bool = Field(
         default=False,
-        description="Whether a notification was dispatched; true iff route == 'notify'.",
+        description="Whether the notify route's stub simulation ran; true iff route == 'notify'.",
     )
 
 
-# --- Stub handler 1: a sub-Commission (LLM judgment), stubbed body ------------
+# --- Stub handler 1: a deterministic reply-template Tool -----------------------
 
 
 class DraftReplyInput(BaseModel):
@@ -102,21 +103,25 @@ class DraftReplyOutput(BaseModel):
     draft_text: str = Field(description="The drafted reply text.")
 
 
-class DraftReplyCommission(Commission[DraftReplyInput, DraftReplyOutput]):
-    """Draft a reply to an email (stub: canned text, non-zero cost probe)."""
+class DraftReplyTool(Commission[DraftReplyInput, DraftReplyOutput]):
+    """Render a deterministic reply template for one email."""
 
     name: ClassVar[str] = "draft_reply"
     description: ClassVar[str] = (
-        "Draft a reply to an email. Drafting only; it never sends.\n"
+        "Render a short reply template for an email. Drafting only; it never sends.\n"
         "\n"
         "Usage:\n"
         "- Call this with the `email` to reply to when a written response is "
-        "warranted; it returns proposed text for a human to review and send.\n"
+        "warranted; it fills a fixed template for a human to review and send.\n"
         "\n"
         "Returns `draft_text`: the proposed reply."
     )
     input_type: ClassVar[type] = DraftReplyInput
     output_type: ClassVar[type] = DraftReplyOutput
+    deterministic: ClassVar[bool] = True
+
+    def __init__(self) -> None:
+        super().__init__(max_input_tokens=None)
 
     async def _run(
         self,
@@ -145,13 +150,11 @@ class DraftReplyCommission(Commission[DraftReplyInput, DraftReplyOutput]):
                 ),
             ),
             provenance=provenance,
-            # Deliberately non-zero so the loop's cost-rollup behavior is
-            # observable: run_llm_loop folds this into children_cost on dispatch.
-            cost=CostMetrics(estimated_usd=0.0023),
+            cost=CostMetrics(estimated_usd=0.0),
         )
 
 
-# --- Stub handler 2: a leaf tool (side effect), stubbed -----------------------
+# --- Stub handler 2: a deterministic notification simulation Tool -------------
 
 
 class NotifyInput(BaseModel):
@@ -161,27 +164,27 @@ class NotifyInput(BaseModel):
 
 
 class NotifyOutput(BaseModel):
-    """Result of a notify dispatch."""
+    """Result of the notification simulation."""
 
-    delivered: bool = Field(description="True if the notification was delivered.")
+    simulated: bool = Field(description="True when the notification simulation ran.")
 
 
 class NotifyUserTool(Commission[NotifyInput, NotifyOutput]):
-    """Notify the user about an email (stub: records instead of sending)."""
+    """Simulate notifying the user without performing external I/O."""
 
     name: ClassVar[str] = "notify_user"
     description: ClassVar[str] = (
-        "Notify the user that an email needs their personal attention.\n"
+        "Simulate notifying the user that an email needs personal attention.\n"
         "\n"
         "Usage:\n"
         "- Call this with a short `reason` when an email can't be handled "
-        "automatically and the user must see it. Use it sparingly: for "
-        "genuinely urgent or judgment-needing mail.\n"
+        "automatically. This provisional example performs no external I/O.\n"
         "\n"
-        "Returns `delivered`: whether the notification went out."
+        "Returns `simulated`: whether the simulation ran."
     )
     input_type: ClassVar[type] = NotifyInput
     output_type: ClassVar[type] = NotifyOutput
+    deterministic: ClassVar[bool] = True
 
     def __init__(self) -> None:
         super().__init__(max_input_tokens=None)
@@ -196,15 +199,23 @@ class NotifyUserTool(Commission[NotifyInput, NotifyOutput]):
             fetched_at=datetime.now(UTC),
             confidence="grounded",
         )
+        if ctx.cancel.is_cancelled:
+            return self._fail(
+                "cancelled",
+                "Cancelled before the notification simulation began.",
+                retryable=False,
+                provenance=provenance,
+                cost=CostMetrics(estimated_usd=0.0),
+            )
         return CommissionResult[NotifyOutput](
             status="success",
-            output=NotifyOutput(delivered=True),
+            output=NotifyOutput(simulated=True),
             provenance=provenance,
             cost=CostMetrics(estimated_usd=0.0),
         )
 
 
-# --- The triage: a basic Commission routing over a sub-Commission + a tool ----
+# --- The triage: a basic Commission routing over two deterministic Tools -------
 
 
 class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
@@ -221,8 +232,8 @@ class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
         "reports what it did.\n"
         "\n"
         "Returns the chosen `route`, the `rationale`, and the route's product: "
-        "`draft_text` on the draft route, `notification_sent` on the notify "
-        "route."
+        "`draft_text` on the draft route, `notification_simulated` on the "
+        "notify route."
     )
     input_type: ClassVar[type] = EmailHandlerInput
     output_type: ClassVar[type] = EmailHandlerOutput
@@ -231,7 +242,7 @@ class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
     def __init__(
         self,
         *,
-        draft: DraftReplyCommission | None = None,
+        draft: DraftReplyTool | None = None,
         notify: NotifyUserTool | None = None,
         model: str | None = None,
     ) -> None:
@@ -239,7 +250,7 @@ class EmailHandlerCommission(Commission[EmailHandlerInput, EmailHandlerOutput]):
         # injectable for DI and tests (the constructor-injection convention;
         # see docs/authoring.md, Step 4: The Toolbox).
         super().__init__(
-            toolbox=(draft or DraftReplyCommission(), notify or NotifyUserTool()),
+            toolbox=(draft or DraftReplyTool(), notify or NotifyUserTool()),
             model=model,
         )
 

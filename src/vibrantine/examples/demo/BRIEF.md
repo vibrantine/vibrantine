@@ -24,7 +24,7 @@ targets a local Ollama model with no key or cost at all.
   check, model choice, spending policy (tiered per-run budget caps),
   conversation state (the session transcript), and presentation. All of it
   rides the public contract: construct with config, build a typed input,
-  `dispatch` with a `CallContext`, read the envelope and the records.
+  enter through `run_commission`, then read the envelope and records.
 - `catalog.py`: the canned setups. Construction config and inputs are
   caller concerns, so they live here with the caller; the example modules
   stay pure worked examples with no demo scaffolding in them.

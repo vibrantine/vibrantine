@@ -17,15 +17,13 @@ from typing import Any
 
 import pytest
 
-from vibrantine import run_commission
-from vibrantine.contract import estimate_tokens
+from vibrantine import FilesystemBackend, estimate_tokens, run_commission
 from vibrantine.examples.recursive_research import (
     RecursiveResearchCommission,
     RecursiveResearchModelMenu,
     ResearchInput,
 )
 from vibrantine.examples.recursive_research.types import ResearchClaim, ResearchOutput
-from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
 
 # One LLM turn at the fixture pricing:
@@ -111,7 +109,7 @@ async def test_model_menu_seats_reach_their_levels() -> None:
     )
     leaf_fake = ScriptedLLM([llm_response(tool_calls=_conclude("c1"))])
     menu = RecursiveResearchModelMenu(researcher="root-model", subresearcher="leaf-model")
-    agent = RecursiveResearchCommission(max_depth=1, models=menu)
+    agent = RecursiveResearchCommission(max_depth=1, model_menu=menu)
 
     result = await run_commission(
         agent,
@@ -139,7 +137,7 @@ async def test_model_menu_default_fills_unnamed_seats() -> None:
     )
     default_fake = ScriptedLLM([llm_response(tool_calls=_conclude("c1"))])
     menu = RecursiveResearchModelMenu(default="menu-default", researcher="root-model")
-    agent = RecursiveResearchCommission(max_depth=1, models=menu)
+    agent = RecursiveResearchCommission(max_depth=1, model_menu=menu)
 
     result = await run_commission(
         agent,
@@ -160,7 +158,7 @@ def test_model_and_menu_together_rejected() -> None:
     with pytest.raises(ValueError, match="not both"):
         RecursiveResearchCommission(
             model="some/model",
-            models=RecursiveResearchModelMenu(default="other/model"),
+            model_menu=RecursiveResearchModelMenu(default="other/model"),
         )
 
 

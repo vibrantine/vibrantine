@@ -12,14 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from vibrantine import run_commission
-from vibrantine.contract import ProgressEvent, Provenance
+from vibrantine import FilesystemBackend, ProgressEvent, Provenance, run_commission
 from vibrantine.examples.synthesize import (
     SynthesisSource,
     SynthesizeCommission,
     SynthesizeInput,
 )
-from vibrantine.persistence import FilesystemBackend
 from vibrantine.testing import AlwaysCancelled, ScriptedLLM, llm_response, scripted_model
 
 
