@@ -15,15 +15,15 @@ from typing import Any
 
 import httpx
 
+from vibrantine import Model
 from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
     NewsDigestCommission,
 )
 from vibrantine.examples.morning_briefing.subcommissions.weather import WeatherCommission
 from vibrantine.examples.summarize import SummarizeCommission
 from vibrantine.examples.synthesize import SynthesizeCommission
-from vibrantine.models import Model
 from vibrantine.testing import ScriptedLLM, llm_response, scripted_model
-from vibrantine.tools.fetch import FetchTool
+from vibrantine.tools import FetchTool
 
 # One default LLM turn (100 in, 50 out) at the fixture pricing.
 TURN_COST = (100 * 0.50 + 50 * 3.00) / 1_000_000

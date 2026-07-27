@@ -19,14 +19,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError
 
-from vibrantine._gatekeeper import (
-    Gatekeeper,
-    RunCancel,
-    RunConfigError,
-    RunHaltedError,
-    UnmeterableCallError,
-)
-from vibrantine.contract import (
+from vibrantine import (
     CallContext,
     Claim,
     Commission,
@@ -34,11 +27,20 @@ from vibrantine.contract import (
     ConfidenceLevel,
     CostMetrics,
     ErrorState,
+    Model,
     Provenance,
+    deposit_llm_trace,
     estimate_tokens,
 )
-from vibrantine.dispatch import deposit_llm_trace, halt_checkpoint_error, stop_signal_error
-from vibrantine.models import Model, UnknownModelError
+from vibrantine._gatekeeper import (
+    Gatekeeper,
+    RunCancel,
+    RunConfigError,
+    RunHaltedError,
+    UnmeterableCallError,
+)
+from vibrantine.dispatch import halt_checkpoint_error, stop_signal_error
+from vibrantine.models import UnknownModelError
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are a research analyst. Read the provided sources and write a concise, "

@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from vibrantine import run_commission
 from vibrantine.examples.ask import AskCommission, AskInput
-from vibrantine.orchestrator import run_commission
 
 pytestmark = [
     pytest.mark.integration,

@@ -2,6 +2,7 @@
 
 import pytest
 
+from vibrantine import run_commission
 from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
     NewsDigestCommission,
     NewsDigestInput,
@@ -10,7 +11,6 @@ from vibrantine.examples.morning_briefing.tests.fakes import (
     SYNTH_COST,
     make_digest,
 )
-from vibrantine.orchestrator import run_commission
 from vibrantine.testing import AlwaysCancelled
 
 DATE = "Monday 06 July 2026"

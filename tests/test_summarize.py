@@ -12,8 +12,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from vibrantine import run_commission
-from vibrantine.contract import CallContext, ProgressEvent
+from vibrantine import CallContext, ProgressEvent, run_commission
 from vibrantine.examples.summarize import (
     SummarizeCommission,
     SummarizeInput,

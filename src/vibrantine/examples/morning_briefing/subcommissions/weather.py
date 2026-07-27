@@ -11,8 +11,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import DEFAULT_MAX_ITERATIONS, CallContext, Commission
-from vibrantine.tools.fetch import FetchTool
+from vibrantine import DEFAULT_MAX_ITERATIONS, CallContext, Commission
+from vibrantine.tools import FetchTool
 
 _SYSTEM_PROMPT = (
     "You report the weather for a morning briefing. The user message gives "

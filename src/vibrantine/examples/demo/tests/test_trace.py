@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from vibrantine.contract import (
+from vibrantine import (
     CommissionResult,
     CommissionStatus,
     CostMetrics,

@@ -21,7 +21,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission
+from vibrantine import CallContext, Commission
 
 SummaryLength = Literal["one_sentence", "short", "medium", "long"]
 """Qualitative target sizes for a summary.

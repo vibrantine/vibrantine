@@ -14,7 +14,7 @@ menu run needs).
 from datetime import UTC, datetime
 from pathlib import Path
 
-from vibrantine.contract import Provenance
+from vibrantine import Provenance
 from vibrantine.examples import ask as _ask_module
 from vibrantine.examples.ask import AskCommission, AskInput
 from vibrantine.examples.morning_briefing import (

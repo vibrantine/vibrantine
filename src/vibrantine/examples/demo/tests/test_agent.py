@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from vibrantine import run_commission
-from vibrantine.contract import CallContext
+from vibrantine import CallContext, run_commission
 from vibrantine.examples.ask import AskCommission
 from vibrantine.examples.demo.agent import (
     ChatInput,

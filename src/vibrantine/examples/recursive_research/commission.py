@@ -19,7 +19,7 @@ This is the first Commission wired into an LLM-loop toolbox, so its
 from pathlib import Path
 from typing import Any, ClassVar
 
-from vibrantine.contract import (
+from vibrantine import (
     DEFAULT_MAX_ITERATIONS,
     CallContext,
     Commission,
@@ -28,7 +28,7 @@ from vibrantine.contract import (
 )
 from vibrantine.examples.recursive_research.models import RecursiveResearchModelMenu
 from vibrantine.examples.recursive_research.types import ResearchInput, ResearchOutput
-from vibrantine.tools.fetch import FetchTool
+from vibrantine.tools import FetchTool
 
 # The prompt lives in prompts/system.md, read the way authoring.md's
 # Step 2 documents; a worked example must lean only on the public
@@ -79,18 +79,19 @@ class RecursiveResearchCommission(Commission[ResearchInput, ResearchOutput]):
         max_depth: int = 2,
         fetch: FetchTool | None = None,
         model: str | None = None,
-        models: RecursiveResearchModelMenu | None = None,
+        model_menu: RecursiveResearchModelMenu | None = None,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> None:
-        if model is not None and models is not None:
+        if model is not None and model_menu is not None:
             raise ValueError(
-                "Pass model= (one model for the whole tree) or models= (a menu of seats), not both."
+                "Pass model= (one model for the whole tree) or model_menu= "
+                "(a menu of seats), not both."
             )
         own_model = model
         sub_model = model
-        if models is not None:
-            own_model = models.researcher or models.default
-            sub_model = models.subresearcher or models.default
+        if model_menu is not None:
+            own_model = model_menu.researcher or model_menu.default
+            sub_model = model_menu.subresearcher or model_menu.default
         resolved_fetch = fetch or FetchTool()
         toolbox: tuple[Commission[Any, Any], ...]
         if max_depth > 0:

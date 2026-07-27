@@ -16,8 +16,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import CallContext, Commission
-from vibrantine.tools.read import ReadTool
+from vibrantine import CallContext, Commission
+from vibrantine.tools import ReadTool
 
 _SYSTEM_PROMPT = (
     "You answer questions about a single file. You have one tool: `read`, "

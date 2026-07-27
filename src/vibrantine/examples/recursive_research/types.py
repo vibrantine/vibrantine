@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from vibrantine.contract import ConfidenceLevel
+from vibrantine import ConfidenceLevel
 
 
 class ResearchInput(BaseModel):

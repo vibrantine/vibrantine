@@ -8,8 +8,9 @@ summary over the survivors, renders markdown, and writes it to disk.
 
 Three lessons live here:
 
-- The date header is plain application code, not a Commission or a Tool.
-  Not everything wears the contract; the three-categories rule in one file.
+- The date header is plain deterministic Python inside the Commission
+  interior, not a child Tool. Not every implementation step needs its own
+  contract boundary.
 - Partial semantics are the author's explicit choice at every level: a
   failed source makes a section partial, a failed section makes the
   briefing partial, and a failed executive summary degrades the briefing
@@ -28,7 +29,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from vibrantine.contract import (
+from vibrantine import (
     CallContext,
     Claim,
     Commission,
@@ -37,8 +38,8 @@ from vibrantine.contract import (
     CostMetrics,
     ErrorState,
     Provenance,
+    dispatch,
 )
-from vibrantine.dispatch import dispatch
 from vibrantine.examples.morning_briefing.subcommissions.news_digest import (
     NewsDigestCommission,
     NewsDigestInput,
@@ -108,8 +109,8 @@ class MorningBriefingCommission(Commission[MorningBriefingInput, MorningBriefing
         input: MorningBriefingInput,
         ctx: CallContext,
     ) -> CommissionResult[MorningBriefingOutput]:
-        # The date header is deliberately plain application code: no judgment,
-        # no fetch worth wrapping, so no contract.
+        # The date header is deliberately plain deterministic interior code:
+        # no judgment or reusable operation worth a child contract.
         now = datetime.now(UTC)
         date_label = now.strftime("%A %d %B %Y")
         provenance = Provenance(
@@ -222,6 +223,15 @@ class MorningBriefingCommission(Commission[MorningBriefingInput, MorningBriefing
             if summary_result.status == "success" and summary_result.output is not None
             else None
         )
+
+        if ctx.cancel.is_cancelled:
+            return self._fail(
+                "cancelled",
+                "Cancelled after the executive summary, before writing the briefing.",
+                retryable=False,
+                provenance=provenance,
+                cost=total_cost,
+            )
 
         markdown = _render_markdown(date_label, executive_summary, rendered, failed_sections)
 
